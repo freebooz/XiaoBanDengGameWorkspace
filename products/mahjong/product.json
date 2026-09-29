@@ -1,0 +1,14 @@
+{
+  "display_name": "小板凳麻将",
+  "product_id": "xbd_mahjong",
+  "game_category": "tile",
+  "game_id": "mahjong",
+  "rule_set_id": "guiyang",
+  "rule_version": "1.0.0",
+  "android_package": "com.freebooz.xiaobandeng.mahjong",
+  "modules": [
+    "foundation",
+    "game_framework/tile",
+    "games/mahjong/guiyang"
+  ]
+}

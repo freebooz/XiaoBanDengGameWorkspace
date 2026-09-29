@@ -1,0 +1,22 @@
+; XiaoBanDeng Godot product shell（小板凳客户端产品壳）
+; 该文件由产品组合工具复制到独立生成工程，产品差异来自 product.json。
+config_version=5
+
+[application]
+config/name="XiaoBanDeng Product"
+run/main_scene="res://scenes/main.tscn"
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+
+[network]
+limits/debugger/max_queued_messages=2048

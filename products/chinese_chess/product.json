@@ -1,0 +1,14 @@
+{
+  "display_name": "小板凳象棋",
+  "product_id": "xbd_chinese_chess",
+  "game_category": "board",
+  "game_id": "chinese_chess",
+  "rule_set_id": "standard",
+  "rule_version": "1.0.0",
+  "android_package": "com.freebooz.xiaobandeng.chinesechess",
+  "modules": [
+    "foundation",
+    "game_framework/board",
+    "games/chinese_chess"
+  ]
+}
