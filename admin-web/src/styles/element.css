@@ -1,0 +1,39 @@
+@import "./tokens.css";
+
+/* Element Plus（Element Plus 组件库）统一品牌化覆盖。 */
+.el-button--primary {
+  --el-button-bg-color: var(--xbd-brand-primary);
+  --el-button-border-color: var(--xbd-brand-primary);
+  --el-button-hover-bg-color: var(--xbd-brand-highlight);
+  --el-button-hover-border-color: var(--xbd-brand-highlight);
+}
+.el-card {
+  --el-card-border-color: var(--xbd-border);
+  border-radius: var(--xbd-radius-md);
+  background: var(--xbd-card-bg);
+  box-shadow: var(--xbd-shadow-card);
+}
+.el-card__header { padding: 14px 16px; color: var(--xbd-text-primary); font-size: 13px; font-weight: 650; }
+.el-card__body { padding: 16px; }
+.el-table {
+  --el-table-border-color: #eee7df;
+  --el-table-header-bg-color: #faf7f2;
+  --el-table-row-hover-bg-color: #fff8ef;
+  color: var(--xbd-text-primary);
+  font-size: 11px;
+}
+.el-table__header { color: #5f554c; font-size: 12px; font-weight: 650; }
+.el-table .cell { line-height: 18px; white-space: nowrap; }
+.el-table th.el-table__cell, .el-table td.el-table__cell { padding: 7px 0; }
+.el-input__wrapper, .el-select__wrapper { border-radius: var(--xbd-radius-sm); }
+.el-drawer { background: var(--xbd-card-bg); }
+.el-drawer__header {
+  margin-bottom: 0;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--xbd-border);
+  color: var(--xbd-text-primary);
+  font-size: 15px;
+  font-weight: 650;
+}
+.el-drawer__body { padding: 16px 18px 22px; }
+.el-pagination { --el-pagination-button-bg-color: transparent; --el-pagination-hover-color: var(--xbd-brand-primary); }

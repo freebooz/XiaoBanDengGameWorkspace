@@ -8,6 +8,14 @@ var _status_label: Label
 
 func _ready() -> void:
 	_product = _load_product_config()
+	# 棋牌游戏产品统一进入三维桌面表现层；2D只保留HUD、菜单、提示和AI叠加。
+	var game_id := str(_product.get("game_id", ""))
+	if game_id == "chinese_chess":
+		_build_game_screen("res://modules/games/chinese_chess/chinese_chess_3d_screen.gd")
+		return
+	if game_id == "mahjong":
+		_build_game_screen("res://modules/games/mahjong/guiyang/guiyang_3d_screen.gd")
+		return
 	_build_ui()
 
 
@@ -27,6 +35,18 @@ func _load_product_config() -> Dictionary:
 		push_error("product.json 格式错误")
 		return {}
 	return parsed
+
+
+func _build_game_screen(script_path: String) -> void:
+	var screen_script = load(script_path)
+	if screen_script == null:
+		push_error("未找到三维游戏界面模块：%s" % script_path)
+		_build_ui()
+		return
+	var screen = screen_script.new()
+	screen.set("product", _product)
+	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(screen)
 
 
 func _build_ui() -> void:

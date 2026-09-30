@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 92" role="img" aria-labelledby="title">
+  <title id="title">小板凳游戏运营平台</title>
+  <defs>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F0B45A"/>
+      <stop offset="0.52" stop-color="#D48A3A"/>
+      <stop offset="1" stop-color="#B96527"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(6 4)">
+    <rect x="6" y="12" width="70" height="24" rx="10" fill="url(#wood)"/>
+    <path d="M18 35h13l-6 32H14zM52 35h13l5 32H58z" fill="#B96527"/>
+    <rect x="21" y="42" width="41" height="7" rx="3.5" fill="#D48A3A"/>
+    <circle cx="32" cy="24" r="2.3" fill="#5A2D1B"/>
+    <circle cx="50" cy="24" r="2.3" fill="#5A2D1B"/>
+    <path d="M36 28c2.4 2.8 8.2 2.8 10.6 0" fill="none" stroke="#5A2D1B" stroke-width="2.2" stroke-linecap="round"/>
+  </g>
+  <text x="96" y="44" fill="#292521" font-size="33" font-weight="700" font-family="Microsoft YaHei, PingFang SC, sans-serif">小板凳</text>
+  <text x="98" y="69" fill="#7D756E" font-size="15" font-family="Microsoft YaHei, PingFang SC, sans-serif" letter-spacing="2">游戏运营平台</text>
+</svg>

@@ -18,11 +18,15 @@
 10. /api/v1/wallet 可查询家族级 xbd_point 资产，空账户按0返回。
 11. /api/v1/ai/capabilities 返回6项AI预留能力。
 12. 管理后台 http://localhost:5173 返回 HTTP 200。
+13. 已安装并使用 Godot 4.7.2 对小板凳象棋、小板凳麻将两个生成工程执行 Headless 编辑器解析与主场景运行验证，均无脚本错误。
+14. 客户端视觉基线已升级为 3D Tabletop：象棋棋盘/棋子、贵阳麻将牌/牌桌均使用三维模型，采用 StandardMaterial3D/PBR 材质与俯视/轻斜俯视摄像机。
+15. 小板凳象棋双 WebSocket 客户端集成测试通过：红黑双方加入同一房间、权威走子、广播同步、回合切换及抢回合拒绝均通过。
+16. 象棋服务端权威计时测试通过：双方就绪后下发对局/回合开始时间，合法走子后刷新下一回合开始时间，并下发60秒预警阈值与30秒倒计时配置。
+17. Godot 计时界面运行验证通过：对局总时长、单步计时、圆形倒计时组件与程序化提醒音均可加载运行，未出现运行时异常。
 
 ## 当前环境限制
 
-Runner 本机当前未发现 Godot 命令，因此未执行 Godot Headless（无界面）解析/导出验证。
-产品组合工程、project.godot、Windows/Android export_presets.cfg 已生成，可在安装 Godot 4.x 后继续验证。
+Runner 本机已安装 Godot 4.7.2，并完成两个产品的 Headless（无界面）解析及主场景运行验证。Windows/Android 正式导出仍需要继续校验导出模板、Android SDK/JDK、签名与渠道配置。
 
 ## 尚未声称完成的生产能力
 

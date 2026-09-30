@@ -1,0 +1,432 @@
+E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\build_chess_set.py:37: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+  scene.world.use_nodes = True
+E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\build_chess_set.py:64: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  mat.use_nodes = True
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular'
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 02:38:20)
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.001'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.002'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.003'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.004'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.005'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.006'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.007'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.008'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.009'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.010'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.011'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.012'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.013'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.014'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.015'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.016'
+00:05.813  reports          | WARNING Path 'C:\Windows\Fonts\simkai.ttf' cannot be made relative for Font 'KaiTi Regular.017'
+00:10.750  render           | Saved: 'E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\XBD_ChineseChess_Set_preview.png'
+Info: Saved as "XBD_ChineseChess_Set.blend"
+INFO Draco is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_draco_bridge.dll
+INFO MeshOptimizer is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_meshopt_bridge.dll
+23:53:17 | INFO: Starting glTF 2.0 export
+23:53:17 | INFO: Extracting primitive: Apron | carved vine 1 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine 1 2
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine 1 3
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine 1 4
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine 1 5
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine 1 6
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine 1 7
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine 1 8
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine 1 9
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine -1 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine -1 2
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine -1 3
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine -1 4
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine -1 5
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine -1 6
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine -1 7
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine -1 8
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | carved vine -1 9
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cylinder.001
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cylinder
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 0 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 0 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 2 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 2 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 3 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 3 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 4 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 4 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 5 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 5 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 6 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 6 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 7 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 7 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 8 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 8 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 9 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll 1 9 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 0 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 0 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 2 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 2 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 3 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 3 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 4 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 4 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 5 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 5 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 6 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 6 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 7 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 7 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 8 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 8 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 9 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | leaf scroll -1 9 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | seal character 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Apron | seal character -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cube.001
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cube
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 2 1 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 2 1 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 2 1 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 2 1 -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 2 7 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 2 7 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 2 7 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 2 7 -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 7 1 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 7 1 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 7 1 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 7 1 -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 7 7 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 7 7 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 7 7 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cannon post | 7 7 -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | curling acanthus 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | curling acanthus 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | curling acanthus -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | curling acanthus -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal 1 1 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal 1 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal 1 1 2
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal 1 1 3
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal 1 1 4
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal 1 -1 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal 1 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal 1 -1 2
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal 1 -1 3
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal 1 -1 4
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal -1 1 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal -1 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal -1 1 2
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal -1 1 3
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal -1 1 4
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal -1 -1 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal -1 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal -1 -1 2
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal -1 -1 3
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Corner | petal -1 -1 4
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cube.009
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cube.008
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cube.007
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cube.006
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Frame | inset gold line long 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Frame | inset gold line long -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Frame | inset gold line short 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Frame | inset gold line short -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cube.004
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cube.002
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cube.005
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Cube.003
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 00 / 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 01 / 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 01 / 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 02 / 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 02 / 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 03 / 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 03 / 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 04 / 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 04 / 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 05 / 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 05 / 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 06 / 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 06 / 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 07 / 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 07 / 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | file 08 / 0
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | rank 00
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | rank 01
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | rank 02
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | rank 03
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | rank 04
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | rank 05
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | rank 06
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | rank 07
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | rank 08
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Grid | rank 09
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Palace | 0.175 / 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Palace | 0.175 / -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Palace | -0.175 / 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Palace | -0.175 / -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: River | Chu He
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: River | Han Jie
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 0 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 0 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 2 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 2 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 2 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 2 -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 4 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 4 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 4 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 4 -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 6 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 6 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 6 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 6 -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 8 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 3 8 -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 0 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 0 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 2 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 2 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 2 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 2 -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 4 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 4 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 4 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 4 -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 6 1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 6 1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 6 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 6 -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 8 -1 1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Extracting primitive: Soldier post | 6 8 -1 -1
+23:53:17 | INFO: Primitives created: 1
+23:53:17 | INFO: Finished glTF 2.0 export in 0.4628329277038574 s
+
+23:53:17 | INFO: Starting glTF 2.0 export
+23:53:17 | INFO: Extracting primitive: Piece_Black_Advisor
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Black_Cannon
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Black_Elephant
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Black_General
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Black_Horse
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Black_Rook
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Black_Soldier
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Red_Advisor
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Red_Cannon
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Red_Elephant
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Red_General
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Red_Horse
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Red_Rook
+23:53:17 | INFO: Primitives created: 5
+23:53:17 | INFO: Extracting primitive: Piece_Red_Soldier
+23:53:17 | INFO: Primitives created: 5
+23:53:18 | INFO: Finished glTF 2.0 export in 0.32378649711608887 s
+
+OUTPUT_BLEND E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\XBD_ChineseChess_Set.blend
+OUTPUT_PREVIEW E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\XBD_ChineseChess_Set_preview.png
+OUTPUT_BOARD_GLB E:\work\2026\XiaoBanDengGameWorkspace\client\games\chinese_chess\assets\models\chess_board.glb
+OUTPUT_PIECES_GLB E:\work\2026\XiaoBanDengGameWorkspace\client\games\chinese_chess\assets\models\chess_pieces.glb
+BOARD_OBJECTS 182 TEMPLATES 14 PREVIEW_PIECES 32
+
+Blender quit

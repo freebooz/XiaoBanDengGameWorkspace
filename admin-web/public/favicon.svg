@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">小板凳品牌图形</title>
+  <defs>
+    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F0B45A"/>
+      <stop offset="0.52" stop-color="#D48A3A"/>
+      <stop offset="1" stop-color="#B96527"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="18" width="76" height="26" rx="11" fill="url(#wood)"/>
+  <path d="M23 43h14l-6 35H18zM59 43h14l5 35H65z" fill="#B96527"/>
+  <rect x="26" y="50" width="44" height="8" rx="4" fill="#D48A3A"/>
+  <circle cx="38" cy="31" r="2.6" fill="#5A2D1B"/>
+  <circle cx="58" cy="31" r="2.6" fill="#5A2D1B"/>
+  <path d="M42 34c2.8 3.2 9.2 3.2 12 0" fill="none" stroke="#5A2D1B" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M19 24c16-5 39-5 58 0" fill="none" stroke="#FFD890" stroke-width="2" opacity=".55"/>
+</svg>

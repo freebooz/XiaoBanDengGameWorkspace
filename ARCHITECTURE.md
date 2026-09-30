@@ -32,6 +32,16 @@ Foundation（账号/网络/房间/UI/支付/AI协议）
 
 Godot 产品采用“构建时组合”，不依赖运行时下载可执行代码。共享源码由 `tools/compose-godot.ps1` 按产品清单复制到临时生成工程。
 
+### 2.1 三维表现基线
+
+一期起，所有棋牌类游戏统一采用 3D Tabletop（桌面游戏三维表现）架构：棋盘、棋子、麻将牌、扑克牌、牌桌均为三维模型；材质统一使用 StandardMaterial3D/PBR（基于物理渲染）材质体系；主摄像机采用俯视或轻斜俯视构图；Godot 使用 Mobile Renderer（移动渲染器）作为 Windows/Android 共用视觉基线。2D 层仅承担 HUD、菜单、聊天、系统提示、AI 教学与复盘叠加。
+
+共享目录 `client/game_framework/tabletop3d/` 提供 PBR 材质工厂、灯光、环境和俯视摄像机。具体游戏只负责创建自己的三维桌面内容，禁止重复搭建渲染基础设施。
+
+### 2.2 对局计时基线
+
+对局时长与单步计时统一采用服务端权威时间戳。服务端快照下发 `server_time_ms`、`match_started_at_ms`、`turn_started_at_ms`、`step_warning_seconds` 与 `step_countdown_seconds`；客户端只根据这些字段显示。第一期默认：单步前60秒正常计时，超过60秒进入30秒警示倒计时；倒计时首次出现和最后10秒提供声音提醒。是否在倒计时结束后判负、托管或自动出招由具体 RuleSet 决定，客户端不得自行裁决。
+
 ## 3. 服务端分层
 
 ```text

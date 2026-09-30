@@ -8,6 +8,7 @@
   "android_package": "com.freebooz.xiaobandeng.chinesechess",
   "modules": [
     "foundation",
+    "game_framework/tabletop3d",
     "game_framework/board",
     "games/chinese_chess"
   ]

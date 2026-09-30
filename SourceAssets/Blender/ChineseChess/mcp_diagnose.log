@@ -1,0 +1,26 @@
+2026-09-30 00:55:56,265 - BlenderMCPServer - INFO - BlenderMCP server starting up
+2026-09-30 00:55:56,266 - BlenderMCPServer - INFO - Blender addon on disk is current (protocol 11).
+2026-09-30 00:55:56,267 - blender-mcp-telemetry - WARNING - Telemetry disabled via environment variable
+2026-09-30 00:55:56,268 - BlenderMCPServer - INFO - Connected to Blender at 127.0.0.1:9878
+2026-09-30 00:55:56,268 - BlenderMCPServer - INFO - Created new persistent connection to Blender
+2026-09-30 00:55:56,268 - BlenderMCPServer - INFO - Sending command: get_addon_info with params: None
+2026-09-30 00:55:56,268 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 00:55:56,320 - BlenderMCPServer - INFO - Received complete response (425 bytes)
+2026-09-30 00:55:56,321 - BlenderMCPServer - INFO - Received 425 bytes of data
+2026-09-30 00:55:56,321 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 00:55:56,321 - BlenderMCPServer - INFO - Blender addon up to date (protocol 11, addon [1, 7], Blender 5.2.1 LTS)
+2026-09-30 00:55:56,321 - BlenderMCPServer - INFO - Successfully connected to Blender on startup
+2026-09-30 00:55:56,325 - mcp.server.lowlevel.server - INFO - Processing request of type CallToolRequest
+2026-09-30 00:55:56,326 - BlenderMCPServer - INFO - Sending command: execute_code with params: {'code': '__file__ = \'E:\\\\work\\\\2026\\\\XiaoBanDengGameWorkspace\\\\SourceAssets\\\\Blender\\\\ChineseChess\\\\diagnose_grooves.py\'\nimport bpy\nimport bmesh\nimport json\nfrom mathutils import Vector\n\nsource = bpy.data.objects["Board | bamboo slab with integral feet"]\nresults = []\nfor kind in ("box", "tube", "welded_tube"):\n    if kind == "box":\n        bpy.ops.mesh.primitive_cube_add(size=1, location=(0.0, 0.02, 0.0199))\n        cutter = bpy.context.object\n        cutter.dimensions = (0.12, 0.0006, 0.0006)\n        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)\n    else:\n        curve = bpy.data.curves.new("diagnostic_tube", "CURVE")\n        curve.dimensions = "3D"\n        curve.bevel_depth = 0.0003\n        curve.bevel_resolution = 2\n        curve.use_fill_caps = True\n        spline = curve.splines.new("POLY")\n        spline.points.add(1)\n        spline.points[0].co = (-0.06, 0.02, 0.0199, 1)\n        spline.points[1].co = (0.06, 0.02, 0.0199, 1)\n        cutter = bpy.data.objects.new("diagnostic_tube", curve)\n        bpy.context.scene.collection.objects.link(cutter)\n        bpy.ops.object.select_all(action="DESELECT")\n        cutter.select_set(True)\n        bpy.context.view_layer.objects.active = cutter\n        bpy.ops.object.convert(target="MESH")\n    bm = bmesh.new()\n    bm.from_mesh(cutter.data)\n    if kind == "welded_tube":\n        bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=0.0000001)\n        bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))\n        bm.to_mesh(cutter.data)\n        cutter.data.update()\n    nonmanifold = sum(not edge.is_manifold for edge in bm.edges)\n    bm.free()\n    for solver in ("MANIFOLD", "EXACT"):\n        obj = source.copy()\n        obj.data = source.data.copy()\n        bpy.context.scene.collection.objects.link(obj)\n        obj.modifiers.clear()\n        modifier = obj.modifiers.new("diagnostic", "BOOLEAN")\n        modifier.solver = solver\n        modifier.operation = "DIFFERENCE"\n        modifier.object = cutter\n        bpy.context.view_layer.objects.active = obj\n        bpy.ops.object.modifier_apply(modifier=modifier.name)\n        hit, point, normal, face = obj.ray_cast(obj.matrix_world.inverted() @ Vector((0, 0.02, 0.1)), Vector((0, 0, -1)))\n        results.append({"kind": kind, "solver": solver, "cutter_nonmanifold_edges": nonmanifold, "vertices": len(obj.data.vertices), "depth": 0.02 - (obj.matrix_world @ point).z if hit else None})\n        bpy.data.objects.remove(obj, do_unlink=True)\n    bpy.data.objects.remove(cutter, do_unlink=True)\nprint(json.dumps(results))\n'}
+2026-09-30 00:55:56,326 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 00:55:56,435 - BlenderMCPServer - INFO - Received complete response (881 bytes)
+2026-09-30 00:55:56,435 - BlenderMCPServer - INFO - Received 881 bytes of data
+2026-09-30 00:55:56,435 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 00:55:56,435 - BlenderMCPServer - INFO - Sending command: get_telemetry_consent with params: None
+2026-09-30 00:55:56,435 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 00:55:56,463 - BlenderMCPServer - INFO - Received complete response (51 bytes)
+2026-09-30 00:55:56,463 - BlenderMCPServer - INFO - Received 51 bytes of data
+2026-09-30 00:55:56,463 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 00:55:56,465 - mcp.server.lowlevel.server - INFO - Processing request of type ListToolsRequest
+2026-09-30 00:55:56,516 - BlenderMCPServer - INFO - Disconnecting from Blender on shutdown
+2026-09-30 00:55:56,516 - BlenderMCPServer - INFO - BlenderMCP server shut down

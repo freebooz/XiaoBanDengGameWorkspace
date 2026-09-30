@@ -1,0 +1,33 @@
+2026-09-30 00:52:20,106 - BlenderMCPServer - INFO - BlenderMCP server starting up
+2026-09-30 00:52:20,118 - BlenderMCPServer - INFO - Blender addon on disk is current (protocol 11).
+2026-09-30 00:52:20,119 - blender-mcp-telemetry - WARNING - Telemetry disabled via environment variable
+2026-09-30 00:52:20,124 - BlenderMCPServer - INFO - Connected to Blender at 127.0.0.1:9878
+2026-09-30 00:52:20,124 - BlenderMCPServer - INFO - Created new persistent connection to Blender
+2026-09-30 00:52:20,124 - BlenderMCPServer - INFO - Sending command: get_addon_info with params: None
+2026-09-30 00:52:20,124 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 00:52:20,156 - BlenderMCPServer - INFO - Received complete response (425 bytes)
+2026-09-30 00:52:20,156 - BlenderMCPServer - INFO - Received 425 bytes of data
+2026-09-30 00:52:20,156 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 00:52:20,156 - BlenderMCPServer - INFO - Blender addon up to date (protocol 11, addon [1, 7], Blender 5.2.1 LTS)
+2026-09-30 00:52:20,156 - BlenderMCPServer - INFO - Successfully connected to Blender on startup
+2026-09-30 00:52:20,160 - mcp.server.lowlevel.server - INFO - Processing request of type ListToolsRequest
+2026-09-30 00:52:20,163 - mcp.server.lowlevel.server - INFO - Processing request of type CallToolRequest
+2026-09-30 00:52:20,163 - BlenderMCPServer - INFO - Sending command: get_addon_info with params: None
+2026-09-30 00:52:20,163 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 00:52:20,209 - BlenderMCPServer - INFO - Received complete response (425 bytes)
+2026-09-30 00:52:20,209 - BlenderMCPServer - INFO - Received 425 bytes of data
+2026-09-30 00:52:20,209 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 00:52:20,209 - BlenderMCPServer - INFO - Blender addon up to date (protocol 11, addon [1, 7], Blender 5.2.1 LTS)
+2026-09-30 00:52:20,209 - BlenderMCPServer - INFO - Sending command: get_telemetry_consent with params: None
+2026-09-30 00:52:20,209 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 00:52:20,264 - BlenderMCPServer - INFO - Received complete response (51 bytes)
+2026-09-30 00:52:20,264 - BlenderMCPServer - INFO - Received 51 bytes of data
+2026-09-30 00:52:20,264 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 00:52:20,318 - mcp.server.lowlevel.server - INFO - Processing request of type CallToolRequest
+2026-09-30 00:52:20,318 - BlenderMCPServer - INFO - Sending command: get_scene_info with params: None
+2026-09-30 00:52:20,318 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 00:52:20,372 - BlenderMCPServer - INFO - Received complete response (305 bytes)
+2026-09-30 00:52:20,372 - BlenderMCPServer - INFO - Received 305 bytes of data
+2026-09-30 00:52:20,372 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 00:52:20,376 - BlenderMCPServer - INFO - Disconnecting from Blender on shutdown
+2026-09-30 00:52:20,376 - BlenderMCPServer - INFO - BlenderMCP server shut down

@@ -1,0 +1,22 @@
+:root {
+  /* 小板凳品牌视觉变量：页面禁止散落硬编码品牌色。 */
+  --xbd-brand-primary: #D48A3A;
+  --xbd-brand-highlight: #F0B45A;
+  --xbd-sidebar-bg: #181411;
+  --xbd-sidebar-bg-secondary: #2A211B;
+  --xbd-page-bg: #F5F2ED;
+  --xbd-card-bg: #FFFDFC;
+  --xbd-text-primary: #292521;
+  --xbd-text-secondary: #7D756E;
+  --xbd-border: #E8E1D8;
+  --xbd-success: #3D9B68;
+  --xbd-warning: #D99B35;
+  --xbd-danger: #D75B4B;
+  --xbd-radius-sm: 8px;
+  --xbd-radius-md: 12px;
+  --xbd-radius-lg: 16px;
+  --xbd-shadow-card: 0 8px 24px rgba(71, 48, 29, 0.06);
+  --xbd-sidebar-width: 220px;
+  --xbd-sidebar-collapsed-width: 64px;
+  --xbd-header-height: 64px;
+}

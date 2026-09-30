@@ -8,6 +8,8 @@
 2. XiaoBanDengAdmin（小板凳统一运营管理后台）。
 3. XiaoBanDengChineseChess（小板凳象棋）：Windows + Android。
 4. XiaoBanDengMahjong（小板凳麻将）：贵阳麻将规则集，Windows + Android。
+5. 客户端统一采用 Godot 三维桌面空间：象棋棋盘/棋子、麻将牌/牌桌均使用三维模型与 PBR 材质，主摄像机为俯视/轻斜俯视；2D 仅作为 HUD 和交互叠加层。
+6. 象棋一期加入服务端权威对局计时：显示总对局时长与当前单步耗时；单步超过60秒后显示30秒圆形警示倒计时，并向当前执棋方播放声音提醒。
 
 ## 验收主链路
 

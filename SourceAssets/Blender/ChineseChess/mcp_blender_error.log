@@ -1,0 +1,18 @@
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Roaming\Blender Foundation\Blender\5.2\scripts\addons\blender_mcp.py", line 2112, in execute_code
+    exec(code, namespace)
+    ~~~~^^^^^^^^^^^^^^^^^
+  File "<string>", line 280, in <module>
+  File "<string>", line 222, in carve
+RuntimeError: Engraved river calligraphy: cutter has 82 non-manifold edges
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Roaming\Blender Foundation\Blender\5.2\scripts\addons\blender_mcp.py", line 1561, in _execute_command_internal
+    result = handler(**params)
+  File "C:\Users\Administrator\AppData\Roaming\Blender Foundation\Blender\5.2\scripts\addons\blender_mcp.py", line 2122, in execute_code
+    raise Exception(
+    ...<5 lines>...
+    )
+Exception: {"exception_type": "RuntimeError", "message": "Engraved river calligraphy: cutter has 82 non-manifold edges", "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\Administrator\\AppData\\Roaming\\Blender Foundation\\Blender\\5.2\\scripts\\addons\\blender_mcp.py\", line 2112, in execute_code\n    exec(code, namespace)\n    ~~~~^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 280, in <module>\n  File \"<string>\", line 222, in carve\nRuntimeError: Engraved river calligraphy: cutter has 82 non-manifold edges\n"}

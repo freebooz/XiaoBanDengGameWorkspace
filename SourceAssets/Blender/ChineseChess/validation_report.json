@@ -1,0 +1,717 @@
+{
+  "status": "PASS",
+  "blender_version": "5.2.1 LTS",
+  "board_bounds_m": [
+    [
+      -0.18400000035762787,
+      0.18400000035762787
+    ],
+    [
+      -0.20399999618530273,
+      0.20399999618530273
+    ],
+    [
+      -0.003999999724328518,
+      0.019999999552965164
+    ]
+  ],
+  "piece_dimensions_m": {
+    "Piece_Black_Rook": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Black_Horse": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Black_Elephant": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Black_Advisor": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Black_General": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Black_Cannon": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Black_Soldier": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Red_Rook": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Red_Horse": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Red_Elephant": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Red_Advisor": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Red_General": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Red_Cannon": [
+      0.032,
+      0.032,
+      0.01003
+    ],
+    "Piece_Red_Soldier": [
+      0.032,
+      0.032,
+      0.01003
+    ]
+  },
+  "checks": {
+    "saved_scene_opened": {
+      "passed": true,
+      "detail": "E:\\work\\2026\\XiaoBanDengGameWorkspace\\SourceAssets\\Blender\\ChineseChess\\XBD_ChineseChess_Set.blend"
+    },
+    "editable_board": {
+      "passed": true,
+      "detail": 81
+    },
+    "14_distinct_piece_masters": {
+      "passed": true,
+      "detail": 14
+    },
+    "32_opening_pieces": {
+      "passed": true,
+      "detail": 32
+    },
+    "red_black_16_each": {
+      "passed": true,
+      "detail": {
+        "red": 16,
+        "black": 16
+      }
+    },
+    "standard_playfield_ranks": {
+      "passed": true,
+      "detail": "10 recessed rank lines"
+    },
+    "river_and_palaces": {
+      "passed": true,
+      "detail": "2 river legends and 4 recessed palace diagonals"
+    },
+    "single_bamboo_body": {
+      "passed": true,
+      "detail": "one flat bamboo body with integral supports"
+    },
+    "size_Piece_Black_Rook": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Black_Rook": {
+      "passed": true,
+      "detail": "車"
+    },
+    "hidden_master_Piece_Black_Rook": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Black_Rook": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Black_Rook": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.0021499999457936358
+      }
+    },
+    "no_circle_cavity_Piece_Black_Rook": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Black_Rook": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Black_Horse": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Black_Horse": {
+      "passed": true,
+      "detail": "馬"
+    },
+    "hidden_master_Piece_Black_Horse": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Black_Horse": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Black_Horse": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.0021499997292925375
+      }
+    },
+    "no_circle_cavity_Piece_Black_Horse": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Black_Horse": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Black_Elephant": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Black_Elephant": {
+      "passed": true,
+      "detail": "象"
+    },
+    "hidden_master_Piece_Black_Elephant": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Black_Elephant": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Black_Elephant": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.0021499997933639176
+      }
+    },
+    "no_circle_cavity_Piece_Black_Elephant": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Black_Elephant": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Black_Advisor": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Black_Advisor": {
+      "passed": true,
+      "detail": "士"
+    },
+    "hidden_master_Piece_Black_Advisor": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Black_Advisor": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Black_Advisor": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.002150000558709623
+      }
+    },
+    "no_circle_cavity_Piece_Black_Advisor": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Black_Advisor": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Black_General": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Black_General": {
+      "passed": true,
+      "detail": "將"
+    },
+    "hidden_master_Piece_Black_General": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Black_General": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Black_General": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.0021499998637194324
+      }
+    },
+    "no_circle_cavity_Piece_Black_General": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Black_General": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Black_Cannon": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Black_Cannon": {
+      "passed": true,
+      "detail": "炮"
+    },
+    "hidden_master_Piece_Black_Cannon": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Black_Cannon": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Black_Cannon": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.002149999671336656
+      }
+    },
+    "no_circle_cavity_Piece_Black_Cannon": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Black_Cannon": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Black_Soldier": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Black_Soldier": {
+      "passed": true,
+      "detail": "卒"
+    },
+    "hidden_master_Piece_Black_Soldier": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Black_Soldier": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Black_Soldier": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.00214999953451272
+      }
+    },
+    "no_circle_cavity_Piece_Black_Soldier": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Black_Soldier": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Red_Rook": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Red_Rook": {
+      "passed": true,
+      "detail": "車"
+    },
+    "hidden_master_Piece_Red_Rook": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Red_Rook": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Red_Rook": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.0021499999457936358
+      }
+    },
+    "no_circle_cavity_Piece_Red_Rook": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Red_Rook": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Red_Horse": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Red_Horse": {
+      "passed": true,
+      "detail": "馬"
+    },
+    "hidden_master_Piece_Red_Horse": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Red_Horse": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Red_Horse": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.0021499997292925375
+      }
+    },
+    "no_circle_cavity_Piece_Red_Horse": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Red_Horse": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Red_Elephant": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Red_Elephant": {
+      "passed": true,
+      "detail": "相"
+    },
+    "hidden_master_Piece_Red_Elephant": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Red_Elephant": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Red_Elephant": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.0021499999760576007
+      }
+    },
+    "no_circle_cavity_Piece_Red_Elephant": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Red_Elephant": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Red_Advisor": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Red_Advisor": {
+      "passed": true,
+      "detail": "仕"
+    },
+    "hidden_master_Piece_Red_Advisor": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Red_Advisor": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Red_Advisor": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.0021499998971745912
+      }
+    },
+    "no_circle_cavity_Piece_Red_Advisor": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Red_Advisor": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Red_General": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Red_General": {
+      "passed": true,
+      "detail": "帥"
+    },
+    "hidden_master_Piece_Red_General": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Red_General": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Red_General": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.0021499996628740817
+      }
+    },
+    "no_circle_cavity_Piece_Red_General": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Red_General": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Red_Cannon": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Red_Cannon": {
+      "passed": true,
+      "detail": "炮"
+    },
+    "hidden_master_Piece_Red_Cannon": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Red_Cannon": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Red_Cannon": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.002149999671336656
+      }
+    },
+    "no_circle_cavity_Piece_Red_Cannon": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Red_Cannon": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "size_Piece_Red_Soldier": {
+      "passed": true,
+      "detail": [
+        0.032,
+        0.032,
+        0.01003
+      ]
+    },
+    "glyph_Piece_Red_Soldier": {
+      "passed": true,
+      "detail": "兵"
+    },
+    "hidden_master_Piece_Red_Soldier": {
+      "passed": true,
+      "detail": "masters do not overlap the board preview"
+    },
+    "flat_character_and_circle_Piece_Red_Soldier": {
+      "passed": true,
+      "detail": "flat ink marking, no engraved lettering or circle"
+    },
+    "character_circle_margin_Piece_Red_Soldier": {
+      "passed": true,
+      "detail": {
+        "minimum_radial_gap_m": 0.0021499998691562085
+      }
+    },
+    "no_circle_cavity_Piece_Red_Soldier": {
+      "passed": true,
+      "detail": {
+        "hit_z_m": 0.01002500206232071
+      }
+    },
+    "valid_mesh_Piece_Red_Soldier": {
+      "passed": true,
+      "detail": "mesh passes Blender structural validation"
+    },
+    "board_dimensions": {
+      "passed": true,
+      "detail": [
+        [
+          -0.18400000035762787,
+          0.18400000035762787
+        ],
+        [
+          -0.20399999618530273,
+          0.20399999618530273
+        ],
+        [
+          -0.003999999724328518,
+          0.019999999552965164
+        ]
+      ]
+    },
+    "underside_hit_0.0": {
+      "passed": true,
+      "detail": 0.0
+    },
+    "underside_hit_0.174": {
+      "passed": true,
+      "detail": 0.174
+    },
+    "curved_underside_support": {
+      "passed": true,
+      "detail": [
+        0.00200000312179327,
+        -0.004000001586973667
+      ]
+    },
+    "pieces_clear_of_board_edge": {
+      "passed": true,
+      "detail": {
+        "minimum_edge_clearance_m": 0.007999990224838244
+      }
+    },
+    "true_grid_cavity_rank": {
+      "passed": true,
+      "detail": {
+        "depth_m": 0.0007749907672405243
+      }
+    },
+    "true_grid_cavity_file": {
+      "passed": true,
+      "detail": {
+        "depth_m": 0.0007749982178211212
+      }
+    },
+    "true_grid_cavity_palace": {
+      "passed": true,
+      "detail": {
+        "depth_m": 0.0007749907672405243
+      }
+    },
+    "true_grid_cavity_cannon_marker": {
+      "passed": true,
+      "detail": {
+        "depth_m": 0.0006499998271465302
+      }
+    },
+    "bamboo_packed_texture": {
+      "passed": true,
+      "detail": [
+        "bamboo_woodgrain.png"
+      ]
+    },
+    "golden_nanmu_packed_texture": {
+      "passed": true,
+      "detail": [
+        "golden_nanmu_fine.png"
+      ]
+    },
+    "preview_render": {
+      "passed": true,
+      "detail": "PNG render saved"
+    },
+    "chess_board.glb_exists": {
+      "passed": true,
+      "detail": "E:\\work\\2026\\XiaoBanDengGameWorkspace\\client\\games\\chinese_chess\\assets\\models\\chess_board.glb"
+    },
+    "chess_pieces.glb_exists": {
+      "passed": true,
+      "detail": "E:\\work\\2026\\XiaoBanDengGameWorkspace\\client\\games\\chinese_chess\\assets\\models\\chess_pieces.glb"
+    }
+  }
+}

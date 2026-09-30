@@ -1,0 +1,36 @@
+BlenderMCP addon registered
+Server thread started
+BlenderMCP server started on localhost:9878
+XBD_BLENDER_MCP_READY port=9878
+00:42.578  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved river calligraphy", 无法执行，物体 'Cut | River Chu He' 存在非流形几何结构
+00:42.578  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved river calligraphy", 无法执行，物体 'Cut | River Chu He' 存在非流形几何结构
+00:42.594  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved river calligraphy", 无法执行，物体 'Cut | River Chu He' 存在非流形几何结构
+00:42.641  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved river calligraphy.001", 无法执行，物体 'Cut | River Han Jie' 存在非流形几何结构
+00:42.657  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved river calligraphy.001", 无法执行，物体 'Cut | River Han Jie' 存在非流形几何结构
+00:42.657  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved river calligraphy.001", 无法执行，物体 'Cut | River Han Jie' 存在非流形几何结构
+00:42.688  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved ranks", 无法执行，物体 'Cut | Grid | rank 00' 存在非流形几何结构
+00:42.688  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved ranks", 无法执行，物体 'Cut | Grid | rank 00' 存在非流形几何结构
+00:42.688  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved ranks", 无法执行，物体 'Cut | Grid | rank 00' 存在非流形几何结构
+00:42.703  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved files", 无法执行，物体 'Cut | Grid | file 00 / 0' 存在非流形几何结构
+00:42.703  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved files", 无法执行，物体 'Cut | Grid | file 00 / 0' 存在非流形几何结构
+00:42.703  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved files", 无法执行，物体 'Cut | Grid | file 00 / 0' 存在非流形几何结构
+00:42.703  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved palace_a", 无法执行，物体 'Cut | Palace | -0.175 / -1' 存在非流形几何结构
+00:42.703  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved palace_a", 无法执行，物体 'Cut | Palace | -0.175 / -1' 存在非流形几何结构
+00:42.703  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved palace_a", 无法执行，物体 'Cut | Palace | -0.175 / -1' 存在非流形几何结构
+00:42.719  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved palace_b", 无法执行，物体 'Cut | Palace | -0.175 / 1' 存在非流形几何结构
+00:42.719  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved palace_b", 无法执行，物体 'Cut | Palace | -0.175 / 1' 存在非流形几何结构
+00:42.719  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved palace_b", 无法执行，物体 'Cut | Palace | -0.175 / 1' 存在非流形几何结构
+00:42.735  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved target_marks", 无法执行，物体 'Cut | Cannon post | 2 1 -1 -1' 存在非流形几何结构
+00:42.735  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved target_marks", 无法执行，物体 'Cut | Cannon post | 2 1 -1 -1' 存在非流形几何结构
+00:42.735  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet", Modifier: "Engraved target_marks", 无法执行，物体 'Cut | Cannon post | 2 1 -1 -1' 存在非流形几何结构
+00:43.094  reports          | WARNING 路径 'C:\Windows\Fonts\simkai.ttf' 不能成为 Font 'KaiTi Regular' 的相对路径
+00:43.938  render           | Saved: 'E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\XBD_ChineseChess_Set_preview.png'
+03:15.657  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet.001", Modifier: "diagnostic", 无法执行，物体 'diagnostic_tube' 存在非流形几何结构
+03:15.657  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet.001", Modifier: "diagnostic", 无法执行，物体 'diagnostic_tube' 存在非流形几何结构
+03:15.672  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet.001", Modifier: "diagnostic", 无法执行，物体 'diagnostic_tube' 存在非流形几何结构
+03:58.203  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet.001", Modifier: "diagnostic", 无法执行，物体 'diagnostic_tube' 存在非流形几何结构
+03:58.203  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet.001", Modifier: "diagnostic", 无法执行，物体 'diagnostic_tube' 存在非流形几何结构
+03:58.203  object.modifier  | WARNING Object: "Board | bamboo slab with integral feet.001", Modifier: "diagnostic", 无法执行，物体 'diagnostic_tube' 存在非流形几何结构
+08:41.782  render           | Saved: 'E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\XBD_ChineseChess_Set_preview.png'
+11:56.203  render           | Saved: 'E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\XBD_ChessBoard_engraved_preview.png'
+12:00.016  render           | Saved: 'E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\XBD_ChessBoard_groove_detail.png'

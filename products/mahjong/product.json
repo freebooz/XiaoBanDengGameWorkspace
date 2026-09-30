@@ -8,6 +8,7 @@
   "android_package": "com.freebooz.xiaobandeng.mahjong",
   "modules": [
     "foundation",
+    "game_framework/tabletop3d",
     "game_framework/tile",
     "games/mahjong/guiyang"
   ]

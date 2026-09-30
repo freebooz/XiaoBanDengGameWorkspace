@@ -12,7 +12,13 @@ $target = Join-Path $workspace ("client\.generated\" + $Product)
 
 # compose-godot.ps1（Godot产品组合工具）
 # 源模块只保留一份，本脚本按产品清单复制到临时工程，避免多个App长期复制公共源码。
-if(Test-Path $target){ Remove-Item $target -Recurse -Force }
+$expectedTarget = [System.IO.Path]::GetFullPath((Join-Path $workspace ("client\.generated\" + $Product)))
+if(Test-Path -LiteralPath $target){
+    $resolvedTarget = (Resolve-Path -LiteralPath $target).ProviderPath
+    if($resolvedTarget -ne $expectedTarget){ throw "Generated project path does not match the intended target: $resolvedTarget" }
+    if((Get-Item -LiteralPath $target).Attributes -band [System.IO.FileAttributes]::ReparsePoint){ throw "Refusing to remove a redirected generated directory: $resolvedTarget" }
+    Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
+}
 New-Item -ItemType Directory -Force -Path $target | Out-Null
 
 Copy-Item (Join-Path $workspace "client\app_shell\*") $target -Recurse -Force
@@ -33,6 +39,19 @@ foreach($module in $config.modules){
 $projectFile = Join-Path $target "project.godot"
 $projectText = Get-Content $projectFile -Raw -Encoding UTF8
 $projectText = $projectText.Replace('config/name="XiaoBanDeng Product"', 'config/name="' + $config.display_name + '"')
+if($Product -eq "chinese_chess"){
+    # 象棋采用参考图的竖屏布局，麻将继续使用共享产品壳的横屏设置。
+    $projectText = $projectText.Replace('window/size/viewport_width=1280', 'window/size/viewport_width=720')
+    $projectText = $projectText.Replace('window/size/viewport_height=720', 'window/size/viewport_height=1280')
+    $projectText = $projectText.Replace('window/size/window_width_override=1280', 'window/size/window_width_override=720')
+    $projectText = $projectText.Replace('window/size/window_height_override=720', 'window/size/window_height_override=1280')
+    $portraitSettings = @'
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+'@
+    $projectText = $projectText.Replace('window/stretch/mode="canvas_items"', $portraitSettings)
+}
 [System.IO.File]::WriteAllText($projectFile, $projectText, [System.Text.UTF8Encoding]::new($false))
 
 $exportFile = Join-Path $target "export_presets.cfg"

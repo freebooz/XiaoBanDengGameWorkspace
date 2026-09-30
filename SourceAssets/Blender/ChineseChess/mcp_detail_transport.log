@@ -1,0 +1,26 @@
+2026-09-30 01:03:50,334 - BlenderMCPServer - INFO - BlenderMCP server starting up
+2026-09-30 01:03:50,480 - BlenderMCPServer - INFO - Blender addon on disk is current (protocol 11).
+2026-09-30 01:03:50,512 - blender-mcp-telemetry - WARNING - Telemetry disabled via environment variable
+2026-09-30 01:03:50,690 - BlenderMCPServer - INFO - Connected to Blender at 127.0.0.1:9878
+2026-09-30 01:03:50,690 - BlenderMCPServer - INFO - Created new persistent connection to Blender
+2026-09-30 01:03:50,690 - BlenderMCPServer - INFO - Sending command: get_addon_info with params: None
+2026-09-30 01:03:50,690 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 01:03:50,705 - BlenderMCPServer - INFO - Received complete response (425 bytes)
+2026-09-30 01:03:50,705 - BlenderMCPServer - INFO - Received 425 bytes of data
+2026-09-30 01:03:50,705 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 01:03:50,706 - BlenderMCPServer - INFO - Blender addon up to date (protocol 11, addon [1, 7], Blender 5.2.1 LTS)
+2026-09-30 01:03:50,706 - BlenderMCPServer - INFO - Successfully connected to Blender on startup
+2026-09-30 01:03:50,960 - mcp.server.lowlevel.server - INFO - Processing request of type CallToolRequest
+2026-09-30 01:03:50,993 - BlenderMCPServer - INFO - Sending command: execute_code with params: {'code': '__file__ = \'E:\\\\work\\\\2026\\\\XiaoBanDengGameWorkspace\\\\SourceAssets\\\\Blender\\\\ChineseChess\\\\render_board_detail.py\'\n"""Render the saved board unobstructed and a real groove close-up via Blender MCP."""\nfrom pathlib import Path\nimport bpy\nfrom mathutils import Vector\n\nroot = Path(__file__).resolve().parent\nscene = bpy.context.scene\ncamera = scene.camera\nold_matrix = camera.matrix_world.copy()\nold_type, old_lens, old_scale = camera.data.type, camera.data.lens, camera.data.ortho_scale\nold_path = scene.render.filepath\nold_size = (scene.render.resolution_x, scene.render.resolution_y)\npieces = list(bpy.data.collections["03 | Opening arrangement preview"].objects)\ntry:\n    for obj in pieces:\n        obj.hide_render = True\n    camera.location = (0, -0.31, 0.54)\n    camera.rotation_euler = (Vector((0, 0, 0.013)) - camera.location).to_track_quat("-Z", "Y").to_euler()\n    camera.data.type = "ORTHO"\n    camera.data.ortho_scale = 0.465\n    scene.render.resolution_x, scene.render.resolution_y = 1400, 1400\n    scene.render.filepath = str(root / "XBD_ChessBoard_engraved_preview.png")\n    bpy.ops.render.render(write_still=True)\n    camera.location = (-0.11, -0.225, 0.165)\n    camera.rotation_euler = (Vector((-0.055, -0.13, 0.020)) - camera.location).to_track_quat("-Z", "Y").to_euler()\n    camera.data.ortho_scale = 0.13\n    scene.render.resolution_x, scene.render.resolution_y = 1600, 1050\n    scene.render.filepath = str(root / "XBD_ChessBoard_groove_detail.png")\n    bpy.ops.render.render(write_still=True)\nfinally:\n    for obj in pieces:\n        obj.hide_render = False\n    camera.matrix_world = old_matrix\n    camera.data.type, camera.data.lens, camera.data.ortho_scale = old_type, old_lens, old_scale\n    scene.render.resolution_x, scene.render.resolution_y = old_size\n    scene.render.filepath = old_path\nprint("BOARD_DETAIL_RENDERS_SAVED")\n'}
+2026-09-30 01:03:50,993 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 01:03:58,226 - BlenderMCPServer - INFO - Received complete response (93 bytes)
+2026-09-30 01:03:58,226 - BlenderMCPServer - INFO - Received 93 bytes of data
+2026-09-30 01:03:58,226 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 01:03:58,226 - BlenderMCPServer - INFO - Sending command: get_telemetry_consent with params: None
+2026-09-30 01:03:58,227 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 01:03:58,270 - BlenderMCPServer - INFO - Received complete response (51 bytes)
+2026-09-30 01:03:58,270 - BlenderMCPServer - INFO - Received 51 bytes of data
+2026-09-30 01:03:58,270 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 01:03:58,274 - mcp.server.lowlevel.server - INFO - Processing request of type ListToolsRequest
+2026-09-30 01:03:58,874 - BlenderMCPServer - INFO - Disconnecting from Blender on shutdown
+2026-09-30 01:03:58,875 - BlenderMCPServer - INFO - BlenderMCP server shut down
