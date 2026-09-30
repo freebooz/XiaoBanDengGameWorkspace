@@ -1,0 +1,9 @@
+00:00.438  blend            | Read blend: "E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\XBD_ChineseChess_Set.blend"
+Traceback (most recent call last):
+  File "E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\check_latest_visual_contract.py", line 10, in <module>
+    assert abs((hi.z - lo.z) - 0.006) < 1e-6, "board must be a 6 mm flat plate with no base"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: board must be a 6 mm flat plate with no base
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 02:38:20)
+
+Blender quit

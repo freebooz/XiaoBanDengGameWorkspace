@@ -1,0 +1,10 @@
+00:00.407  blend            | Read blend: "E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\XBD_ChineseChess_Set.blend"
+BOARD_UV_AFFINE_RESIDUAL_PIXELS max= 21.54056675115689 rms= 7.497745832299512
+Traceback (most recent call last):
+  File "E:\work\2026\XiaoBanDengGameWorkspace\SourceAssets\Blender\ChineseChess\audit_board_uv.py", line 15, in <module>
+    assert np.abs(residual).max() < .01, 'Playing surface must use one continuous affine UV transform'
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Playing surface must use one continuous affine UV transform
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 02:38:20)
+
+Blender quit

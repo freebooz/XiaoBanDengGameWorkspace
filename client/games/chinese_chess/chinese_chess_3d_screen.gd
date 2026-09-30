@@ -1,4 +1,5 @@
 extends Control
+signal request_return_to_lobby
 ## ChineseChess3DScreen（小板凳象棋三维在线对局界面）
 ## 参考国风竖屏对弈布局：山水背景、厚木棋盘、立体棋子与双人信息区。
 ## 红黑双方分别从自己的棋盘一侧观察，黑方相机与红方相差180度。
@@ -11,29 +12,53 @@ const WARNING_SOUND_SCRIPT = preload("res://modules/foundation/audio/turn_warnin
 const LANDSCAPE_TEXTURE_PATH := "res://modules/games/chinese_chess/assets/ink_landscape_background.png"
 const PORTRAIT_TEXTURE_PATH := "res://modules/games/chinese_chess/assets/player_portraits.png"
 const BOARD_SURFACE_TEXTURE_PATH := "res://modules/games/chinese_chess/assets/engraved_chessboard.png"
-const WOOD_GRAIN_TEXTURE_PATH := "res://modules/games/chinese_chess/assets/board_woodgrain.png"
+const WOOD_GRAIN_TEXTURE_PATH := "res://modules/games/chinese_chess/assets/red_sandalwood_woodgrain.png"
+const GOLDEN_NANMU_TEXTURE_PATH := "res://modules/games/chinese_chess/assets/golden_nanmu_woodgrain.png"
 const BLENDER_BOARD_PATH := "res://modules/games/chinese_chess/assets/models/chess_board.glb"
 const BLENDER_PIECES_PATH := "res://modules/games/chinese_chess/assets/models/chess_pieces.glb"
+const MOVE_SOUND_PATH := "res://modules/games/chinese_chess/assets/audio/sfx_chess_move_wood_01.wav"
+const MOVE_SOUND_FALLBACK_PATH := "res://modules/games/chinese_chess/assets/audio/move_wood.wav"
+const BGM_PATH := "res://modules/games/chinese_chess/assets/audio/bgm_chinese_guzheng_01.mp3"
+const BGM_FALLBACK_PATH := "res://modules/games/chinese_chess/assets/audio/bgm_guofeng.wav"
+const ACTION_ICON_ROOT := "res://modules/games/chinese_chess/assets/ui/mobile/"
+const BRAND_STOOL_PATH := ACTION_ICON_ROOT + "brand_stool_3d.png"
 
 const CELL_SIZE := 0.86
 const BOARD_Y := 0.125
 const PIECE_CENTER_Y := 0.22
 const GRID_WIDTH := CELL_SIZE * 8.0
 const GRID_HEIGHT := CELL_SIZE * 9.0
-const PIECE_RADIUS := CELL_SIZE * 0.40
+const PIECE_RADIUS := CELL_SIZE * 0.45
 const BLENDER_MODEL_SCALE := CELL_SIZE / 0.040
 const BLENDER_BOARD_TOP := 0.020
 const INVALID_POS := Vector2i(-1, -1)
-const DEFAULT_ROOM_ID := "manual-chess-001"
+const DEFAULT_ROOM_ID := "1000"
 const BOARD_VIEW_SIZE := Vector2i(1000, 1140)
+const CAMERA_FOV := 35.0
+const CAMERA_HEIGHT := BOARD_Y + 18.0
+const CAMERA_RADIUS := 2.5
+const VISUAL_SETTINGS_PATH := "user://chinese_chess_visuals.cfg"
+const QUALITY_SIZES := [Vector2i(750, 855), Vector2i(1000, 1140), Vector2i(1500, 1710)]
+const QUALITY_MSAA := [Viewport.MSAA_2X, Viewport.MSAA_4X, Viewport.MSAA_8X]
 const INK := Color("#1b1713")
 const GOLD := Color("#efd1a0")
+enum LayoutMode {
+	PHONE_PORTRAIT,
+	TABLET_PORTRAIT,
+	PHONE_LANDSCAPE,
+	TABLET_LANDSCAPE,
+	DESKTOP,
+	WIDE_DESKTOP,
+}
+
 
 var product: Dictionary = {}
+var match_context: Dictionary = {}
 var _landscape_texture: Texture2D
 var _portrait_texture: Texture2D
 var _board_surface_texture: Texture2D
 var _wood_grain_texture: Texture2D
+var _golden_nanmu_texture: Texture2D
 
 var _socket := WebSocketPeer.new()
 var _connected := false
@@ -44,8 +69,15 @@ var _client_id := ""
 var _your_color := ""
 var _turn := ""
 var _winner := ""
+var _loser := ""
+var _end_reason := ""
+var _dissolved := false
+var _finished_at_ms: int = 0
 var _room_status := "waiting"
 var _selected := INVALID_POS
+var _move_number := 1
+var _layout_mode := LayoutMode.PHONE_PORTRAIT
+var _last_reported_layout_mode := -1
 
 var _stage
 var _board_viewport: SubViewport
@@ -55,15 +87,21 @@ var _board_text_root: Node3D
 var _selection_ring: MeshInstance3D
 var _pieces_by_pos: Dictionary = {}
 var _blender_piece_templates: Dictionary = {}
+var _grid_x_m := PackedFloat64Array([-.160, -.120, -.080, -.040, 0, .040, .080, .120, .160])
+var _grid_y_m := PackedFloat64Array([.180, .140, .100, .060, .020, -.020, -.060, -.100, -.140, -.180])
+var _grid_registration_loaded := false
+var _pbr_material_reported := false
 
 var _status_label: Label
 var _role_label: Label
 var _turn_label: Label
+var _turn_status_label: Label
+var _round_status_label: Label
 var _left_player_label: Label
 var _left_timer_label: Label
 var _right_player_label: Label
 var _right_timer_label: Label
-var _background: TextureRect
+var _background: ColorRect
 var _top_shade: ColorRect
 var _bottom_shade: ColorRect
 var _title_label: Label
@@ -79,12 +117,34 @@ var _board_frame: Panel
 var _board_view: TextureRect
 var _action_buttons: Array[Button] = []
 var _footer_label: Label
+var _brand_stool: TextureRect
+var _music_quick_button: Button
+var _settings_quick_button: Button
 var _menu_panel: Panel
 var _menu_label: Label
 var _menu_close: Button
+var _quality_label: Label
+var _quality_option: OptionButton
+var _render_quality := 1
 var _match_duration_label: Label
 var _countdown_clock: Control
 var _warning_audio: AudioStreamPlayer
+var _move_audio: AudioStreamPlayer
+var _bgm_audio: AudioStreamPlayer
+var _bgm_enabled := true
+var _app_has_focus := true
+var _sfx_enabled := true
+var _bgm_toggle_button: Button
+var _sfx_toggle_button: Button
+var _settlement_overlay: ColorRect
+var _settlement_panel: Panel
+var _settlement_title: Label
+var _settlement_detail: Label
+var _settlement_stats: Label
+var _settlement_review_button: Button
+var _settlement_lobby_button: Button
+var _settlement_shown := false
+var _auto_validation_move_sent := false
 
 # 服务端权威计时状态。客户端仅平滑显示，不自行决定规则超时。
 var _server_clock_offset_ms: int = 0
@@ -96,19 +156,35 @@ var _last_countdown_second: int = -999
 
 
 func _ready() -> void:
-	_client_id = "pc-%s" % str(OS.get_process_id())
+	_room_id = str(match_context.get("room_id", DEFAULT_ROOM_ID))
+	_client_id = str(match_context.get("account_id", ""))
+	if _client_id == "":
+		_client_id = "pc-%s" % str(OS.get_process_id())
+	print("CHESS_CONTEXT room=%s client=%s" % [_room_id, _client_id])
 	_landscape_texture = _load_png_texture(LANDSCAPE_TEXTURE_PATH, Color("#2b211b"))
 	_portrait_texture = _load_png_texture(PORTRAIT_TEXTURE_PATH, Color("#8a5f45"))
 	_board_surface_texture = _load_png_texture(BOARD_SURFACE_TEXTURE_PATH, Color("#935d37"))
 	_wood_grain_texture = _load_png_texture(WOOD_GRAIN_TEXTURE_PATH, Color("#65402b"))
+	_golden_nanmu_texture = _load_png_texture(GOLDEN_NANMU_TEXTURE_PATH, Color("#d2ad6f"))
 	mouse_filter = Control.MOUSE_FILTER_PASS
+	_load_render_quality()
 	_build_3d_world()
 	_build_hud()
+	_apply_render_quality(_render_quality, false)
 	_show_preview_position()
 	resized.connect(_layout_hud)
 	_layout_hud()
 	_connect_socket()
 	set_process(true)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		_app_has_focus = true
+		_sync_bgm_playback()
+	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_app_has_focus = false
+		_sync_bgm_playback()
 
 
 func _process(_delta: float) -> void:
@@ -159,19 +235,20 @@ func _build_3d_world() -> void:
 	world.add_child(_stage)
 	_camera = _stage.configure(
 		9.7,
-		Vector3(0.0, 17.0, 4.2),
-		Vector3(0.0, 0.0, 0.0),
-		false,
-		34.0
+		Vector3(0.0, CAMERA_HEIGHT, CAMERA_RADIUS),
+		Vector3(0.0, BOARD_Y, 0.0),
+		true,
+		CAMERA_FOV
 	)
-	_stage.set_orbit_view(0.0, 4.2, 17.0, Vector3.ZERO)
+	_stage.set_orbit_view(0.0, CAMERA_RADIUS, CAMERA_HEIGHT, Vector3(0.0, BOARD_Y, 0.0))
 	_stage.get_node("Floor").visible = false
 	var board_environment: WorldEnvironment = _stage.get_node("WorldEnvironment")
 	board_environment.environment.background_mode = Environment.BG_CLEAR_COLOR
 
-	var table_material := PBR_FACTORY.create_material(Color("#5c3827"), 0.52, 0.01)
-	var frame_material := PBR_FACTORY.create_material(Color("#744b35"), 0.48, 0.01)
-	var engraved_material := PBR_FACTORY.create_material(Color("#d2b7a0"), 0.64, 0.0)
+	# 恢复早期檀木棋盘：红檀木厚底座/边框 + 温润雕刻盘面。
+	var table_material := PBR_FACTORY.create_material(Color("#4b1f19"), 0.42, 0.01)
+	var frame_material := PBR_FACTORY.create_material(Color("#6c2a21"), 0.38, 0.01)
+	var engraved_material := PBR_FACTORY.create_material(Color("#d3aa70"), 0.52, 0.0)
 	table_material.albedo_texture = _wood_grain_texture
 	frame_material.albedo_texture = _wood_grain_texture
 	engraved_material.albedo_texture = _board_surface_texture
@@ -199,6 +276,7 @@ func _build_3d_world() -> void:
 	engraved_face.material_override = engraved_material
 	engraved_face.position.y = 0.128
 	world.add_child(engraved_face)
+	# 优先使用真正的雕刻三维棋盘；程序化棋盘仅作为资源加载失败时的降级方案。
 	if _add_blender_assets(world):
 		world.get_node("ChessTable").visible = false
 		world.get_node("ChessBoardCarvedBody").visible = false
@@ -224,12 +302,27 @@ func _build_3d_world() -> void:
 
 
 func _add_blender_assets(world: Node3D) -> bool:
-	if not ResourceLoader.exists(BLENDER_BOARD_PATH) or not ResourceLoader.exists(BLENDER_PIECES_PATH):
-		return false
-	var board_scene := load(BLENDER_BOARD_PATH) as PackedScene
-	var pieces_scene := load(BLENDER_PIECES_PATH) as PackedScene
+	# Godot 4.x 对 .glb 源路径的 ResourceLoader.exists() 在部分运行模式下可能返回 false，
+	# 即使资源已经被编辑器正确导入；因此直接加载 PackedScene，并以 null 作为降级判断。
+	var board_scene := ResourceLoader.load(BLENDER_BOARD_PATH, "PackedScene") as PackedScene
+	var pieces_scene := ResourceLoader.load(BLENDER_PIECES_PATH, "PackedScene") as PackedScene
+	print("CHESS_GLTF_LOAD board=%s pieces=%s" % [str(board_scene != null), str(pieces_scene != null)])
 	if board_scene == null or pieces_scene == null:
 		return false
+
+	var board := board_scene.instantiate() as Node3D
+	board.name = "BlenderRedSandalwoodBoard"
+	board.scale = Vector3.ONE * BLENDER_MODEL_SCALE
+	board.position.y = BOARD_Y - BLENDER_BOARD_TOP * BLENDER_MODEL_SCALE
+	world.add_child(board)
+	_load_board_grid_registration(board)
+	_configure_board_visuals(board)
+	var physical_board_width := 0.412 * BLENDER_MODEL_SCALE
+	var physical_board_height := 0.452 * BLENDER_MODEL_SCALE
+	var horizontal_clearance := (physical_board_width - GRID_WIDTH) * 0.5 - PIECE_RADIUS
+	var vertical_clearance := (physical_board_height - GRID_HEIGHT) * 0.5 - PIECE_RADIUS
+	print("CHESS_BOARD_CLEARANCE horizontal=%.3f vertical=%.3f" % [horizontal_clearance, vertical_clearance])
+
 	var library := pieces_scene.instantiate() as Node3D
 	library.name = "BlenderPieceLibrary"
 	library.visible = false
@@ -239,27 +332,154 @@ func _add_blender_assets(world: Node3D) -> bool:
 			var template_name: String = "Piece_%s_%s" % [side, role]
 			var template := library.find_child(template_name, true, false) as Node3D
 			if template != null:
+				_configure_piece_template_visuals(template)
 				_blender_piece_templates[template_name] = template
 	if _blender_piece_templates.size() != 14:
 		_blender_piece_templates.clear()
 		library.queue_free()
 		return false
-	var board := board_scene.instantiate() as Node3D
-	board.name = "BlenderBambooBoard"
-	board.scale = Vector3.ONE * BLENDER_MODEL_SCALE
-	board.position.y = BOARD_Y - BLENDER_BOARD_TOP * BLENDER_MODEL_SCALE
-	world.add_child(board)
-	# 木材模型使用柔和照明，保留浅竹纹与金丝楠木高光的细节。
+
+	# 降低暖光强度，避免金丝楠木纹理被高光洗平。
 	var environment_node: WorldEnvironment = _stage.get_node("WorldEnvironment")
 	environment_node.environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	environment_node.environment.ambient_light_color = Color("#e5dfd6")
-	environment_node.environment.ambient_light_energy = 0.42
+	environment_node.environment.ambient_light_color = Color("#e4d4c2")
+	environment_node.environment.ambient_light_energy = 0.27
+	var reflection_sky := Sky.new()
+	var sky_material := ProceduralSkyMaterial.new()
+	sky_material.sky_top_color = Color("#75808b")
+	sky_material.sky_horizon_color = Color("#e7dac1")
+	sky_material.ground_horizon_color = Color("#7b6250")
+	sky_material.ground_bottom_color = Color("#191511")
+	reflection_sky.sky_material = sky_material
+	environment_node.environment.sky = reflection_sky
+	environment_node.environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	var key_light: DirectionalLight3D = _stage.get_node("KeyLight")
-	key_light.light_color = Color("#fff4e5")
-	key_light.light_energy = 0.95
+	key_light.light_color = Color("#fff2df")
+	key_light.light_energy = 0.72
 	var fill_light: OmniLight3D = _stage.get_node("FillLight")
-	fill_light.light_energy = 0.45
+	fill_light.light_color = Color("#d9a576")
+	fill_light.light_energy = 0.26
 	return true
+
+
+func _load_board_grid_registration(board: Node) -> void:
+	var mesh := board.find_child("ChessBoard_RedSandalwood", true, false)
+	if mesh == null:
+		return
+	var extras: Dictionary = mesh.get_meta("extras", {})
+	var xs: Array = extras.get("grid_x_m", [])
+	var ys: Array = extras.get("grid_y_m", [])
+	if xs.size() != 9 or ys.size() != 10:
+		return
+	for i in range(xs.size()):
+		if not is_finite(float(xs[i])) or absf(float(xs[i])) > .161:
+			return
+		if i > 0 and float(xs[i]) - float(xs[i - 1]) < .030:
+			return
+	for i in range(ys.size()):
+		if not is_finite(float(ys[i])) or absf(float(ys[i])) > .181:
+			return
+		if i > 0 and float(ys[i - 1]) - float(ys[i]) < .030:
+			return
+	_grid_x_m = PackedFloat64Array(xs)
+	_grid_y_m = PackedFloat64Array(ys)
+	_grid_registration_loaded = true
+	print("CHESS_GRID_REGISTRATION loaded=true files=9 ranks=10")
+
+
+func _configure_board_visuals(node: Node) -> void:
+	# 棋盘在不同俯视角下统一使用各向异性 Mipmap，强化红檀木木纹和雕刻沟槽边缘。
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh != null:
+			for surface_index in range(mesh_instance.mesh.get_surface_count()):
+				var source_material := mesh_instance.get_active_material(surface_index)
+				if source_material is StandardMaterial3D:
+					var material := source_material.duplicate() as StandardMaterial3D
+					material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+					material.texture_repeat = false
+					if material.albedo_texture != null:
+						material.clearcoat_enabled = true
+						material.clearcoat = 0.20
+						material.clearcoat_roughness = 0.24
+						material.roughness = 0.40
+					mesh_instance.set_surface_override_material(surface_index, material)
+					print("CHESS_BOARD_PBR material=%s albedo=%s normal=%s roughness=%s" % [
+						material.resource_name,
+						str(material.albedo_texture != null),
+						str(material.normal_enabled and material.normal_texture != null),
+						str(material.roughness_texture != null),
+					])
+	for child in node.get_children():
+		_configure_board_visuals(child)
+
+
+func _load_render_quality() -> void:
+	var settings := ConfigFile.new()
+	if settings.load(VISUAL_SETTINGS_PATH) == OK:
+		var saved = settings.get_value("graphics", "quality", 1)
+		if saved is int and saved >= 0 and saved <= 2:
+			_render_quality = saved
+
+
+func _apply_render_quality(index: int, persist: bool = true) -> void:
+	_render_quality = clampi(index, 0, 2)
+	if _board_viewport != null:
+		_board_viewport.size = QUALITY_SIZES[_render_quality]
+		_board_viewport.msaa_3d = QUALITY_MSAA[_render_quality]
+	if _stage != null:
+		_stage.get_node("KeyLight").shadow_enabled = _render_quality > 0
+		_apply_quality_texture_filter(_board_viewport)
+	if _quality_option != null:
+		_quality_option.select(_render_quality)
+	if persist:
+		var settings := ConfigFile.new()
+		settings.set_value("graphics", "quality", _render_quality)
+		var saved := settings.save(VISUAL_SETTINGS_PATH)
+		if saved != OK:
+			push_warning("Could not save chess render quality: %s" % error_string(saved))
+	print("CHESS_RENDER_QUALITY quality=%d resolution=%s msaa=%d" % [_render_quality, str(QUALITY_SIZES[_render_quality]), QUALITY_MSAA[_render_quality]])
+
+
+func _apply_quality_texture_filter(node: Node) -> void:
+	if node is MeshInstance3D and node.mesh != null:
+		for surface in range(node.mesh.get_surface_count()):
+			var material = node.get_active_material(surface)
+			if material is StandardMaterial3D:
+				material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS if _render_quality == 0 else BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	for child in node.get_children():
+		_apply_quality_texture_filter(child)
+
+
+func _configure_piece_template_visuals(node: Node) -> void:
+	# 俯视/斜俯视下启用各向异性 Mipmap 过滤，减少木纹在倾斜表面的模糊。
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh != null:
+			for surface_index in range(mesh_instance.mesh.get_surface_count()):
+				var source_material := mesh_instance.get_active_material(surface_index)
+				if source_material is StandardMaterial3D:
+					var tuned_material := source_material.duplicate() as StandardMaterial3D
+					tuned_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+					if tuned_material.albedo_texture != null:
+						# glTF clearcoat is absent from the imported StandardMaterial3D.
+						# Apply the saved Blender lacquer contract explicitly in Godot.
+						tuned_material.clearcoat_enabled = true
+						tuned_material.clearcoat = 0.58
+						tuned_material.clearcoat_roughness = 0.12
+						tuned_material.normal_scale = 0.08
+					if not _pbr_material_reported and tuned_material.albedo_texture != null:
+						_pbr_material_reported = true
+						print("CHESS_PBR material=%s albedo=%s normal=%s roughness=%s filter=%s" % [
+							tuned_material.resource_name,
+							str(tuned_material.albedo_texture != null),
+							str(tuned_material.normal_enabled and tuned_material.normal_texture != null),
+							str(tuned_material.roughness_texture != null),
+							str(tuned_material.texture_filter),
+						])
+					mesh_instance.set_surface_override_material(surface_index, tuned_material)
+	for child in node.get_children():
+		_configure_piece_template_visuals(child)
 
 
 func _build_grid(parent: Node3D) -> void:
@@ -358,42 +578,91 @@ func _create_board_label(text: String, color: Color) -> Label3D:
 
 
 func _load_png_texture(path: String, fallback_color: Color) -> Texture2D:
-	# 导入后的纹理可随 Android 导出打包；开发机首次扫描时再尝试读取 PNG 源文件。
-	var imported := ResourceLoader.load(path, "Texture2D")
-	if imported is Texture2D:
-		return imported as Texture2D
-	var image := Image.load_from_file(path)
-	if image != null and not image.is_empty():
-		return ImageTexture.create_from_image(image)
+	# 开发组合工程直接读取PNG字节，不依赖Godot导入缓存；正式导出时源文件也会随模块复制。
+	if FileAccess.file_exists(path):
+		var bytes := FileAccess.get_file_as_bytes(path)
+		if not bytes.is_empty():
+			var image := Image.new()
+			var load_error := image.load_png_from_buffer(bytes)
+			if load_error == OK and not image.is_empty():
+				return ImageTexture.create_from_image(image)
 
-	# 读取失败时仍生成可见占位纹理，避免单张美术资源导致客户端无法启动。
+	# PNG缺失或损坏时生成可见占位纹理，避免单张美术资源阻断对局。
 	var fallback := Image.create(8, 8, false, Image.FORMAT_RGBA8)
 	fallback.fill(fallback_color)
 	return ImageTexture.create_from_image(fallback)
 
 
+func _load_svg_texture(path: String) -> Texture2D:
+	var image := Image.new()
+	if FileAccess.file_exists(path) and image.load_svg_from_buffer(FileAccess.get_file_as_bytes(path)) == OK:
+		return ImageTexture.create_from_image(image)
+	return _load_png_texture("", GOLD)
+
+
 func _build_hud() -> void:
-	_background = TextureRect.new()
-	_background.texture = _landscape_texture
-	_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	# Warm near-black lacquer backdrop keeps the board and golden controls legible.
+	_background = ColorRect.new()
+	_background.color = Color("#0b0d0e")
+	var backdrop_shader := Shader.new()
+	backdrop_shader.code = "shader_type canvas_item; void fragment() { float edge = smoothstep(0.16, 0.85, distance(UV, vec2(0.5, 0.48))); vec3 ink = mix(vec3(0.055, 0.057, 0.055), vec3(0.026, 0.024, 0.022), edge); COLOR = vec4(ink, 1.0); }"
+	var backdrop_material := ShaderMaterial.new()
+	backdrop_material.shader = backdrop_shader
+	_background.material = backdrop_material
 	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(_background)
+	var outer_frame := Panel.new()
+	outer_frame.name = "DuelGoldFrame"
+	outer_frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	outer_frame.add_theme_stylebox_override("panel", _flat_style(Color.TRANSPARENT, Color("#6d5634"), 24, 1))
+	outer_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(outer_frame)
 
 	_top_shade = ColorRect.new()
-	_top_shade.color = Color("#17141388")
+	_top_shade.color = Color.TRANSPARENT
+	_top_shade.visible = false
 	_top_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_top_shade)
 	_bottom_shade = ColorRect.new()
-	_bottom_shade.color = Color("#17100bba")
+	_bottom_shade.color = Color.TRANSPARENT
+	_bottom_shade.visible = false
 	_bottom_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_bottom_shade)
 
-	_title_label = _make_label(self, "中国象棋", 56, Color("#fff0d1"))
-	_subtitle_label = _make_label(self, "楚河汉界 · 棋逢知己", 22, Color("#f2d9ab"))
+	_brand_stool = TextureRect.new()
+	_brand_stool.name = "BrandStool"
+	_brand_stool.texture = _load_png_texture(BRAND_STOOL_PATH, Color.TRANSPARENT)
+	_brand_stool.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_brand_stool.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_brand_stool.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_brand_stool)
+	_title_label = _make_label(self, "小板凳", 56, Color("#fff0d1"))
+	var brush_font := SystemFont.new()
+	brush_font.font_names = PackedStringArray(["KaiTi", "STKaiti", "Noto Serif CJK SC"])
+	_title_label.add_theme_font_override("font", brush_font)
+	_subtitle_label = _make_label(self, "以棋会友 · 乐在棋中", 22, Color("#e8c891"))
+	_music_quick_button = Button.new()
+	_music_quick_button.name = "MusicQuickButton"
+	_music_quick_button.pressed.connect(_toggle_bgm)
+	add_child(_music_quick_button)
+	_settings_quick_button = Button.new()
+	_settings_quick_button.name = "SettingsQuickButton"
+	_settings_quick_button.pressed.connect(_on_action_pressed.bind("菜单"))
+	add_child(_settings_quick_button)
+	for quick_button in [_music_quick_button, _settings_quick_button]:
+		quick_button.add_theme_stylebox_override("normal", _flat_style(Color("#151515"), Color("#be965d"), 60, 2, 4))
+		quick_button.add_theme_stylebox_override("hover", _flat_style(Color("#32271d"), Color("#f2c978"), 60, 2, 4))
+		quick_button.add_theme_stylebox_override("pressed", _flat_style(Color("#503123"), Color("#f2c978"), 60, 2))
+		var quick_icon := TextureRect.new()
+		quick_icon.name = "QuickIcon"
+		quick_icon.texture = _load_svg_texture(ACTION_ICON_ROOT + ("icon_music.svg" if quick_button == _music_quick_button else "icon_settings.svg"))
+		quick_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		quick_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		quick_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		quick_button.add_child(quick_icon)
 	_match_duration_label = _make_label(self, "对局时长 00:00", 18, Color("#f5c76e"))
-	_seal_label = _make_label(self, "对\n弈", 22, Color.WHITE)
+	_seal_label = _make_label(self, "象\n棋", 22, Color.WHITE)
 	_seal_label.add_theme_stylebox_override("normal", _flat_style(Color("#9e211d"), Color("#d68b63"), 8, 1))
 
 	_left_card = _create_player_card(true)
@@ -402,7 +671,7 @@ func _build_hud() -> void:
 	_board_frame = Panel.new()
 	_board_frame.name = "WoodBoardFrame"
 	_board_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_board_frame.add_theme_stylebox_override("panel", _flat_style(Color("#4d291b"), Color("#dfaa69"), 16, 4, 18))
+	_board_frame.add_theme_stylebox_override("panel", _flat_style(Color.TRANSPARENT, Color.TRANSPARENT, 0, 0, 0))
 	add_child(_board_frame)
 	_board_view = TextureRect.new()
 	_board_view.name = "InteractiveBoard"
@@ -416,38 +685,108 @@ func _build_hud() -> void:
 
 	_role_label = _make_label(self, "阵营：连接中", 18, GOLD)
 	_turn_label = _make_label(self, "回合：等待", 20, Color("#fff4de"))
+	_turn_status_label = _make_label(self, "等待双方进入对局", 26, Color("#f4cf7a"))
+	_round_status_label = _make_label(self, "第 1 步", 15, Color("#9f9488"))
 	_status_label = _make_label(self, "正在连接本地服务端，棋盘显示开局预览", 17, Color("#fff1d7"))
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	for item in [
-		["≡", "菜单"], ["↶", "悔棋"], ["✦", "提示"],
-		["◇", "求和"], ["⚑", "认输"], ["✉", "聊天"]
+		["菜单", "icon_menu.png"], ["悔棋", "icon_undo.png"], ["提示", "icon_hint.png"],
+		["求和", "icon_draw.png"], ["认输", "icon_resign.png"], ["离开", "icon_exit.png"]
 	]:
 		var button := Button.new()
-		button.text = "%s\n%s" % [item[0], item[1]]
-		button.add_theme_font_size_override("font_size", 20)
-		button.add_theme_color_override("font_color", GOLD)
-		button.add_theme_color_override("font_hover_color", Color.WHITE)
-		button.add_theme_stylebox_override("normal", _flat_style(Color("#181a1ccc"), Color("#be9a6b"), 28, 2))
-		button.add_theme_stylebox_override("hover", _flat_style(Color("#573322ee"), Color("#f1cf98"), 28, 2))
-		button.add_theme_stylebox_override("pressed", _flat_style(Color("#804622"), Color("#fff0cb"), 28, 2))
-		button.pressed.connect(_on_action_pressed.bind(str(item[1])))
+		button.name = "Action_" + str(item[0])
+		button.add_theme_stylebox_override("normal", _flat_style(Color.TRANSPARENT, Color.TRANSPARENT, 0, 0))
+		button.add_theme_stylebox_override("hover", _flat_style(Color.TRANSPARENT, Color.TRANSPARENT, 0, 0))
+		button.add_theme_stylebox_override("pressed", _flat_style(Color.TRANSPARENT, Color.TRANSPARENT, 0, 0))
+		var disc := Panel.new()
+		disc.name = "IconDisc"
+		disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		disc.add_theme_stylebox_override("panel", _flat_style(Color("#501913") if str(item[0]) == "离开" else Color("#131514"), Color("#c89f63"), 90, 2, 3))
+		button.add_child(disc)
+		var icon := TextureRect.new()
+		icon.name = "ActionIcon"
+		icon.texture = _load_svg_texture(ACTION_ICON_ROOT + "icon_exit_gold.svg") if str(item[0]) == "离开" else _load_png_texture(ACTION_ICON_ROOT + str(item[1]), GOLD)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		disc.add_child(icon)
+		var caption := _make_label(button, str(item[0]), 16, GOLD)
+		caption.name = "ActionCaption"
+		button.pressed.connect(_on_action_pressed.bind(str(item[0])))
 		add_child(button)
 		_action_buttons.append(button)
 
-	_footer_label = _make_label(self, "— 以棋会友 · 乐在棋中 —", 22, Color("#e5b76f"))
+	_footer_label = _make_label(self, "以棋会友 · 乐在棋中", 16, Color("#7f7468"))
 	_menu_panel = Panel.new()
 	_menu_panel.add_theme_stylebox_override("panel", _flat_style(Color("#251a15f2"), Color("#dcb67b"), 20, 2, 18))
 	_menu_panel.visible = false
 	add_child(_menu_panel)
 	_menu_label = _make_label(_menu_panel, "小板凳象棋", 22, Color("#f3d8ab"))
 	_menu_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_bgm_toggle_button = Button.new()
+	_bgm_toggle_button.add_theme_font_size_override("font_size", 16)
+	_bgm_toggle_button.add_theme_stylebox_override("normal", _flat_style(Color("#533023"), Color("#c89558"), 8, 1))
+	_bgm_toggle_button.pressed.connect(_toggle_bgm)
+	_menu_panel.add_child(_bgm_toggle_button)
+
+	_sfx_toggle_button = Button.new()
+	_sfx_toggle_button.add_theme_font_size_override("font_size", 16)
+	_sfx_toggle_button.add_theme_stylebox_override("normal", _flat_style(Color("#533023"), Color("#c89558"), 8, 1))
+	_sfx_toggle_button.pressed.connect(_toggle_sfx)
+	_menu_panel.add_child(_sfx_toggle_button)
+
+	_quality_label = _make_label(_menu_panel, "画质", 16, GOLD)
+	_quality_option = OptionButton.new()
+	_quality_option.name = "RenderQuality"
+	_quality_option.add_item("低 · 流畅", 0)
+	_quality_option.add_item("中 · 均衡", 1)
+	_quality_option.add_item("高 · 精细", 2)
+	_quality_option.select(_render_quality)
+	_quality_option.add_theme_font_size_override("font_size", 16)
+	_quality_option.add_theme_color_override("font_color", GOLD)
+	_quality_option.add_theme_stylebox_override("normal", _flat_style(Color("#533023"), Color("#c89558"), 8, 1))
+	_quality_option.item_selected.connect(_apply_render_quality)
+	_menu_panel.add_child(_quality_option)
+
 	_menu_close = Button.new()
 	_menu_close.text = "返回棋局"
 	_menu_close.add_theme_font_size_override("font_size", 18)
 	_menu_close.add_theme_stylebox_override("normal", _flat_style(Color("#9e542f"), GOLD, 8, 1))
 	_menu_close.pressed.connect(func() -> void: _menu_panel.visible = false)
 	_menu_panel.add_child(_menu_close)
+
+	_settlement_overlay = ColorRect.new()
+	_settlement_overlay.color = Color("#09050399")
+	_settlement_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_settlement_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_settlement_overlay.visible = false
+	add_child(_settlement_overlay)
+
+	_settlement_panel = Panel.new()
+	_settlement_panel.add_theme_stylebox_override("panel", _flat_style(Color("#3c1d17f7"), Color("#e3ad63"), 22, 3, 24))
+	_settlement_panel.visible = false
+	add_child(_settlement_panel)
+	_settlement_title = _make_label(_settlement_panel, "对局结算", 30, Color("#ffe1a5"))
+	_settlement_detail = _make_label(_settlement_panel, "", 18, Color("#fff1da"))
+	_settlement_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_settlement_stats = _make_label(_settlement_panel, "", 15, Color("#d9b990"))
+	_settlement_stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+	_settlement_review_button = Button.new()
+	_settlement_review_button.text = "查看棋局"
+	_settlement_review_button.add_theme_font_size_override("font_size", 17)
+	_settlement_review_button.add_theme_stylebox_override("normal", _flat_style(Color("#5d3828"), Color("#c89558"), 10, 1))
+	_settlement_review_button.pressed.connect(_hide_settlement_for_review)
+	_settlement_panel.add_child(_settlement_review_button)
+
+	_settlement_lobby_button = Button.new()
+	_settlement_lobby_button.text = "返回大厅"
+	_settlement_lobby_button.add_theme_font_size_override("font_size", 17)
+	_settlement_lobby_button.add_theme_stylebox_override("normal", _flat_style(Color("#a95c2d"), Color("#f0c16d"), 10, 1))
+	_settlement_lobby_button.pressed.connect(_return_to_lobby)
+	_settlement_panel.add_child(_settlement_lobby_button)
+
 	_countdown_clock = COUNTDOWN_CLOCK_SCRIPT.new()
 	_countdown_clock.size = Vector2(230.0, 230.0)
 	add_child(_countdown_clock)
@@ -457,6 +796,7 @@ func _build_hud() -> void:
 	_warning_audio.stream = WARNING_SOUND_SCRIPT.create_warning_stream()
 	_warning_audio.volume_db = -4.0
 	add_child(_warning_audio)
+	_setup_audio()
 	_update_player_panels()
 
 
@@ -492,7 +832,7 @@ func _create_player_card(left_side: bool) -> Panel:
 	var card := Panel.new()
 	card.name = "LeftPlayer" if left_side else "RightPlayer"
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.add_theme_stylebox_override("panel", _flat_style(Color("#151413ce"), Color("#c7a274"), 18, 2))
+	card.add_theme_stylebox_override("panel", _flat_style(Color("#111313ed"), Color("#8b6a3d"), 18, 1))
 	add_child(card)
 
 	var avatar_frame := Panel.new()
@@ -519,6 +859,21 @@ func _create_player_card(left_side: bool) -> Panel:
 	var name_label := _make_label(card, "等待玩家", 23, Color("#fff1d9"))
 	var rank_label := _make_label(card, "象棋对弈", 15, Color("#d8b77e"))
 	var timer_label := _make_label(card, "--:--", 27, Color("#f2e9d4"))
+	var badge := Panel.new()
+	badge.name = "SideBadge"
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.add_theme_stylebox_override("panel", _flat_style(Color("#ad2520"), Color("#d9a15f"), 8, 1))
+	card.add_child(badge)
+	var badge_text := _make_label(badge, "红方" if left_side else "黑方", 13, Color.WHITE)
+	badge_text.name = "SideBadgeText"
+	var timer_frame := Panel.new()
+	timer_frame.name = "TimerFrame"
+	timer_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	timer_frame.add_theme_stylebox_override("panel", _flat_style(Color("#0b0c0c"), Color("#9a733e"), 10, 1))
+	card.add_child(timer_frame)
+	var watch := _make_label(timer_frame, "◷", 23, GOLD)
+	watch.name = "TimerIcon"
+	timer_label.reparent(timer_frame)
 	if left_side:
 		_left_avatar = portrait
 		_left_player_label = name_label
@@ -532,12 +887,31 @@ func _create_player_card(left_side: bool) -> Panel:
 	return card
 
 
+func _resolve_layout_mode(w: float, h: float) -> LayoutMode:
+	var landscape := w >= h
+	if not landscape:
+		return LayoutMode.PHONE_PORTRAIT if w < 900.0 else LayoutMode.TABLET_PORTRAIT
+	var ratio := w / maxf(h, 1.0)
+	if h < 680.0:
+		return LayoutMode.PHONE_LANDSCAPE
+	if w < 1300.0 or ratio < 1.48:
+		return LayoutMode.TABLET_LANDSCAPE
+	if ratio >= 2.0:
+		return LayoutMode.WIDE_DESKTOP
+	return LayoutMode.DESKTOP
+
+
 func _layout_hud() -> void:
 	if _board_frame == null or size.x < 100.0 or size.y < 100.0:
 		return
+
 	var w := size.x
 	var h := size.y
-	var portrait := h > w * 1.12
+	_layout_mode = _resolve_layout_mode(w, h)
+	if _last_reported_layout_mode != int(_layout_mode):
+		_last_reported_layout_mode = int(_layout_mode)
+		print("CHESS_LAYOUT mode=%s size=%dx%d" % [LayoutMode.keys()[_layout_mode], int(w), int(h)])
+
 	var board_w: float
 	var board_h: float
 	var board_x: float
@@ -547,123 +921,252 @@ func _layout_hud() -> void:
 	var card_y: float
 	var avatar_size: float
 	var scale_factor: float
-	if portrait:
-		board_w = minf(w - 12.0, h * 0.64 / 1.14)
-		board_h = board_w * 1.14
+	var action_y: float
+	var action_h: float
+	var action_gap: float
+	var action_columns := 6
+	var action_rows := 1
+	var action_area_w: float
+
+	var is_portrait := _layout_mode == LayoutMode.PHONE_PORTRAIT or _layout_mode == LayoutMode.TABLET_PORTRAIT
+	var is_phone_portrait := _layout_mode == LayoutMode.PHONE_PORTRAIT
+	var is_phone_landscape := _layout_mode == LayoutMode.PHONE_LANDSCAPE
+	var is_desktop := _layout_mode == LayoutMode.DESKTOP or _layout_mode == LayoutMode.WIDE_DESKTOP
+
+	if is_portrait:
+		var margin_x := clampf(w * .028, 10.0, 24.0)
+		var header_h := clampf(h * .11, 82.0, 140.0)
+		card_h = clampf(h * .088, 60.0, 108.0)
+		action_h = clampf(h * .10, 74.0, 104.0)
+		card_y = header_h + 8.0
+		board_y = card_y + card_h + 10.0
+		var available_board_h := h - board_y - card_h - action_h - 38.0
+		board_w = minf(w - margin_x * 2.0, available_board_h / 1.09)
+		board_h = board_w * 1.09
 		board_x = (w - board_w) * 0.5
-		board_y = h * 0.159
-		card_w = (board_w - 16.0) * 0.5
-		card_h = h * 0.068
-		card_y = board_y - card_h - 14.0
-		avatar_size = minf(card_h - 10.0, card_w * 0.28)
-		scale_factor = minf(1.0, w / 940.0)
-		_top_shade.position = Vector2.ZERO
-		_top_shade.size = Vector2(w, board_y)
-		_bottom_shade.position = Vector2(0, board_y + board_h + 8.0)
-		_bottom_shade.size = Vector2(w, h - _bottom_shade.position.y)
-		_title_label.position = Vector2(board_x + board_w * 0.20, h * 0.010)
-		_title_label.size = Vector2(board_w * 0.60, h * 0.050)
-		_subtitle_label.position = Vector2(board_x + board_w * 0.16, h * 0.058)
-		_subtitle_label.size = Vector2(board_w * 0.68, h * 0.022)
-		_match_duration_label.position = Vector2(board_x + board_w * 0.25, board_y + 5.0)
-		_match_duration_label.size = Vector2(board_w * 0.50, 28.0)
-		_seal_label.position = Vector2(board_x + board_w * 0.78, h * 0.022)
-		_seal_label.size = Vector2(board_w * 0.055, h * 0.050)
-		_left_card.position = Vector2(board_x + 3.0, card_y)
-		_right_card.position = Vector2(board_x + board_w - card_w - 3.0, card_y)
-		_role_label.position = Vector2(board_x, board_y + board_h + 8.0)
-		_role_label.size = Vector2(board_w * 0.36, 32.0)
-		_turn_label.position = Vector2(board_x + board_w * 0.36, board_y + board_h + 8.0)
-		_turn_label.size = Vector2(board_w * 0.64, 32.0)
-		var action_y := board_y + board_h + 44.0
-		var gap := 8.0
-		var action_w := (board_w - gap * 5.0) / 6.0
-		for i in range(_action_buttons.size()):
-			_action_buttons[i].position = Vector2(board_x + i * (action_w + gap), action_y)
-			_action_buttons[i].size = Vector2(action_w, minf(92.0, h * 0.064))
-		_status_label.position = Vector2(board_x + 4.0, action_y + minf(92.0, h * 0.064) + 10.0)
-		_status_label.size = Vector2(board_w - 8.0, 38.0)
-		_footer_label.position = Vector2(board_x, h - maxf(45.0, h * 0.04))
-		_footer_label.size = Vector2(board_w, 35.0)
+		card_w = board_w
+		avatar_size = card_h - 10.0
+		scale_factor = clampf(w / 600.0, .78, 1.16)
+		var stool_size := clampf(w * .17, 70.0, 112.0)
+		_brand_stool.position = Vector2(board_x, 5.0)
+		_brand_stool.size = Vector2(stool_size, header_h - 10.0)
+		var title_x := board_x + stool_size + 5.0
+		_title_label.position = Vector2(title_x, header_h * .19)
+		_title_label.size = Vector2(minf(w * .43, 260.0), header_h * .48)
+		_subtitle_label.position = Vector2(title_x, header_h * .62)
+		_subtitle_label.size = Vector2(minf(w * .44, 270.0), header_h * .27)
+		_seal_label.position = Vector2(title_x + _title_label.size.x - 18.0, header_h * .13)
+		_seal_label.size = Vector2(27.0, clampf(header_h * .46, 36.0, 52.0))
+		var quick_size := clampf(w * .09, 40.0, 57.0)
+		_music_quick_button.position = Vector2(w - quick_size * 2.0 - 19.0, header_h * .28)
+		_settings_quick_button.position = Vector2(w - quick_size - 12.0, header_h * .28)
+		_music_quick_button.size = Vector2.ONE * quick_size
+		_settings_quick_button.size = Vector2.ONE * quick_size
+		for quick_button in [_music_quick_button, _settings_quick_button]:
+			quick_button.get_node("QuickIcon").position = Vector2.ONE * (quick_size * .25)
+			quick_button.get_node("QuickIcon").size = Vector2.ONE * (quick_size * .50)
+		var header_shift := h * .039
+		for header_item in [_brand_stool, _title_label, _subtitle_label, _seal_label, _music_quick_button, _settings_quick_button]:
+			header_item.position.y += header_shift
+		_turn_status_label.visible = false
+		_round_status_label.visible = false
+		_match_duration_label.visible = false
+		_role_label.visible = false
+		_turn_label.visible = false
+		_status_label.visible = false
+		_footer_label.visible = false
+		_right_card.position = Vector2(board_x, card_y + h * .055)
+		_left_card.position = Vector2(board_x, board_y + board_h + 10.0)
+		action_columns = 6
+		action_rows = 1
+		action_gap = clampf(w * .008, 3.0, 8.0)
+		action_y = _left_card.position.y + card_h + 10.0
+		action_area_w = board_w
 	else:
-		board_h = h * 0.70
+		_turn_status_label.visible = true
+		_round_status_label.visible = true
+		_match_duration_label.visible = true
+		_role_label.visible = true
+		_turn_label.visible = true
+		_status_label.visible = true
+		var board_height_ratio := 0.76 if is_phone_landscape else (0.74 if _layout_mode == LayoutMode.TABLET_LANDSCAPE else 0.72)
+		board_h = minf(h * board_height_ratio, (w * (0.64 if is_phone_landscape else 0.52)) * 1.14)
 		board_w = board_h / 1.14
 		board_x = (w - board_w) * 0.5
-		board_y = h * 0.12
-		card_w = maxf(180.0, minf(330.0, (w - board_w) * 0.5 - 34.0))
-		card_h = minf(150.0, h * 0.21)
-		card_y = h * 0.24
-		avatar_size = minf(card_h - 20.0, card_w * 0.31)
-		scale_factor = minf(0.85, h / 840.0)
-		_top_shade.position = Vector2.ZERO
-		_top_shade.size = Vector2(w, h * 0.12)
-		_bottom_shade.position = Vector2(0, h * 0.87)
-		_bottom_shade.size = Vector2(w, h * 0.13)
-		_title_label.position = Vector2(board_x + board_w * 0.10, 3.0)
-		_title_label.size = Vector2(board_w * 0.80, h * 0.065)
-		_subtitle_label.position = Vector2(board_x + board_w * 0.15, h * 0.062)
-		_subtitle_label.size = Vector2(board_w * 0.70, h * 0.036)
-		_match_duration_label.position = Vector2(board_x + board_w * 0.25, board_y + 3.0)
-		_match_duration_label.size = Vector2(board_w * 0.50, 24.0)
-		_seal_label.position = Vector2(board_x + board_w * 0.80, 6.0)
+		board_y = maxf(56.0, h * (0.085 if is_phone_landscape else 0.095))
+
+		scale_factor = clampf(h / (720.0 if is_phone_landscape else 900.0), 0.72, 1.12)
+		var side_space := (w - board_w) * 0.5
+		card_w = clampf(side_space - 34.0, 190.0, 360.0)
+		card_h = clampf(h * (0.16 if is_phone_landscape else 0.17), 88.0, 160.0)
+		avatar_size = minf(card_h - 16.0, card_w * 0.31)
+		card_y = board_y + board_h * 0.18
+
+		_title_label.position = Vector2(board_x + board_w * 0.12, 2.0)
+		_brand_stool.position = Vector2(_title_label.position.x - 85.0, 1.0)
+		_brand_stool.size = Vector2(82.0, 75.0)
+		_title_label.size = Vector2(board_w * 0.76, clampf(h * 0.055, 42.0, 64.0))
+		_subtitle_label.position = Vector2(board_x + board_w * 0.18, h * 0.052)
+		_subtitle_label.size = Vector2(board_w * 0.64, clampf(h * 0.032, 26.0, 38.0))
+		_seal_label.position = Vector2(board_x + board_w * 0.84, 7.0)
 		_seal_label.size = Vector2(34.0, 48.0)
-		_left_card.position = Vector2(maxf(12.0, board_x - card_w - 18.0), card_y)
-		_right_card.position = Vector2(minf(w - card_w - 12.0, board_x + board_w + 18.0), card_y)
-		_role_label.position = Vector2(_left_card.position.x, card_y + card_h + 15.0)
-		_role_label.size = Vector2(card_w, 34.0)
-		_turn_label.position = Vector2(_right_card.position.x, card_y + card_h + 15.0)
-		_turn_label.size = Vector2(card_w, 34.0)
-		var action_y := h * 0.84
-		var action_w := minf(105.0, (w - 60.0) / 6.0)
-		var action_gap := minf(24.0, (w - action_w * 6.0) / 7.0)
-		var total_action_w := action_w * 6.0 + action_gap * 5.0
-		for i in range(_action_buttons.size()):
-			_action_buttons[i].position = Vector2((w - total_action_w) * 0.5 + i * (action_w + action_gap), action_y)
-			_action_buttons[i].size = Vector2(action_w, h * 0.105)
-		_status_label.position = Vector2(board_x + 6.0, board_y + board_h + 5.0)
-		_status_label.size = Vector2(board_w - 12.0, 30.0)
-		_footer_label.position = Vector2(0, h - 27.0)
-		_footer_label.size = Vector2(w, 24.0)
+		_music_quick_button.position = Vector2(w - 116.0, 12.0)
+		_settings_quick_button.position = Vector2(w - 60.0, 12.0)
+		_music_quick_button.size = Vector2(46.0, 46.0)
+		_settings_quick_button.size = Vector2(46.0, 46.0)
+		for quick_button in [_music_quick_button, _settings_quick_button]:
+			quick_button.get_node("QuickIcon").position = Vector2(11.0, 11.0)
+			quick_button.get_node("QuickIcon").size = Vector2(24.0, 24.0)
+
+		_turn_status_label.position = Vector2(board_x + board_w * 0.12, board_y - 42.0)
+		_turn_status_label.size = Vector2(board_w * 0.76, 34.0)
+		_round_status_label.position = Vector2(board_x - card_w - 18.0, board_y - 34.0)
+		_round_status_label.size = Vector2(card_w, 28.0)
+		_match_duration_label.position = Vector2(board_x + board_w + 18.0, board_y - 34.0)
+		_match_duration_label.size = Vector2(card_w, 28.0)
+
+		_left_card.position = Vector2(maxf(12.0, board_x - card_w - 20.0), card_y)
+		_right_card.position = Vector2(minf(w - card_w - 12.0, board_x + board_w + 20.0), card_y)
+		_role_label.position = Vector2(_left_card.position.x, card_y + card_h + 12.0)
+		_role_label.size = Vector2(card_w, 32.0)
+		_turn_label.position = Vector2(_right_card.position.x, card_y + card_h + 12.0)
+		_turn_label.size = Vector2(card_w, 32.0)
+
+		action_columns = 6
+		action_rows = 1
+		action_gap = clampf(w * 0.008, 8.0, 18.0)
+		action_h = clampf(h * (0.088 if is_phone_landscape else 0.080), 54.0, 82.0)
+		action_y = minf(h - action_h - 18.0, board_y + board_h + 24.0)
+		action_area_w = minf(w * (0.76 if is_desktop else 0.88), maxf(board_w + 260.0, 660.0))
+
 	_board_frame.position = Vector2(board_x, board_y)
 	_board_frame.size = Vector2(board_w, board_h)
-	_board_view.position = Vector2(7.0, 7.0)
-	_board_view.size = Vector2(board_w - 14.0, board_h - 14.0)
-	if _countdown_clock != null:
-		_countdown_clock.size = Vector2(230.0, 230.0)
-		_countdown_clock.position = Vector2(board_x + board_w * 0.5 - 115.0, board_y + board_h * 0.5 - 115.0)
+	_board_view.position = Vector2.ZERO
+	_board_view.size = Vector2(board_w, board_h)
+
 	_left_card.size = Vector2(card_w, card_h)
 	_right_card.size = Vector2(card_w, card_h)
 	_layout_player_card(_left_card, _left_avatar, _left_player_label, _left_rank_label, _left_timer_label, avatar_size, scale_factor)
 	_layout_player_card(_right_card, _right_avatar, _right_player_label, _right_rank_label, _right_timer_label, avatar_size, scale_factor)
-	_title_label.add_theme_font_size_override("font_size", roundi(56.0 * scale_factor))
-	_subtitle_label.add_theme_font_size_override("font_size", roundi(22.0 * scale_factor))
-	_match_duration_label.add_theme_font_size_override("font_size", roundi(18.0 * scale_factor))
-	_seal_label.add_theme_font_size_override("font_size", roundi(22.0 * scale_factor))
-	_menu_panel.size = Vector2(minf(400.0, w * 0.78), 210.0)
+
+	var action_w := (action_area_w - action_gap * float(action_columns - 1)) / float(action_columns)
+	var action_x := (w - action_area_w) * 0.5
+	for i in range(_action_buttons.size()):
+		var row := int(i / action_columns)
+		var column := i % action_columns
+		_action_buttons[i].position = Vector2(
+			action_x + float(column) * (action_w + action_gap),
+			action_y + float(row) * (action_h + 8.0)
+		)
+		_action_buttons[i].size = Vector2(action_w, action_h)
+		var disc: Panel = _action_buttons[i].get_node("IconDisc")
+		var diameter := minf(action_w - 2.0, action_h * .70)
+		disc.position = Vector2((action_w - diameter) * .5, 0.0)
+		disc.size = Vector2(diameter, diameter)
+		var icon: TextureRect = disc.get_node("ActionIcon")
+		icon.position = Vector2.ONE * (diameter * .20)
+		icon.size = Vector2.ONE * (diameter * .60)
+		var caption: Label = _action_buttons[i].get_node("ActionCaption")
+		caption.position = Vector2(0.0, diameter + 2.0)
+		caption.size = Vector2(action_w, action_h - diameter)
+		caption.add_theme_font_size_override("font_size", roundi(clampf(16.0 * scale_factor, 11.0, 20.0)))
+
+	var status_y := action_y + float(action_rows) * action_h + float(maxi(0, action_rows - 1)) * 8.0 + 6.0
+	_status_label.position = Vector2(maxf(12.0, (w - minf(action_area_w, board_w + 120.0)) * 0.5), status_y)
+	_status_label.size = Vector2(minf(action_area_w, board_w + 120.0), 34.0)
+	_footer_label.visible = not is_portrait and h - status_y > 48.0
+	_footer_label.position = Vector2(0, h - 30.0)
+	_footer_label.size = Vector2(w, 24.0)
+
+	_title_label.add_theme_font_size_override("font_size", roundi(clampf(56.0 * scale_factor, 31.0, 62.0)))
+	_subtitle_label.add_theme_font_size_override("font_size", roundi(clampf(18.0 * scale_factor, 12.0, 24.0)))
+	_match_duration_label.add_theme_font_size_override("font_size", roundi(clampf(15.0 * scale_factor, 11.0, 18.0)))
+	_seal_label.add_theme_font_size_override("font_size", roundi(clampf(20.0 * scale_factor, 14.0, 24.0)))
+	_turn_status_label.add_theme_font_size_override("font_size", roundi(clampf(24.0 * scale_factor, 17.0, 30.0)))
+	_round_status_label.add_theme_font_size_override("font_size", roundi(clampf(14.0 * scale_factor, 11.0, 17.0)))
+	_role_label.add_theme_font_size_override("font_size", roundi(clampf(16.0 * scale_factor, 11.0, 18.0)))
+	_turn_label.add_theme_font_size_override("font_size", roundi(clampf(18.0 * scale_factor, 12.0, 21.0)))
+
+	if _countdown_clock != null:
+		var clock_size := clampf(minf(board_w, board_h) * 0.31, 160.0, 240.0)
+		_countdown_clock.size = Vector2(clock_size, clock_size)
+		_countdown_clock.position = Vector2(
+			board_x + board_w * 0.5 - clock_size * 0.5,
+			board_y + board_h * 0.5 - clock_size * 0.5
+		)
+
+	_layout_modal_panels(w, h)
+
+
+func _layout_modal_panels(w: float, h: float) -> void:
+	_menu_panel.size = Vector2(minf(440.0, w * 0.84), minf(380.0, h - 24.0))
 	_menu_panel.position = (size - _menu_panel.size) * 0.5
-	_menu_label.position = Vector2(20.0, 20.0)
-	_menu_label.size = Vector2(_menu_panel.size.x - 40.0, 115.0)
-	_menu_close.position = Vector2((_menu_panel.size.x - 130.0) * 0.5, 147.0)
-	_menu_close.size = Vector2(130.0, 42.0)
+	_menu_label.position = Vector2(20.0, 18.0)
+	var header_h := clampf(_menu_panel.size.y * .245, 50.0, 94.0)
+	var row_h := clampf((_menu_panel.size.y - 36.0 - header_h - 32.0 - 48.0) / 3.0, 26.0, 44.0)
+	var first_row_y := 18.0 + header_h + 8.0
+	_menu_label.size = Vector2(_menu_panel.size.x - 40.0, header_h)
+	_bgm_toggle_button.position = Vector2(28.0, first_row_y)
+	_bgm_toggle_button.size = Vector2(_menu_panel.size.x - 56.0, row_h)
+	_sfx_toggle_button.position = Vector2(28.0, first_row_y + row_h + 8.0)
+	_sfx_toggle_button.size = Vector2(_menu_panel.size.x - 56.0, row_h)
+	_quality_label.position = Vector2(28.0, first_row_y + (row_h + 8.0) * 2.0)
+	_quality_label.size = Vector2(86.0, row_h)
+	_quality_option.position = Vector2(126.0, _quality_label.position.y)
+	_quality_option.size = Vector2(_menu_panel.size.x - 154.0, row_h)
+	_menu_close.position = Vector2((_menu_panel.size.x - 150.0) * 0.5, _menu_panel.size.y - 66.0)
+	_menu_close.size = Vector2(150.0, 48.0)
+
+	if _settlement_panel != null:
+		var settlement_w := minf(540.0, w * 0.88)
+		var settlement_h := minf(430.0, h * 0.58)
+		_settlement_panel.size = Vector2(settlement_w, settlement_h)
+		_settlement_panel.position = (size - _settlement_panel.size) * 0.5
+		_settlement_title.position = Vector2(22.0, 24.0)
+		_settlement_title.size = Vector2(settlement_w - 44.0, 54.0)
+		_settlement_detail.position = Vector2(32.0, 86.0)
+		_settlement_detail.size = Vector2(settlement_w - 64.0, 94.0)
+		_settlement_stats.position = Vector2(32.0, 184.0)
+		_settlement_stats.size = Vector2(settlement_w - 64.0, 110.0)
+		var settlement_button_w := (settlement_w - 78.0) * 0.5
+		_settlement_review_button.position = Vector2(28.0, settlement_h - 78.0)
+		_settlement_review_button.size = Vector2(settlement_button_w, 50.0)
+		_settlement_lobby_button.position = Vector2(50.0 + settlement_button_w, settlement_h - 78.0)
+		_settlement_lobby_button.size = Vector2(settlement_button_w, 50.0)
 
 
 func _layout_player_card(card: Panel, avatar: TextureRect, name_label: Label, rank_label: Label, timer_label: Label, avatar_size: float, scale_factor: float) -> void:
 	var frame: Panel = card.get_node("AvatarFrame")
-	frame.position = Vector2(7.0, (card.size.y - avatar_size) * 0.5)
+	frame.position = Vector2(5.0, (card.size.y - avatar_size) * 0.5)
 	frame.size = Vector2(avatar_size, avatar_size)
 	avatar.position = Vector2(3.0, 3.0)
 	avatar.size = frame.size - Vector2(6.0, 6.0)
-	var text_x := avatar_size + 13.0
-	var text_w := card.size.x - text_x - 5.0
-	name_label.position = Vector2(text_x, 7.0)
-	name_label.size = Vector2(text_w, card.size.y * 0.30)
-	rank_label.position = Vector2(text_x, card.size.y * 0.34)
-	rank_label.size = Vector2(text_w, card.size.y * 0.22)
-	timer_label.position = Vector2(text_x, card.size.y * 0.59)
-	timer_label.size = Vector2(text_w, card.size.y * 0.31)
-	name_label.add_theme_font_size_override("font_size", roundi(22.0 * scale_factor))
-	rank_label.add_theme_font_size_override("font_size", roundi(15.0 * scale_factor))
-	timer_label.add_theme_font_size_override("font_size", roundi(27.0 * scale_factor))
+	var badge: Panel = card.get_node("SideBadge")
+	var badge_text: Label = badge.get_node("SideBadgeText")
+	var timer_frame: Panel = card.get_node("TimerFrame")
+	var watch: Label = timer_frame.get_node("TimerIcon")
+	var timer_w := clampf(card.size.x * .23, 84.0, 126.0)
+	timer_frame.position = Vector2(card.size.x - timer_w - 8.0, (card.size.y - 36.0) * .5)
+	timer_frame.size = Vector2(timer_w, 36.0)
+	watch.position = Vector2(4.0, 0.0)
+	watch.size = Vector2(26.0, 36.0)
+	timer_label.position = Vector2(26.0, 0.0)
+	timer_label.size = Vector2(timer_w - 29.0, 36.0)
+	var text_x := avatar_size + 15.0
+	var text_w := card.size.x - text_x - timer_w - 12.0
+	name_label.position = Vector2(text_x, maxf(3.0, card.size.y * .10))
+	name_label.size = Vector2(text_w, card.size.y * .39)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	badge.position = Vector2(text_x, card.size.y * .56)
+	badge.size = Vector2(40.0, 25.0)
+	badge_text.position = Vector2.ZERO
+	badge_text.size = badge.size
+	rank_label.position = Vector2(text_x + 47.0, card.size.y * .53)
+	rank_label.size = Vector2(maxf(20.0, text_w - 47.0), 29.0)
+	rank_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	name_label.add_theme_font_size_override("font_size", roundi(clampf(22.0 * scale_factor, 13.0, 24.0)))
+	rank_label.add_theme_font_size_override("font_size", roundi(clampf(15.0 * scale_factor, 10.0, 17.0)))
+	timer_label.add_theme_font_size_override("font_size", roundi(clampf(25.0 * scale_factor, 15.0, 27.0)))
 
 
 func _on_action_pressed(action: String) -> void:
@@ -671,6 +1174,9 @@ func _on_action_pressed(action: String) -> void:
 		_menu_label.text = "小板凳象棋\n房间：%s\n规则：标准象棋 · %s" % [_room_id, str(product.get("rule_version", "1.0.0"))]
 		_menu_panel.visible = true
 		_menu_panel.move_to_front()
+		return
+	if action == "离开":
+		_return_to_lobby()
 		return
 	var detail := "该功能正在接入服务端。"
 	if action == "提示":
@@ -721,6 +1227,7 @@ func _handle_message(text: String) -> void:
 		"chess_joined":
 			_joined = true
 			_your_color = str(message.get("your_color", ""))
+			print("CHESS_JOINED color=%s room=%s" % [_your_color, _room_id])
 			_apply_player_view()
 			_status_label.text = "状态：%s" % str(message.get("message", "已加入房间"))
 			_update_hud()
@@ -738,7 +1245,11 @@ func _apply_state(message: Dictionary) -> void:
 	var previous_color := _your_color
 	_your_color = str(message.get("your_color", _your_color))
 	_turn = str(message.get("turn", ""))
+	_move_number = maxi(1, int(message.get("move_number", _move_number)))
 	_winner = str(message.get("winner", ""))
+	_loser = str(message.get("loser", ""))
+	_end_reason = str(message.get("end_reason", ""))
+	_dissolved = bool(message.get("dissolved", false))
 	_room_status = str(message.get("status", "waiting"))
 	var previous_turn_started_at_ms := _turn_started_at_ms
 	var server_time_ms := int(message.get("server_time_ms", 0))
@@ -746,10 +1257,13 @@ func _apply_state(message: Dictionary) -> void:
 		_server_clock_offset_ms = server_time_ms - _local_unix_ms()
 	_match_started_at_ms = int(message.get("match_started_at_ms", _match_started_at_ms))
 	_turn_started_at_ms = int(message.get("turn_started_at_ms", _turn_started_at_ms))
+	_finished_at_ms = int(message.get("finished_at_ms", _finished_at_ms))
 	_step_warning_seconds = int(message.get("step_warning_seconds", 60))
 	_step_countdown_seconds = int(message.get("step_countdown_seconds", 30))
 	if previous_turn_started_at_ms != _turn_started_at_ms:
 		_last_countdown_second = -999
+		if previous_turn_started_at_ms > 0:
+			_play_move_sound()
 	_pieces_by_pos.clear()
 
 	if previous_color != _your_color:
@@ -768,8 +1282,18 @@ func _apply_state(message: Dictionary) -> void:
 	_rebuild_piece_models()
 	_update_hud()
 
-	if _winner != "":
-		_status_label.text = "本局结束：%s获胜。" % _color_name(_winner)
+	if "--auto-flow" in OS.get_cmdline_user_args() and not _auto_validation_move_sent and _room_status == "playing" and _your_color == "red" and _turn == "red":
+		_auto_validation_move_sent = true
+		call_deferred("_send_auto_validation_move")
+
+	if _room_status == "finished" or _winner != "" or _end_reason != "":
+		if _end_reason == "timeout":
+			_status_label.text = "本局结束：%s思考超时，对局已自动解散。" % _color_name(_loser)
+		elif _winner != "":
+			_status_label.text = "本局结束：%s获胜。" % _color_name(_winner)
+		else:
+			_status_label.text = "本局已经结束。"
+		_show_settlement()
 	elif _room_status == "waiting":
 		_status_label.text = "状态：等待第二位玩家进入同一房间。"
 	elif _turn == _your_color:
@@ -778,13 +1302,26 @@ func _apply_state(message: Dictionary) -> void:
 		_status_label.text = "状态：等待对方走棋。"
 
 
+func _send_auto_validation_move() -> void:
+	# 自动验收专用：红方标准开局先走 0 路兵一步，正常玩家启动不会触发。
+	if _room_status != "playing" or _your_color != "red" or _turn != "red":
+		return
+	_send_json({
+		"type": "chess_move",
+		"piece_id": "red_soldier_0",
+		"from": {"x": 0, "y": 6},
+		"to": {"x": 0, "y": 5}
+	})
+	print("CHESS_AUTO_MOVE submitted room=%s" % _room_id)
+
+
 func _apply_player_view() -> void:
 	if _stage == null:
 		return
 	if _your_color == "black":
-		_stage.set_orbit_view(180.0, 4.2, 17.0, Vector3.ZERO)
+		_stage.set_orbit_view(180.0, CAMERA_RADIUS, CAMERA_HEIGHT, Vector3(0.0, BOARD_Y, 0.0))
 	else:
-		_stage.set_orbit_view(0.0, 4.2, 17.0, Vector3.ZERO)
+		_stage.set_orbit_view(0.0, CAMERA_RADIUS, CAMERA_HEIGHT, Vector3(0.0, BOARD_Y, 0.0))
 
 	_rebuild_piece_models()
 
@@ -830,7 +1367,9 @@ func _create_piece_model(piece: Dictionary) -> Node3D:
 	cylinder.height = 0.17
 	cylinder.radial_segments = 40
 	body.mesh = cylinder
-	body.material_override = PBR_FACTORY.create_material(Color("#946138"), 0.39, 0.01)
+	var body_material := PBR_FACTORY.create_material(Color("#d1a564"), 0.36, 0.01)
+	body_material.albedo_texture = _golden_nanmu_texture
+	body.material_override = body_material
 	root.add_child(body)
 
 	var top_disc := MeshInstance3D.new()
@@ -841,7 +1380,9 @@ func _create_piece_model(piece: Dictionary) -> Node3D:
 	top_cylinder.radial_segments = 40
 	top_disc.mesh = top_cylinder
 	top_disc.position.y = 0.097
-	top_disc.material_override = PBR_FACTORY.create_material(Color("#f0d7a8"), 0.48, 0.0)
+	var top_material := PBR_FACTORY.create_material(Color("#e6c27e"), 0.44, 0.0)
+	top_material.albedo_texture = _golden_nanmu_texture
+	top_disc.material_override = top_material
 	root.add_child(top_disc)
 
 	var color := str(piece.get("color", ""))
@@ -868,32 +1409,74 @@ func _create_piece_model(piece: Dictionary) -> Node3D:
 func _update_hud() -> void:
 	if _role_label == null:
 		return
+
+	_round_status_label.text = "第 %d 步" % _move_number
 	if _your_color == "":
-		_role_label.text = "阵营：观战"
+		_role_label.text = "我方：观战"
 	else:
-		_role_label.text = "阵营：%s" % _color_name(_your_color)
+		_role_label.text = "我方：%s · %s" % [_color_name(_your_color), "在线" if _connected else "连接中"]
+
 	if _winner != "":
+		_turn_status_label.text = "对局结束 · %s获胜" % _color_name(_winner)
+		_turn_status_label.add_theme_color_override("font_color", Color("#f0c978"))
 		_turn_label.text = "胜方：%s" % _color_name(_winner)
-	elif _turn == "":
-		_turn_label.text = "回合：等待"
+	elif _end_reason == "timeout":
+		_turn_status_label.text = "对局结束 · 超时解散"
+		_turn_status_label.add_theme_color_override("font_color", Color("#d7c5ad"))
+		_turn_label.text = "结算：超时解散"
+	elif _room_status == "waiting" or _turn == "":
+		_turn_status_label.text = "等待对手进入对局"
+		_turn_status_label.add_theme_color_override("font_color", Color("#b8aea4"))
+		_turn_label.text = "当前：等待"
+	elif _turn == _your_color:
+		_turn_status_label.text = "● 轮到你走棋"
+		_turn_status_label.add_theme_color_override("font_color", Color("#f2c978"))
+		_turn_label.text = "当前：%s · 我方思考" % _color_name(_turn)
 	else:
-		_turn_label.text = "回合：%s" % _color_name(_turn)
+		_turn_status_label.text = "● 对手思考中"
+		_turn_status_label.add_theme_color_override("font_color", Color("#ded7cf"))
+		_turn_label.text = "当前：%s · 对手思考" % _color_name(_turn)
+
 	_update_player_panels()
 
 
 func _update_player_panels() -> void:
 	if _left_player_label == null or _right_player_label == null:
 		return
-	if _your_color == "black":
-		_left_player_label.text = "黑方 · 我"
-		_right_player_label.text = "红方 · 对手"
-	else:
-		_left_player_label.text = "红方 · 我"
-		_right_player_label.text = "黑方 · 对手"
-	_left_rank_label.text = "本局执棋"
-	_right_rank_label.text = "同室棋友"
+
+	var left_color := "black" if _your_color == "black" else "red"
+	var right_color := "red" if left_color == "black" else "black"
+	var display_name := str(match_context.get("display_name", "我"))
+	if display_name == "":
+		display_name = "我"
+
+	_left_player_label.text = display_name
+	_right_player_label.text = str(match_context.get("opponent_display_name", "对手"))
+	_left_card.get_node("SideBadge/SideBadgeText").text = "红方" if left_color == "red" else "黑方"
+	_right_card.get_node("SideBadge/SideBadgeText").text = "红方" if right_color == "red" else "黑方"
+	_left_card.get_node("SideBadge").add_theme_stylebox_override("panel", _flat_style(Color("#a51f1d") if left_color == "red" else Color("#45484a"), Color("#d8ae74"), 7, 1))
+	_right_card.get_node("SideBadge").add_theme_stylebox_override("panel", _flat_style(Color("#a51f1d") if right_color == "red" else Color("#45484a"), Color("#d8ae74"), 7, 1))
+
+	var left_active := _room_status == "playing" and _turn == left_color
+	var right_active := _room_status == "playing" and _turn == right_color
+	_left_rank_label.text = "● 执棋中" if left_active else ("● 在线" if _room_status == "playing" else "● 等待")
+	_right_rank_label.text = "● 执棋中" if right_active else ("● 在线" if _room_status == "playing" else "● 等待")
+	_left_rank_label.add_theme_color_override("font_color", Color("#f2c978") if left_active else Color("#7fcf9b"))
+	_right_rank_label.add_theme_color_override("font_color", Color("#f2c978") if right_active else Color("#7fcf9b"))
+	_update_player_card_visual(_left_card, left_active)
+	_update_player_card_visual(_right_card, right_active)
+
 	# 计时由 _update_time_ui() 使用服务端权威时间戳持续刷新。
 	_update_time_ui()
+
+
+func _update_player_card_visual(card: Panel, active: bool) -> void:
+	if card == null:
+		return
+	if active:
+		card.add_theme_stylebox_override("panel", _flat_style(Color("#271d13f2"), Color("#c39a5d"), 18, 2))
+	else:
+		card.add_theme_stylebox_override("panel", _flat_style(Color("#111313ed"), Color("#8b6a3d"), 18, 1))
 
 
 func _update_time_ui() -> void:
@@ -907,7 +1490,7 @@ func _update_time_ui() -> void:
 	else:
 		_match_duration_label.text = "对局时长 00:00"
 
-	if _room_status != "playing" or _turn_started_at_ms <= 0 or _winner != "":
+	if _room_status != "playing" or _turn_started_at_ms <= 0 or _winner != "" or _end_reason != "":
 		_left_timer_label.text = "--:--"
 		_right_timer_label.text = "--:--"
 		_left_timer_label.add_theme_color_override("font_color", Color("#f2e9d4"))
@@ -985,10 +1568,211 @@ func _format_duration(total_seconds: int) -> String:
 
 
 func _play_warning_tone() -> void:
-	if _warning_audio == null:
+	if not _sfx_enabled or _warning_audio == null:
 		return
 	_warning_audio.stop()
 	_warning_audio.play()
+
+
+func _load_audio_stream(path: String) -> AudioStream:
+	# 开发态和发布态都优先直接解码源音频字节，避免依赖Godot编辑器导入缓存。
+	if FileAccess.file_exists(path):
+		var bytes := FileAccess.get_file_as_bytes(path)
+		if not bytes.is_empty():
+			var extension := path.get_extension().to_lower()
+			if extension == "wav":
+				var wav_stream := AudioStreamWAV.load_from_buffer(bytes)
+				if wav_stream != null:
+					return wav_stream
+			elif extension == "mp3":
+				var mp3_stream := AudioStreamMP3.load_from_buffer(bytes)
+				if mp3_stream != null:
+					return mp3_stream
+
+	var imported = load(path)
+	if imported is AudioStream:
+		return imported as AudioStream
+	return null
+
+
+func _setup_audio() -> void:
+	_move_audio = AudioStreamPlayer.new()
+	_move_audio.name = "MoveWoodAudio"
+	_move_audio.volume_db = -5.0
+	var move_stream := _load_audio_stream(MOVE_SOUND_PATH)
+	var move_source_path := MOVE_SOUND_PATH
+	if move_stream is AudioStream:
+		_move_audio.stream = move_stream
+	else:
+		var fallback_move_stream := _load_audio_stream(MOVE_SOUND_FALLBACK_PATH)
+		move_source_path = MOVE_SOUND_FALLBACK_PATH
+		if fallback_move_stream is AudioStream:
+			_move_audio.stream = fallback_move_stream
+	add_child(_move_audio)
+	print("CHESS_MOVE_SOUND_SOURCE path=%s stream=%s" % [
+		move_source_path,
+		_move_audio.stream.get_class() if _move_audio.stream != null else "null"
+	])
+
+	_bgm_audio = AudioStreamPlayer.new()
+	_bgm_audio.name = "GuofengBgmAudio"
+	_bgm_audio.volume_db = -17.0
+	var bgm_stream := _load_audio_stream(BGM_PATH)
+	var bgm_source_path := BGM_PATH
+	if bgm_stream is AudioStream:
+		_bgm_audio.stream = bgm_stream
+	else:
+		# 新古筝BGM在目标平台导入失败时自动降级到项目内置国风音乐。
+		var fallback_stream := _load_audio_stream(BGM_FALLBACK_PATH)
+		bgm_source_path = BGM_FALLBACK_PATH
+		if fallback_stream is AudioStream:
+			_bgm_audio.stream = fallback_stream
+	_bgm_audio.finished.connect(_on_bgm_finished)
+	add_child(_bgm_audio)
+	var window := get_window()
+	_app_has_focus = window == null or window.has_focus()
+	_sync_bgm_playback()
+	_update_audio_toggle_labels()
+	print("CHESS_BGM_SOURCE path=%s stream=%s" % [bgm_source_path, _bgm_audio.stream.get_class() if _bgm_audio.stream != null else "null"])
+	print("CHESS_BGM playing=%s enabled=%s focused=%s paused=%s" % [
+		str(_bgm_audio.playing),
+		str(_bgm_enabled),
+		str(_app_has_focus),
+		str(_bgm_audio.stream_paused)
+	])
+	if "--auto-bgm-toggle" in OS.get_cmdline_user_args():
+		call_deferred("_run_bgm_toggle_validation")
+
+
+func _on_bgm_finished() -> void:
+	# WAV 未设置导入循环时由这里无缝重启；关闭音乐或失去焦点时绝不自动拉起。
+	if _bgm_enabled and _app_has_focus and _bgm_audio != null and _bgm_audio.stream != null:
+		_bgm_audio.play()
+
+
+func _sync_bgm_playback() -> void:
+	if _bgm_audio == null or _bgm_audio.stream == null:
+		_update_audio_toggle_labels()
+		return
+
+	var should_play := _bgm_enabled and _app_has_focus
+	if should_play:
+		if _bgm_audio.playing:
+			_bgm_audio.stream_paused = false
+		else:
+			_bgm_audio.stream_paused = false
+			_bgm_audio.play()
+	else:
+		# 使用暂停而不是 stop，重新开启时从原位置继续；双客户端调试时后台窗口自动静音。
+		if _bgm_audio.playing:
+			_bgm_audio.stream_paused = true
+	_update_audio_toggle_labels()
+
+
+func _toggle_bgm() -> void:
+	_bgm_enabled = not _bgm_enabled
+	_sync_bgm_playback()
+	print("CHESS_BGM_TOGGLE enabled=%s playing=%s focused=%s paused=%s" % [
+		str(_bgm_enabled),
+		str(_bgm_audio != null and _bgm_audio.playing),
+		str(_app_has_focus),
+		str(_bgm_audio != null and _bgm_audio.stream_paused)
+	])
+
+
+func _run_bgm_toggle_validation() -> void:
+	_toggle_bgm()
+	print("CHESS_BGM_VALIDATE_OFF enabled=%s paused=%s" % [
+		str(_bgm_enabled),
+		str(_bgm_audio != null and _bgm_audio.stream_paused)
+	])
+	await get_tree().create_timer(0.12).timeout
+	_toggle_bgm()
+	print("CHESS_BGM_VALIDATE_ON enabled=%s paused=%s" % [
+		str(_bgm_enabled),
+		str(_bgm_audio != null and _bgm_audio.stream_paused)
+	])
+
+
+func _toggle_sfx() -> void:
+	_sfx_enabled = not _sfx_enabled
+	if not _sfx_enabled and _warning_audio != null:
+		_warning_audio.stop()
+	_update_audio_toggle_labels()
+
+
+func _update_audio_toggle_labels() -> void:
+	if _bgm_toggle_button != null:
+		var bgm_state := "关"
+		if _bgm_enabled:
+			bgm_state = "开" if _app_has_focus else "开（后台暂停）"
+		_bgm_toggle_button.text = "背景音乐：%s" % bgm_state
+	if _sfx_toggle_button != null:
+		_sfx_toggle_button.text = "走棋音效：%s" % ("开" if _sfx_enabled else "关")
+
+
+func _play_move_sound() -> void:
+	if not _sfx_enabled or _move_audio == null or _move_audio.stream == null:
+		return
+	_move_audio.stop()
+	_move_audio.play()
+	print("CHESS_MOVE_SOUND played room=%s" % _room_id)
+
+
+func _show_settlement() -> void:
+	if _settlement_panel == null or _settlement_shown:
+		return
+	_settlement_shown = true
+
+	var title_text := "对局结算"
+	var detail_text := ""
+	if _end_reason == "timeout":
+		title_text = "对局已解散"
+		detail_text = "%s思考超时，本局已由服务端自动解散。" % _color_name(_loser)
+	elif _winner != "":
+		var result_text := "胜利" if _winner == _your_color else "失利"
+		title_text = "本局%s" % result_text
+		detail_text = "%s吃将获胜，对局已经完成结算。" % _color_name(_winner)
+	else:
+		title_text = "对局结束"
+		detail_text = "本局已经结束。"
+
+	var duration_seconds := 0
+	if _match_started_at_ms > 0:
+		var end_ms := _finished_at_ms if _finished_at_ms > 0 else _authoritative_now_ms()
+		duration_seconds = maxi(0, int((end_ms - _match_started_at_ms) / 1000))
+
+	var reason_text := "正常结束"
+	if _end_reason == "timeout":
+		reason_text = "单步超时自动解散"
+	elif _end_reason == "general_captured":
+		reason_text = "将/帅被吃"
+
+	_settlement_title.text = title_text
+	_settlement_detail.text = detail_text
+	_settlement_stats.text = "对局时长：%s\n结束原因：%s\n房间：%s" % [
+		_format_duration(duration_seconds),
+		reason_text,
+		_room_id
+	]
+	_settlement_overlay.visible = true
+	_settlement_panel.visible = true
+	_settlement_overlay.move_to_front()
+	_settlement_panel.move_to_front()
+	print("CHESS_SETTLEMENT reason=%s loser=%s winner=%s dissolved=%s" % [_end_reason, _loser, _winner, str(_dissolved)])
+
+
+func _hide_settlement_for_review() -> void:
+	if _settlement_overlay != null:
+		_settlement_overlay.visible = false
+	if _settlement_panel != null:
+		_settlement_panel.visible = false
+
+
+func _return_to_lobby() -> void:
+	if _bgm_audio != null:
+		_bgm_audio.stop()
+	emit_signal("request_return_to_lobby")
 
 
 func _show_preview_position() -> void:
@@ -1016,7 +1800,7 @@ func _on_board_pressed(pos: Vector2i) -> void:
 	if _your_color != "red" and _your_color != "black":
 		_status_label.text = "状态：当前是观战身份。"
 		return
-	if _winner != "":
+	if _winner != "" or _end_reason != "" or _room_status == "finished":
 		_status_label.text = "状态：本局已经结束。"
 		return
 	if _turn != _your_color:
@@ -1073,8 +1857,8 @@ func _screen_to_board(screen_pos: Vector2) -> Vector2i:
 	if _camera == null or _board_view == null or _board_view.size.x <= 0.0 or _board_view.size.y <= 0.0:
 		return INVALID_POS
 	var viewport_pos := Vector2(
-		screen_pos.x * BOARD_VIEW_SIZE.x / _board_view.size.x,
-		screen_pos.y * BOARD_VIEW_SIZE.y / _board_view.size.y
+		screen_pos.x * _board_viewport.size.x / _board_view.size.x,
+		screen_pos.y * _board_viewport.size.y / _board_view.size.y
 	)
 	var ray_origin := _camera.project_ray_origin(viewport_pos)
 	var ray_direction := _camera.project_ray_normal(viewport_pos)
@@ -1084,10 +1868,8 @@ func _screen_to_board(screen_pos: Vector2) -> Vector2i:
 	if distance <= 0.0:
 		return INVALID_POS
 	var hit := ray_origin + ray_direction * distance
-	var x := roundi(hit.x / CELL_SIZE + 4.0)
-	var y := roundi(hit.z / CELL_SIZE + 4.5)
-	if x < 0 or x > 8 or y < 0 or y > 9:
-		return INVALID_POS
+	var x := _nearest_grid_index(hit.x / BLENDER_MODEL_SCALE, _grid_x_m)
+	var y := _nearest_grid_index(-hit.z / BLENDER_MODEL_SCALE, _grid_y_m)
 	var snapped := _board_to_world(Vector2i(x, y))
 	if Vector2(hit.x - snapped.x, hit.z - snapped.z).length() > CELL_SIZE * 0.48:
 		return INVALID_POS
@@ -1096,10 +1878,18 @@ func _screen_to_board(screen_pos: Vector2) -> Vector2i:
 
 func _board_to_world(pos: Vector2i) -> Vector3:
 	return Vector3(
-		(float(pos.x) - 4.0) * CELL_SIZE,
+		_grid_x_m[pos.x] * BLENDER_MODEL_SCALE,
 		PIECE_CENTER_Y,
-		(float(pos.y) - 4.5) * CELL_SIZE
+		-_grid_y_m[pos.y] * BLENDER_MODEL_SCALE
 	)
+
+
+func _nearest_grid_index(value: float, positions: PackedFloat64Array) -> int:
+	var nearest := 0
+	for i in range(1, positions.size()):
+		if absf(value - positions[i]) < absf(value - positions[nearest]):
+			nearest = i
+	return nearest
 
 
 func _piece_at(pos: Vector2i) -> Dictionary:

@@ -3,87 +3,87 @@
   "blender_version": "5.2.1 LTS",
   "board_bounds_m": [
     [
-      -0.18400000035762787,
-      0.18400000035762787
+      -0.20600000023841858,
+      0.20600000023841858
     ],
     [
-      -0.20399999618530273,
-      0.20399999618530273
+      -0.22599999606609344,
+      0.22599999606609344
     ],
     [
-      -0.003999999724328518,
-      0.019999999552965164
+      0.014000000432133675,
+      0.020000001415610313
     ]
   ],
   "piece_dimensions_m": {
     "Piece_Black_Rook": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Black_Horse": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Black_Elephant": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Black_Advisor": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Black_General": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Black_Cannon": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Black_Soldier": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Red_Rook": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Red_Horse": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Red_Elephant": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Red_Advisor": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Red_General": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Red_Cannon": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ],
     "Piece_Red_Soldier": [
-      0.032,
-      0.032,
+      0.036,
+      0.036,
       0.01003
     ]
   },
@@ -94,7 +94,7 @@
     },
     "editable_board": {
       "passed": true,
-      "detail": 81
+      "detail": 79
     },
     "14_distinct_piece_masters": {
       "passed": true,
@@ -117,17 +117,17 @@
     },
     "river_and_palaces": {
       "passed": true,
-      "detail": "2 river legends and 4 recessed palace diagonals"
+      "detail": "river lettering in supplied texture and 4 recessed palace diagonals"
     },
-    "single_bamboo_body": {
+    "single_flat_body": {
       "passed": true,
-      "detail": "one flat bamboo body with integral supports"
+      "detail": "one flat body without feet or support base"
     },
     "size_Piece_Black_Rook": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -146,7 +146,7 @@
     "character_circle_margin_Piece_Black_Rook": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.0021499999457936358
+        "minimum_radial_gap_m": 0.0024187501972710006
       }
     },
     "no_circle_cavity_Piece_Black_Rook": {
@@ -162,8 +162,8 @@
     "size_Piece_Black_Horse": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -182,7 +182,7 @@
     "character_circle_margin_Piece_Black_Horse": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.0021499997292925375
+        "minimum_radial_gap_m": 0.0024187493813939438
       }
     },
     "no_circle_cavity_Piece_Black_Horse": {
@@ -198,8 +198,8 @@
     "size_Piece_Black_Elephant": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -218,7 +218,7 @@
     "character_circle_margin_Piece_Black_Elephant": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.0021499997933639176
+        "minimum_radial_gap_m": 0.0024187495375250674
       }
     },
     "no_circle_cavity_Piece_Black_Elephant": {
@@ -234,8 +234,8 @@
     "size_Piece_Black_Advisor": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -254,7 +254,7 @@
     "character_circle_margin_Piece_Black_Advisor": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.002150000558709623
+        "minimum_radial_gap_m": 0.002418750861360487
       }
     },
     "no_circle_cavity_Piece_Black_Advisor": {
@@ -270,8 +270,8 @@
     "size_Piece_Black_General": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -290,7 +290,7 @@
     "character_circle_margin_Piece_Black_General": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.0021499998637194324
+        "minimum_radial_gap_m": 0.0024187502383660117
       }
     },
     "no_circle_cavity_Piece_Black_General": {
@@ -306,8 +306,8 @@
     "size_Piece_Black_Cannon": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -326,7 +326,7 @@
     "character_circle_margin_Piece_Black_Cannon": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.002149999671336656
+        "minimum_radial_gap_m": 0.002418749677638098
       }
     },
     "no_circle_cavity_Piece_Black_Cannon": {
@@ -342,8 +342,8 @@
     "size_Piece_Black_Soldier": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -362,7 +362,7 @@
     "character_circle_margin_Piece_Black_Soldier": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.00214999953451272
+        "minimum_radial_gap_m": 0.0024187490106882866
       }
     },
     "no_circle_cavity_Piece_Black_Soldier": {
@@ -378,8 +378,8 @@
     "size_Piece_Red_Rook": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -398,7 +398,7 @@
     "character_circle_margin_Piece_Red_Rook": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.0021499999457936358
+        "minimum_radial_gap_m": 0.0024187501972710006
       }
     },
     "no_circle_cavity_Piece_Red_Rook": {
@@ -414,8 +414,8 @@
     "size_Piece_Red_Horse": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -434,7 +434,7 @@
     "character_circle_margin_Piece_Red_Horse": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.0021499997292925375
+        "minimum_radial_gap_m": 0.0024187493813939438
       }
     },
     "no_circle_cavity_Piece_Red_Horse": {
@@ -450,8 +450,8 @@
     "size_Piece_Red_Elephant": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -470,7 +470,7 @@
     "character_circle_margin_Piece_Red_Elephant": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.0021499999760576007
+        "minimum_radial_gap_m": 0.002418749860773008
       }
     },
     "no_circle_cavity_Piece_Red_Elephant": {
@@ -486,8 +486,8 @@
     "size_Piece_Red_Advisor": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -506,7 +506,7 @@
     "character_circle_margin_Piece_Red_Advisor": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.0021499998971745912
+        "minimum_radial_gap_m": 0.002418750340592331
       }
     },
     "no_circle_cavity_Piece_Red_Advisor": {
@@ -522,8 +522,8 @@
     "size_Piece_Red_General": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -542,7 +542,7 @@
     "character_circle_margin_Piece_Red_General": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.0021499996628740817
+        "minimum_radial_gap_m": 0.0024187498555564377
       }
     },
     "no_circle_cavity_Piece_Red_General": {
@@ -558,8 +558,8 @@
     "size_Piece_Red_Cannon": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -578,7 +578,7 @@
     "character_circle_margin_Piece_Red_Cannon": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.002149999671336656
+        "minimum_radial_gap_m": 0.002418749677638098
       }
     },
     "no_circle_cavity_Piece_Red_Cannon": {
@@ -594,8 +594,8 @@
     "size_Piece_Red_Soldier": {
       "passed": true,
       "detail": [
-        0.032,
-        0.032,
+        0.036,
+        0.036,
         0.01003
       ]
     },
@@ -614,7 +614,7 @@
     "character_circle_margin_Piece_Red_Soldier": {
       "passed": true,
       "detail": {
-        "minimum_radial_gap_m": 0.0021499998691562085
+        "minimum_radial_gap_m": 0.002418749764325335
       }
     },
     "no_circle_cavity_Piece_Red_Soldier": {
@@ -631,16 +631,16 @@
       "passed": true,
       "detail": [
         [
-          -0.18400000035762787,
-          0.18400000035762787
+          -0.20600000023841858,
+          0.20600000023841858
         ],
         [
-          -0.20399999618530273,
-          0.20399999618530273
+          -0.22599999606609344,
+          0.22599999606609344
         ],
         [
-          -0.003999999724328518,
-          0.019999999552965164
+          0.014000000432133675,
+          0.020000001415610313
         ]
       ]
     },
@@ -652,53 +652,55 @@
       "passed": true,
       "detail": 0.174
     },
-    "curved_underside_support": {
+    "flat_underside_no_support": {
       "passed": true,
       "detail": [
-        0.00200000312179327,
-        -0.004000001586973667
+        0.013999994844198227,
+        0.01400000974535942
       ]
     },
     "pieces_clear_of_board_edge": {
       "passed": true,
       "detail": {
-        "minimum_edge_clearance_m": 0.007999990224838244
+        "minimum_edge_clearance_m": 0.02799998617172242
       }
     },
     "true_grid_cavity_rank": {
       "passed": true,
       "detail": {
-        "depth_m": 0.0007749907672405243
+        "depth_m": 0.000774996355175972
       }
     },
     "true_grid_cavity_file": {
       "passed": true,
       "detail": {
-        "depth_m": 0.0007749982178211212
+        "depth_m": 0.000774996355175972
       }
     },
     "true_grid_cavity_palace": {
       "passed": true,
       "detail": {
-        "depth_m": 0.0007749907672405243
+        "depth_m": 0.0007750038057565689
       }
     },
     "true_grid_cavity_cannon_marker": {
       "passed": true,
       "detail": {
-        "depth_m": 0.0006499998271465302
+        "depth_m": 0.0006499830633401871
       }
     },
-    "bamboo_packed_texture": {
+    "reference_surface_packed_texture": {
       "passed": true,
       "detail": [
-        "bamboo_woodgrain.png"
+        "board_reference_surface.png"
       ]
     },
     "golden_nanmu_packed_texture": {
       "passed": true,
       "detail": [
-        "golden_nanmu_fine.png"
+        "golden_nanmu_lacquer_color.png",
+        "golden_nanmu_fine_normal.png",
+        "golden_nanmu_fine_roughness.png"
       ]
     },
     "preview_render": {

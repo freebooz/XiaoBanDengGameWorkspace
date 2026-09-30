@@ -1,0 +1,28 @@
+2026-09-30 21:42:38,201 - BlenderMCPServer - INFO - BlenderMCP server starting up
+2026-09-30 21:42:38,202 - BlenderMCPServer - WARNING - MCP for Blender addon on disk is outdated (expected protocol 13): C:\Users\Administrator\AppData\Roaming\Blender Foundation\Blender\5.2\scripts\addons\blender_mcp.py. Run `uvx mcp-for-blender install-addon` to update it, then in Blender: Preferences �� Add-ons �� disable and re-enable 'Interface: MCP for Blender' (or restart Blender) and click Start MCP Server.
+2026-09-30 21:42:38,203 - blender-mcp-telemetry - WARNING - Telemetry disabled via environment variable
+2026-09-30 21:42:38,205 - BlenderMCPServer - INFO - Connected to Blender at 127.0.0.1:9878
+2026-09-30 21:42:38,205 - BlenderMCPServer - INFO - Created new persistent connection to Blender
+2026-09-30 21:42:38,205 - BlenderMCPServer - INFO - Sending command: get_addon_info with params: None
+2026-09-30 21:42:38,205 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 21:42:38,219 - BlenderMCPServer - INFO - Received complete response (425 bytes)
+2026-09-30 21:42:38,219 - BlenderMCPServer - INFO - Received 425 bytes of data
+2026-09-30 21:42:38,219 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 21:42:38,219 - BlenderMCPServer - WARNING - Blender addon protocol 11 is behind expected 13. Run `uvx mcp-for-blender install-addon` to update it, then restart Blender or disable/enable 'Interface: MCP for Blender', then Start MCP Server. Trajectory still works via fallbacks.
+2026-09-30 21:42:38,219 - BlenderMCPServer - INFO - Successfully connected to Blender on startup
+2026-09-30 21:42:38,220 - BlenderMCPServer - WARNING - Blender addon protocol 11 is behind expected 13. Run `uvx mcp-for-blender install-addon` to update it, then restart Blender or disable/enable 'Interface: MCP for Blender', then Start MCP Server. Trajectory still works via fallbacks.
+2026-09-30 21:42:38,223 - mcp.server.lowlevel.server - INFO - Processing request of type CallToolRequest
+2026-09-30 21:42:38,223 - BlenderMCPServer - INFO - MCP client mcp 0.1.0: extensions=[], apps=False, openai_forms=False
+2026-09-30 21:42:38,224 - BlenderMCPServer - INFO - Sending command: execute_code with params: {'code': "__file__ = 'E:/work/2026/XiaoBanDengGameWorkspace/SourceAssets/Blender/ChineseChess/audit_board_uv.py'\nBLENDER_MCP_EXECUTION = True\nexec(compile(open(__file__, encoding='utf-8-sig').read(), __file__, 'exec'))"}
+2026-09-30 21:42:38,224 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 21:42:38,283 - BlenderMCPServer - INFO - Received complete response (144 bytes)
+2026-09-30 21:42:38,283 - BlenderMCPServer - INFO - Received 144 bytes of data
+2026-09-30 21:42:38,283 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 21:42:38,284 - BlenderMCPServer - INFO - Sending command: get_telemetry_consent with params: None
+2026-09-30 21:42:38,284 - BlenderMCPServer - INFO - Command sent, waiting for response...
+2026-09-30 21:42:38,336 - BlenderMCPServer - INFO - Received complete response (51 bytes)
+2026-09-30 21:42:38,336 - BlenderMCPServer - INFO - Received 51 bytes of data
+2026-09-30 21:42:38,336 - BlenderMCPServer - INFO - Response parsed, status: success
+2026-09-30 21:42:38,338 - mcp.server.lowlevel.server - INFO - Processing request of type ListToolsRequest
+2026-09-30 21:42:38,385 - BlenderMCPServer - INFO - Disconnecting from Blender on shutdown
+2026-09-30 21:42:38,385 - BlenderMCPServer - INFO - BlenderMCP server shut down

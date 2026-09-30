@@ -39,19 +39,7 @@ foreach($module in $config.modules){
 $projectFile = Join-Path $target "project.godot"
 $projectText = Get-Content $projectFile -Raw -Encoding UTF8
 $projectText = $projectText.Replace('config/name="XiaoBanDeng Product"', 'config/name="' + $config.display_name + '"')
-if($Product -eq "chinese_chess"){
-    # 象棋采用参考图的竖屏布局，麻将继续使用共享产品壳的横屏设置。
-    $projectText = $projectText.Replace('window/size/viewport_width=1280', 'window/size/viewport_width=720')
-    $projectText = $projectText.Replace('window/size/viewport_height=720', 'window/size/viewport_height=1280')
-    $projectText = $projectText.Replace('window/size/window_width_override=1280', 'window/size/window_width_override=720')
-    $projectText = $projectText.Replace('window/size/window_height_override=720', 'window/size/window_height_override=1280')
-    $portraitSettings = @'
-window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
-window/handheld/orientation=1
-'@
-    $projectText = $projectText.Replace('window/stretch/mode="canvas_items"', $portraitSettings)
-}
+# 客户端默认采用移动端9:16竖屏设计基线（720x1280）；PC调试仍可通过窗口参数覆盖尺寸，界面按宽高比响应式布局。
 [System.IO.File]::WriteAllText($projectFile, $projectText, [System.Text.UTF8Encoding]::new($false))
 
 $exportFile = Join-Path $target "export_presets.cfg"

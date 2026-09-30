@@ -11,6 +11,7 @@ import (
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/account"
 	adminplatform "github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/admin"
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/ai"
+	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/matchmaking"
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/room"
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/wallet"
 	"github.com/gorilla/websocket"
@@ -20,27 +21,30 @@ import (
 
 // Server（HTTP服务）聚合一期API。业务规则留在service/engine层。
 type Server struct {
-	cfg      config.Config
-	db       *pgxpool.Pool
-	redis    *redis.Client
-	accounts *account.Service
-	wallets  *wallet.Service
-	rooms    *room.Manager
-	ai       *ai.Service
-	chess    *chessHub
-	admin    adminReader
-	upgrader websocket.Upgrader
+	cfg         config.Config
+	db          *pgxpool.Pool
+	redis       *redis.Client
+	accounts    *account.Service
+	wallets     *wallet.Service
+	rooms       *room.Manager
+	ai          *ai.Service
+	chess       *chessHub
+	admin       adminReader
+	matchmaking *matchmaking.Manager
+	upgrader    websocket.Upgrader
 }
 
 // New（创建HTTP处理器）注册一期基础API与WebSocket入口。
 func New(cfg config.Config, db *pgxpool.Pool, redisClient *redis.Client) http.Handler {
 	roomManager := room.NewManager()
+	matchManager := matchmaking.NewManager(roomManager)
 	s := &Server{
 		cfg: cfg, db: db, redis: redisClient,
 		accounts: account.NewService(db), wallets: wallet.NewService(db),
-		rooms: roomManager, ai: ai.NewService(), chess: newChessHub(),
-		admin:    adminplatform.NewService(db, roomManager),
-		upgrader: websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
+		rooms: roomManager, ai: ai.NewService(), chess: newChessHub(matchManager),
+		admin:       adminplatform.NewService(db, roomManager),
+		matchmaking: matchManager,
+		upgrader:    websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.health)
@@ -48,6 +52,9 @@ func New(cfg config.Config, db *pgxpool.Pool, redisClient *redis.Client) http.Ha
 	mux.HandleFunc("/api/v1/auth/guest", s.guestLogin)
 	mux.HandleFunc("/api/v1/wallet", s.wallet)
 	mux.HandleFunc("/api/v1/rooms", s.roomsHandler)
+	mux.HandleFunc("/api/v1/matchmaking/quick", s.quickMatch)
+	mux.HandleFunc("/api/v1/matchmaking/ready", s.roomReady)
+	mux.HandleFunc("/api/v1/matchmaking/cancel", s.cancelMatch)
 	mux.HandleFunc("/api/v1/ai/capabilities", s.aiCapabilities)
 	mux.HandleFunc("/api/v1/admin/overview", s.adminOverview)
 	mux.HandleFunc("/api/v1/admin/users", s.adminUsers)

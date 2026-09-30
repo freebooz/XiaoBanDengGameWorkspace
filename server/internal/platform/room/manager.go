@@ -1,12 +1,13 @@
 package room
 
 import (
+	"crypto/rand"
 	"errors"
+	"math/big"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // Room（通用房间）只管理玩家容器与游戏标识，不实现象棋或麻将规则。
@@ -42,10 +43,25 @@ func (m *Manager) Create(req CreateRequest) (Room, error) {
 	if req.ProductID == "" || req.GameID == "" || req.RuleSetID == "" || req.RuleVersion == "" {
 		return Room{}, errors.New("product_id/game_id/rule_set_id/rule_version均不能为空")
 	}
-	item := Room{RoomID: uuid.NewString(), ProductID: req.ProductID, GameID: req.GameID, RuleSetID: req.RuleSetID, RuleVersion: req.RuleVersion, State: "waiting", CreatedAt: time.Now().UTC()}
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.rooms) >= 9000 {
+		return Room{}, errors.New("房间已满，请稍后重试")
+	}
+	start, err := rand.Int(rand.Reader, big.NewInt(9000))
+	if err != nil {
+		return Room{}, errors.New("生成房间号失败，请稍后重试")
+	}
+	var roomID string
+	for offset := 0; offset < 9000; offset++ {
+		candidate := strconv.Itoa(1000 + (int(start.Int64())+offset)%9000)
+		if _, exists := m.rooms[candidate]; !exists {
+			roomID = candidate
+			break
+		}
+	}
+	item := Room{RoomID: roomID, ProductID: req.ProductID, GameID: req.GameID, RuleSetID: req.RuleSetID, RuleVersion: req.RuleVersion, State: "waiting", CreatedAt: time.Now().UTC()}
 	m.rooms[item.RoomID] = item
-	m.mu.Unlock()
 	return item, nil
 }
 
@@ -67,4 +83,29 @@ func (m *Manager) Get(roomID string) (Room, bool) {
 	defer m.mu.RUnlock()
 	item, ok := m.rooms[roomID]
 	return item, ok
+}
+
+// SetState（更新房间状态）由匹配和对局生命周期管理调用。
+func (m *Manager) SetState(roomID string, state string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	item, ok := m.rooms[roomID]
+	if !ok {
+		return false
+	}
+	item.State = state
+	m.rooms[roomID] = item
+	return true
+}
+
+// Close（关闭房间）从活动房间目录移除房间。
+// 对局结算或超时解散后调用；历史记录由独立对局/回放存储负责。
+func (m *Manager) Close(roomID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.rooms[roomID]; !ok {
+		return false
+	}
+	delete(m.rooms, roomID)
+	return true
 }

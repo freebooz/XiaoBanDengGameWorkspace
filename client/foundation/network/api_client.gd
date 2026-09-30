@@ -18,6 +18,22 @@ func catalog_url() -> String:
 	return base_url + "/api/v1/catalog"
 
 
+func guest_login_url() -> String:
+	return base_url + "/api/v1/auth/guest"
+
+
+func quick_match_url() -> String:
+	return base_url + "/api/v1/matchmaking/quick"
+
+
+func room_ready_url() -> String:
+	return base_url + "/api/v1/matchmaking/ready"
+
+
+func cancel_match_url() -> String:
+	return base_url + "/api/v1/matchmaking/cancel"
+
+
 func websocket_url() -> String:
 	if base_url.begins_with("https://"):
 		return "wss://" + base_url.trim_prefix("https://") + "/ws"

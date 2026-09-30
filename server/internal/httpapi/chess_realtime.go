@@ -7,14 +7,24 @@ import (
 	"time"
 
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/game/chinesechess"
+	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/matchmaking"
 	"github.com/gorilla/websocket"
 )
+
+const (
+	chessStepWarningSeconds   = 60
+	chessStepCountdownSeconds = 30
+)
+
+var defaultChessTurnTimeout = time.Duration(chessStepWarningSeconds+chessStepCountdownSeconds) * time.Second
 
 // chessHub（象棋实时对局中心）负责把两个 WebSocket 客户端绑定到同一个开发/一期象棋房间。
 // 房间中的棋盘状态只保存在服务端，客户端只能提交走子意图，最终合法性由 chinesechess.Board 校验。
 type chessHub struct {
-	mu    sync.Mutex
-	rooms map[string]*chessRoom
+	mu          sync.Mutex
+	rooms       map[string]*chessRoom
+	matchmaking *matchmaking.Manager
+	turnTimeout time.Duration
 }
 
 // chessRoom（象棋实时房间）串行保护同一棋局中的座位、棋盘和广播。
@@ -26,8 +36,14 @@ type chessRoom struct {
 	clients        map[*chessClient]struct{}
 	seats          map[chinesechess.Color]string
 	winner         chinesechess.Color
+	loser          chinesechess.Color
+	endReason      string
+	dissolved      bool
 	matchStartedAt time.Time
 	turnStartedAt  time.Time
+	finishedAt     time.Time
+	turnTimer      *time.Timer
+	moveNumber     int
 }
 
 // chessClient（象棋实时连接）保存单个 WebSocket 的房间、客户端标识与阵营。
@@ -36,6 +52,7 @@ type chessClient struct {
 	conn     *websocket.Conn
 	writeMu  sync.Mutex
 	roomID   string
+	room     *chessRoom // Bind to this game instance even if its four-digit number is reused.
 	clientID string
 	color    chinesechess.Color
 }
@@ -50,8 +67,15 @@ type chessPieceView struct {
 }
 
 // newChessHub（创建象棋实时中心）。
-func newChessHub() *chessHub {
-	return &chessHub{rooms: map[string]*chessRoom{}}
+func newChessHub(managers ...*matchmaking.Manager) *chessHub {
+	hub := &chessHub{
+		rooms:       map[string]*chessRoom{},
+		turnTimeout: defaultChessTurnTimeout,
+	}
+	if len(managers) > 0 {
+		hub.matchmaking = managers[0]
+	}
+	return hub
 }
 
 // newChessClient（创建连接上下文）。
@@ -86,12 +110,18 @@ func (h *chessHub) getOrCreateRoom(roomID string) *chessRoom {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if existing := h.rooms[roomID]; existing != nil {
-		return existing
+		existing.mu.Lock()
+		finished := existing.dissolved
+		existing.mu.Unlock()
+		if !finished {
+			return existing
+		}
 	}
 	created := &chessRoom{
-		roomID:  roomID,
-		board:   chinesechess.NewInitialBoard(),
-		clients: map[*chessClient]struct{}{},
+		roomID:     roomID,
+		board:      chinesechess.NewInitialBoard(),
+		moveNumber: 1,
+		clients:    map[*chessClient]struct{}{},
 		seats: map[chinesechess.Color]string{
 			chinesechess.Red:   "",
 			chinesechess.Black: "",
@@ -123,15 +153,35 @@ func (h *chessHub) handleJoin(client *chessClient, message map[string]any) {
 	defer room.mu.Unlock()
 
 	color := chinesechess.Color("")
-	if room.seats[chinesechess.Red] == "" || room.seats[chinesechess.Red] == clientID {
-		color = chinesechess.Red
-		room.seats[chinesechess.Red] = clientID
-	} else if room.seats[chinesechess.Black] == "" || room.seats[chinesechess.Black] == clientID {
-		color = chinesechess.Black
-		room.seats[chinesechess.Black] = clientID
+	if h.matchmaking != nil {
+		seat, ok := h.matchmaking.SeatFor(roomID, clientID)
+		if !ok {
+			_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "玩家不属于该匹配房间"})
+			return
+		}
+		if seat == "red" {
+			color = chinesechess.Red
+		} else {
+			color = chinesechess.Black
+		}
+		if occupied := room.seats[color]; occupied != "" && occupied != clientID {
+			_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "权威座位已被其他连接占用"})
+			return
+		}
+		room.seats[color] = clientID
+	} else {
+		// 测试/独立实时模块没有匹配服务时保留顺序分配回退。
+		if room.seats[chinesechess.Red] == "" || room.seats[chinesechess.Red] == clientID {
+			color = chinesechess.Red
+			room.seats[chinesechess.Red] = clientID
+		} else if room.seats[chinesechess.Black] == "" || room.seats[chinesechess.Black] == clientID {
+			color = chinesechess.Black
+			room.seats[chinesechess.Black] = clientID
+		}
 	}
 
 	client.roomID = roomID
+	client.room = room
 	client.clientID = clientID
 	client.color = color
 	room.clients[client] = struct{}{}
@@ -141,6 +191,7 @@ func (h *chessHub) handleJoin(client *chessClient, message map[string]any) {
 		now := time.Now().UTC()
 		room.matchStartedAt = now
 		room.turnStartedAt = now
+		h.scheduleTurnTimeoutLocked(room)
 	}
 
 	_ = client.writeJSON(map[string]any{
@@ -159,7 +210,7 @@ func (h *chessHub) handleMove(client *chessClient, message map[string]any) {
 		_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "尚未加入象棋房间"})
 		return
 	}
-	room := h.findRoom(client.roomID)
+	room := client.room
 	if room == nil {
 		_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "象棋房间不存在"})
 		return
@@ -178,7 +229,7 @@ func (h *chessHub) handleMove(client *chessClient, message map[string]any) {
 		_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "观战连接不能走棋"})
 		return
 	}
-	if room.winner != "" {
+	if room.winner != "" || room.endReason != "" {
 		_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "本局已经结束"})
 		return
 	}
@@ -192,9 +243,60 @@ func (h *chessHub) handleMove(client *chessClient, message map[string]any) {
 		return
 	}
 	room.winner = capturedGeneralWinner(room.board)
+	room.moveNumber++
 	// 合法走子完成后切换回合，并以服务端时间重置下一步计时。
 	room.turnStartedAt = time.Now().UTC()
+	if room.winner != "" {
+		h.finishRoomLocked(room, "general_captured", oppositeColor(room.winner))
+	} else {
+		h.scheduleTurnTimeoutLocked(room)
+	}
 	room.broadcastStateLocked()
+}
+
+// scheduleTurnTimeoutLocked（调度服务端权威单步超时）要求调用方持有 room.mu。
+func (h *chessHub) scheduleTurnTimeoutLocked(room *chessRoom) {
+	if room == nil || h.turnTimeout <= 0 || room.endReason != "" || room.winner != "" {
+		return
+	}
+	if room.turnTimer != nil {
+		room.turnTimer.Stop()
+	}
+	expectedStartedAt := room.turnStartedAt
+	expectedTurn := room.board.Turn
+	room.turnTimer = time.AfterFunc(h.turnTimeout, func() {
+		room.mu.Lock()
+		defer room.mu.Unlock()
+
+		if room.endReason != "" || room.winner != "" {
+			return
+		}
+		if !room.turnStartedAt.Equal(expectedStartedAt) || room.board.Turn != expectedTurn {
+			return
+		}
+
+		h.finishRoomLocked(room, "timeout", expectedTurn)
+		room.broadcastStateLocked()
+	})
+}
+
+// finishRoomLocked（结束并解散权威对局）要求调用方持有 room.mu。
+// 超时不伪造胜方；正常吃将保留 winner，仅统一释放匹配/活动房间。
+func (h *chessHub) finishRoomLocked(room *chessRoom, reason string, loser chinesechess.Color) {
+	if room == nil || room.endReason != "" {
+		return
+	}
+	if room.turnTimer != nil {
+		room.turnTimer.Stop()
+		room.turnTimer = nil
+	}
+	room.endReason = reason
+	room.loser = loser
+	room.dissolved = true
+	room.finishedAt = time.Now().UTC()
+	if h.matchmaking != nil {
+		h.matchmaking.FinishRoom(room.roomID)
+	}
 }
 
 // disconnect（连接断开）释放该连接占用的座位。
@@ -203,7 +305,7 @@ func (h *chessHub) disconnect(client *chessClient) {
 	if client == nil || client.roomID == "" {
 		return
 	}
-	room := h.findRoom(client.roomID)
+	room := client.room
 	if room == nil {
 		return
 	}
@@ -218,10 +320,19 @@ func (h *chessHub) disconnect(client *chessClient) {
 		room.seats[chinesechess.Black] = ""
 	}
 	if len(room.clients) == 0 {
+		if room.turnTimer != nil {
+			room.turnTimer.Stop()
+			room.turnTimer = nil
+		}
 		room.board = chinesechess.NewInitialBoard()
 		room.winner = ""
+		room.loser = ""
+		room.endReason = ""
+		room.dissolved = false
 		room.matchStartedAt = time.Time{}
 		room.turnStartedAt = time.Time{}
+		room.finishedAt = time.Time{}
+		room.moveNumber = 1
 		room.seats[chinesechess.Red] = ""
 		room.seats[chinesechess.Black] = ""
 		return
@@ -259,7 +370,7 @@ func (r *chessRoom) snapshotFor(client *chessClient) map[string]any {
 	if r.seats[chinesechess.Red] != "" && r.seats[chinesechess.Black] != "" {
 		status = "playing"
 	}
-	if r.winner != "" {
+	if r.winner != "" || r.endReason != "" {
 		status = "finished"
 	}
 	now := time.Now().UTC()
@@ -271,20 +382,29 @@ func (r *chessRoom) snapshotFor(client *chessClient) map[string]any {
 	if !r.turnStartedAt.IsZero() {
 		turnStartedAtMS = r.turnStartedAt.UnixMilli()
 	}
+	finishedAtMS := int64(0)
+	if !r.finishedAt.IsZero() {
+		finishedAtMS = r.finishedAt.UnixMilli()
+	}
 	return map[string]any{
 		"type":                   "chess_state",
 		"room_id":                r.roomID,
 		"status":                 status,
 		"turn":                   string(r.board.Turn),
+		"move_number":            r.moveNumber,
 		"winner":                 string(r.winner),
+		"loser":                  string(r.loser),
+		"end_reason":             r.endReason,
+		"dissolved":              r.dissolved,
 		"your_color":             string(client.color),
 		"red_player":             r.seats[chinesechess.Red],
 		"black_player":           r.seats[chinesechess.Black],
 		"server_time_ms":         now.UnixMilli(),
 		"match_started_at_ms":    matchStartedAtMS,
 		"turn_started_at_ms":     turnStartedAtMS,
-		"step_warning_seconds":   60,
-		"step_countdown_seconds": 30,
+		"finished_at_ms":         finishedAtMS,
+		"step_warning_seconds":   chessStepWarningSeconds,
+		"step_countdown_seconds": chessStepCountdownSeconds,
 		"pieces":                 pieces,
 	}
 }
@@ -336,6 +456,16 @@ func jsonInt(value any) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func oppositeColor(color chinesechess.Color) chinesechess.Color {
+	if color == chinesechess.Red {
+		return chinesechess.Black
+	}
+	if color == chinesechess.Black {
+		return chinesechess.Red
+	}
+	return ""
 }
 
 // capturedGeneralWinner（判断是否有将/帅被吃）用于一期最小完整胜负验证。

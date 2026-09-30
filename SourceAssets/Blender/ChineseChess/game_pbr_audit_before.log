@@ -1,0 +1,6 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+IMPORTED_PBR {"albedo_uses_uv2":false,"clearcoat":1.0,"clearcoat_enabled":false,"clearcoat_roughness":0.5,"name":"Pieces | golden nanmu woodgrain","normal":true,"normal_scale":0.479999989271164,"roughness":1.0,"roughness_texture":true,"uv_scale":"(1.0, 1.0, 1.0)"}
+IMPORTED_PBR {"albedo_uses_uv2":false,"clearcoat":1.0,"clearcoat_enabled":false,"clearcoat_roughness":0.5,"name":"Pieces | golden nanmu wood face","normal":true,"normal_scale":0.479999989271164,"roughness":1.0,"roughness_texture":true,"uv_scale":"(1.0, 1.0, 1.0)"}
+IMPORTED_PBR {"albedo_uses_uv2":false,"clearcoat":1.0,"clearcoat_enabled":false,"clearcoat_roughness":0.5,"name":"Red side | carved cinnabar","normal":false,"normal_scale":1.0,"roughness":0.439999997615814,"roughness_texture":false,"uv_scale":"(1.0, 1.0, 1.0)"}
+IMPORTED_UV vertices=649 uv0=649 tangents=2596

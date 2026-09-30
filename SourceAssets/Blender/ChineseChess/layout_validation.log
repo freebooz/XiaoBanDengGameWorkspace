@@ -1,0 +1,8 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+LAYOUT_SMOKE phone_portrait=0
+LAYOUT_SMOKE tablet_portrait=1
+LAYOUT_SMOKE phone_landscape=2
+LAYOUT_SMOKE tablet_landscape=3
+LAYOUT_SMOKE desktop=4
+LAYOUT_SMOKE wide_desktop=5

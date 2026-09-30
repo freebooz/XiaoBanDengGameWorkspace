@@ -1,0 +1,74 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+Vulkan 1.4.341 - Forward Mobile - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4090
+
+FLOW_STATE=BOOT
+FLOW_STATE=LOGIN
+FLOW_STATE=LOBBY
+FLOW_STATE=MATCHING
+FLOW_STATE=ROOM
+ROOM_SEAT=black room=5914 ready=0
+ROOM_SEAT=black room=5914 ready=0
+ROOM_SEAT=black room=5914 ready=1
+FLOW_STATE=GAME
+CHESS_CONTEXT room=5914 client=cb68ebe0-4df8-4549-82d6-a49943f675fa
+CHESS_GLTF_LOAD board=true pieces=true
+CHESS_GRID_REGISTRATION loaded=true files=9 ranks=10
+CHESS_BOARD_PBR material=Board | supplied reference playing surface albedo=true normal=false roughness=false
+CHESS_BOARD_PBR material=Board | matching reference wood sides albedo=true normal=false roughness=false
+CHESS_BOARD_PBR material=Board | incised near-black lines albedo=false normal=false roughness=false
+CHESS_BOARD_CLEARANCE horizontal=0.602 vertical=0.602
+CHESS_PBR material=Pieces | golden nanmu woodgrain albedo=true normal=true roughness=true filter=5
+CHESS_MOVE_SOUND_SOURCE path=res://modules/games/chinese_chess/assets/audio/sfx_chess_move_wood_01.wav stream=AudioStreamWAV
+CHESS_BGM_SOURCE path=res://modules/games/chinese_chess/assets/audio/bgm_chinese_guzheng_01.mp3 stream=AudioStreamMP3
+CHESS_BGM playing=true enabled=true focused=true paused=false
+CHESS_RENDER_QUALITY quality=1 resolution=(1000, 1140) msaa=2
+CHESS_LAYOUT mode=PHONE_PORTRAIT size=720x1280
+FLOW_ROOM=5914
+CHESS_JOINED color=black room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_LAYOUT mode=TABLET_PORTRAIT size=903x1280
+CHESS_LAYOUT mode=PHONE_PORTRAIT size=868x1280
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_MOVE_SOUND played room=5914
+CHESS_SETTLEMENT reason=timeout loser=black winner= dissolved=true
+FLOW_STATE=LOBBY
+FLOW_STATE=MATCHING
+FLOW_STATE=ROOM
+ROOM_SEAT=black room=3642 ready=0
+ROOM_SEAT=black room=3642 ready=0
+ROOM_SEAT=black room=3642 ready=1
+FLOW_STATE=GAME
+CHESS_CONTEXT room=3642 client=cb68ebe0-4df8-4549-82d6-a49943f675fa
+CHESS_GLTF_LOAD board=true pieces=true
+CHESS_GRID_REGISTRATION loaded=true files=9 ranks=10
+CHESS_BOARD_PBR material=Board | supplied reference playing surface albedo=true normal=false roughness=false
+CHESS_BOARD_PBR material=Board | matching reference wood sides albedo=true normal=false roughness=false
+CHESS_BOARD_PBR material=Board | incised near-black lines albedo=false normal=false roughness=false
+CHESS_BOARD_CLEARANCE horizontal=0.602 vertical=0.602
+CHESS_PBR material=Pieces | golden nanmu woodgrain albedo=true normal=true roughness=true filter=5
+CHESS_MOVE_SOUND_SOURCE path=res://modules/games/chinese_chess/assets/audio/sfx_chess_move_wood_01.wav stream=AudioStreamWAV
+CHESS_BGM_SOURCE path=res://modules/games/chinese_chess/assets/audio/bgm_chinese_guzheng_01.mp3 stream=AudioStreamMP3
+CHESS_BGM playing=true enabled=true focused=true paused=false
+CHESS_RENDER_QUALITY quality=1 resolution=(1000, 1140) msaa=2
+CHESS_LAYOUT mode=PHONE_PORTRAIT size=757x1280
+FLOW_ROOM=3642
+CHESS_JOINED color=black room=3642
+CHESS_MOVE_SOUND played room=3642
