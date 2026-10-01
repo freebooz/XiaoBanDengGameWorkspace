@@ -6,105 +6,23 @@ FLOW_STATE=LOGIN
 FLOW_STATE=LOBBY
 FLOW_STATE=MATCHING
 FLOW_STATE=ROOM
-ROOM_SEAT=black room=4918 ready=0
-ROOM_SEAT=black room=4918 ready=0
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
-ROOM_SEAT=black room=4918 ready=1
+ROOM_SEAT=red room=4362 ready=1
+ROOM_SEAT=red room=4362 ready=1
+FLOW_STATE=GAME
+CHESS_CONTEXT room=4362 client=785f4713-a358-4ef3-aa27-936f57d2224a
+CHESS_GLTF_LOAD board=true pieces=true
+CHESS_GRID_REGISTRATION loaded=true files=9 ranks=10
+CHESS_BOARD_PBR material=Board | supplied reference playing surface albedo=true normal=false roughness=false
+CHESS_BOARD_PBR material=Board | matching reference wood sides albedo=true normal=false roughness=false
+CHESS_BOARD_PBR material=Board | incised near-black lines albedo=false normal=false roughness=false
+CHESS_BOARD_CLEARANCE horizontal=0.602 vertical=0.602
+CHESS_PBR material=Pieces | golden nanmu woodgrain albedo=true normal=true roughness=true filter=5
+CHESS_MOVE_SOUND_SOURCE path=res://modules/games/chinese_chess/assets/audio/sfx_chess_move_wood_01.wav stream=AudioStreamWAV
+CHESS_BGM_SOURCE path=res://modules/games/chinese_chess/assets/audio/bgm_chinese_guzheng_01.mp3 stream=AudioStreamMP3
+CHESS_BGM playing=true enabled=true focused=true paused=false
+CHESS_RENDER_QUALITY quality=1 resolution=(1000, 1140) msaa=2
+CHESS_LAYOUT mode=PHONE_PORTRAIT size=720x1280
+FLOW_ROOM=4362
+CHESS_JOINED color=red room=4362
+CHESS_AUTO_MOVE submitted room=4362
+CHESS_MOVE_SOUND played room=4362

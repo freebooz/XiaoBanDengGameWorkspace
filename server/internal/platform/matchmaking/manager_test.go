@@ -1,6 +1,7 @@
 package matchmaking
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/room"
@@ -236,5 +237,55 @@ func TestFinishRoomReleasesPlayersAndClosesRoom(t *testing.T) {
 	}
 	if rematch.RoomID == first.RoomID {
 		t.Fatal("结束房间后玩家重新匹配必须进入新房间")
+	}
+}
+
+func TestMahjongMatchUsesFourSeatsAndFourReadyPlayers(t *testing.T) {
+	rooms := room.NewManager()
+	manager := NewManager(rooms)
+	base := QuickMatchRequest{ProductID: "xbd_mahjong", GameID: "mahjong", RuleSetID: "guiyang", RuleVersion: "2.0.0"}
+	var firstRoom string
+	for seat := 0; seat < 4; seat++ {
+		base.AccountID = fmt.Sprintf("mahjong-%d", seat)
+		result, err := manager.QuickMatch(base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if seat == 0 {
+			firstRoom = result.RoomID
+		}
+		if result.RoomID != firstRoom || result.SeatIndex != seat || result.Capacity != 4 {
+			t.Fatalf("座位错误: %+v", result)
+		}
+		if len(result.PlayerAccountIDs) != seat+1 {
+			t.Fatalf("玩家列表错误: %+v", result)
+		}
+		if (result.Status == StatusMatched) != (seat == 3) {
+			t.Fatalf("四人满座时才应匹配完成: %+v", result)
+		}
+	}
+	base.AccountID = "mahjong-fifth"
+	fifth, err := manager.QuickMatch(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fifth.RoomID == firstRoom {
+		t.Fatal("第五位玩家不能加入满座房间")
+	}
+	for seat := 0; seat < 4; seat++ {
+		ready, err := manager.Ready(RoomReadyRequest{AccountID: fmt.Sprintf("mahjong-%d", seat), RoomID: firstRoom})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ready.Start != (seat == 3) {
+			t.Fatalf("四人准备状态错误: %+v", ready)
+		}
+		if got, ok := manager.SeatIndexFor(firstRoom, fmt.Sprintf("mahjong-%d", seat)); !ok || got != seat {
+			t.Fatalf("权威座位错误: %d %v", got, ok)
+		}
+	}
+	players, ok := manager.MahjongPlayersFor(firstRoom)
+	if !ok || players[0] != "mahjong-0" || players[3] != "mahjong-3" {
+		t.Fatalf("满座房间玩家错误: %+v %v", players, ok)
 	}
 }

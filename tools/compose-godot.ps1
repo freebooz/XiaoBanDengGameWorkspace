@@ -35,6 +35,11 @@ foreach($module in $config.modules){
     Copy-Item $source $destination -Recurse -Force
 }
 
+# 麻将使用独立四人大厅，避免象棋的双座位流程和界面进入麻将产品。
+if($Product -eq "mahjong"){
+    Copy-Item (Join-Path $workspace "client\games\mahjong\guiyang\mahjong_app.gd") (Join-Path $target "scripts\main.gd") -Force
+}
+
 # 产品名和Android包名在生成工程中进行最小差异替换。
 $projectFile = Join-Path $target "project.godot"
 $projectText = Get-Content $projectFile -Raw -Encoding UTF8

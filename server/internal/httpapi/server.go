@@ -29,6 +29,7 @@ type Server struct {
 	rooms       *room.Manager
 	ai          *ai.Service
 	chess       *chessHub
+	mahjong     *mahjongHub
 	admin       adminReader
 	matchmaking *matchmaking.Manager
 	upgrader    websocket.Upgrader
@@ -41,7 +42,7 @@ func New(cfg config.Config, db *pgxpool.Pool, redisClient *redis.Client) http.Ha
 	s := &Server{
 		cfg: cfg, db: db, redis: redisClient,
 		accounts: account.NewService(db), wallets: wallet.NewService(db),
-		rooms: roomManager, ai: ai.NewService(), chess: newChessHub(matchManager),
+		rooms: roomManager, ai: ai.NewService(), chess: newChessHub(matchManager), mahjong: newMahjongHub(matchManager),
 		admin:       adminplatform.NewService(db, roomManager),
 		matchmaking: matchManager,
 		upgrader:    websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
@@ -137,6 +138,8 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 	client := newChessClient(conn)
 	defer s.chess.disconnect(client)
+	mahjongClient := newMahjongClient(client)
+	defer s.mahjong.disconnect(mahjongClient)
 	_ = client.writeJSON(map[string]any{"type": "connected", "message": "小板凳实时连接已建立"})
 	for {
 		var message map[string]any
@@ -145,6 +148,9 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		}
 		// 象棋实时子协议由服务端权威房间消费；其他一期消息仍保留通用ACK便于后续扩展。
 		if s.chess.handle(client, message) {
+			continue
+		}
+		if s.mahjong.handle(mahjongClient, message) {
 			continue
 		}
 		_ = client.writeJSON(map[string]any{"type": "ack", "payload": message})

@@ -4,7 +4,7 @@
   "game_category": "tile",
   "game_id": "mahjong",
   "rule_set_id": "guiyang",
-  "rule_version": "1.0.0",
+  "rule_version": "2.0.0",
   "android_package": "com.freebooz.xiaobandeng.mahjong",
   "modules": [
     "foundation",

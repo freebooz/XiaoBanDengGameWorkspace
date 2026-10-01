@@ -10,9 +10,6 @@ func build_standard_wall() -> Array[Dictionary]:
 		for rank in range(1, 10):
 			for _copy in range(4):
 				wall.append({"suit": suit, "rank": rank})
-	for rank in range(1, 8):
-		for _copy in range(4):
-			wall.append({"suit": "honor", "rank": rank})
 	return wall
 
 

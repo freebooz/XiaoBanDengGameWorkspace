@@ -1,0 +1,14 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+MAHJONG_FLOW=boot
+MAHJONG_FLOW=login
+MAHJONG_FLOW=lobby
+MAHJONG_FLOW=matching
+MAHJONG_FLOW=room
+MAHJONG_FLOW=game
+MAHJONG_ROOM=6893
+MAHJONG_STATE room=6893 phase=turn turn=0.0 seat=2.0 remaining=55.0
+MAHJONG_STATE room=6893 phase=turn turn=1.0 seat=2.0 remaining=54.0
+MAHJONG_STATE room=6893 phase=turn turn=2.0 seat=2.0 remaining=53.0
+MAHJONG_STATE room=6893 phase=turn turn=3.0 seat=2.0 remaining=52.0
+MAHJONG_STATE room=6893 phase=turn turn=0.0 seat=2.0 remaining=51.0

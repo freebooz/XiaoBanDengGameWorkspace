@@ -23,18 +23,21 @@ type QuickMatchRequest struct {
 }
 
 type QuickMatchResult struct {
-	Status         string `json:"status"`
-	RoomID         string `json:"room_id"`
-	Players        int    `json:"players"`
-	ProductID      string `json:"product_id"`
-	GameID         string `json:"game_id"`
-	RuleSetID      string `json:"rule_set_id"`
-	RuleVersion    string `json:"rule_version"`
-	SeatColor      string `json:"seat_color"`
-	RedAccountID   string `json:"red_account_id"`
-	BlackAccountID string `json:"black_account_id"`
-	ReadyPlayers   int    `json:"ready_players"`
-	Start          bool   `json:"start"`
+	Status           string   `json:"status"`
+	RoomID           string   `json:"room_id"`
+	Players          int      `json:"players"`
+	ProductID        string   `json:"product_id"`
+	GameID           string   `json:"game_id"`
+	RuleSetID        string   `json:"rule_set_id"`
+	RuleVersion      string   `json:"rule_version"`
+	SeatColor        string   `json:"seat_color"`
+	RedAccountID     string   `json:"red_account_id"`
+	BlackAccountID   string   `json:"black_account_id"`
+	ReadyPlayers     int      `json:"ready_players"`
+	Start            bool     `json:"start"`
+	Capacity         int      `json:"capacity"`
+	SeatIndex        int      `json:"seat_index"`
+	PlayerAccountIDs []string `json:"player_account_ids"`
 }
 
 type RoomReadyRequest struct {
@@ -96,14 +99,16 @@ func (m *Manager) QuickMatch(req QuickMatchRequest) (QuickMatchResult, error) {
 
 	if roomID, ok := m.waitingByKey[key]; ok {
 		players := m.playersByRoom[roomID]
-		if len(players) == 1 && players[0] != req.AccountID {
+		capacity := capacityFor(req.GameID)
+		if len(players) < capacity && !containsPlayer(players, req.AccountID) {
 			players = append(players, req.AccountID)
 			m.playersByRoom[roomID] = players
 			m.assignments[req.AccountID] = assignment{RoomID: roomID, Key: key}
-			delete(m.waitingByKey, key)
-			m.readyByRoom[roomID] = map[string]bool{}
-			if !m.rooms.SetState(roomID, "matched") {
-				return QuickMatchResult{}, errors.New("匹配房间已失效")
+			if len(players) == capacity {
+				delete(m.waitingByKey, key)
+				if !m.rooms.SetState(roomID, "matched") {
+					return QuickMatchResult{}, errors.New("匹配房间已失效")
+				}
 			}
 			return m.resultLocked(roomID, req.AccountID), nil
 		}
@@ -139,15 +144,20 @@ func (m *Manager) Ready(req RoomReadyRequest) (RoomReadyResult, error) {
 		return RoomReadyResult{}, errors.New("玩家不属于该匹配房间")
 	}
 	players := m.playersByRoom[req.RoomID]
-	if len(players) < 2 {
-		return RoomReadyResult{}, errors.New("对手尚未进入房间")
+	item, exists := m.rooms.Get(req.RoomID)
+	if !exists {
+		return RoomReadyResult{}, errors.New("匹配房间已失效")
+	}
+	capacity := capacityFor(item.GameID)
+	if len(players) < capacity {
+		return RoomReadyResult{}, errors.New("玩家尚未满座")
 	}
 	if m.readyByRoom[req.RoomID] == nil {
 		m.readyByRoom[req.RoomID] = map[string]bool{}
 	}
 	m.readyByRoom[req.RoomID][req.AccountID] = true
 	readyPlayers := m.readyCountLocked(req.RoomID)
-	start := readyPlayers >= 2
+	start := readyPlayers >= capacity
 	if start {
 		if !m.rooms.SetState(req.RoomID, "playing") {
 			return RoomReadyResult{}, errors.New("房间已失效")
@@ -237,13 +247,21 @@ func (m *Manager) resultLocked(roomID string, accountID string) QuickMatchResult
 	}
 	players := m.playersByRoom[roomID]
 	status := StatusWaiting
-	if len(players) >= 2 {
+	capacity := capacityFor(item.GameID)
+	if len(players) >= capacity {
 		status = StatusMatched
 	}
+	seatIndex := -1
+	for index, player := range players {
+		if player == accountID {
+			seatIndex = index
+			break
+		}
+	}
 	seatColor := ""
-	if len(players) > 0 && players[0] == accountID {
+	if item.GameID == "chinese_chess" && len(players) > 0 && players[0] == accountID {
 		seatColor = "red"
-	} else if len(players) > 1 && players[1] == accountID {
+	} else if item.GameID == "chinese_chess" && len(players) > 1 && players[1] == accountID {
 		seatColor = "black"
 	}
 	redAccountID := ""
@@ -256,19 +274,71 @@ func (m *Manager) resultLocked(roomID string, accountID string) QuickMatchResult
 	}
 	readyPlayers := m.readyCountLocked(roomID)
 	return QuickMatchResult{
-		Status:         status,
-		RoomID:         roomID,
-		Players:        len(players),
-		ProductID:      item.ProductID,
-		GameID:         item.GameID,
-		RuleSetID:      item.RuleSetID,
-		RuleVersion:    item.RuleVersion,
-		SeatColor:      seatColor,
-		RedAccountID:   redAccountID,
-		BlackAccountID: blackAccountID,
-		ReadyPlayers:   readyPlayers,
-		Start:          item.State == "playing" && readyPlayers >= 2,
+		Status:           status,
+		RoomID:           roomID,
+		Players:          len(players),
+		ProductID:        item.ProductID,
+		GameID:           item.GameID,
+		RuleSetID:        item.RuleSetID,
+		RuleVersion:      item.RuleVersion,
+		SeatColor:        seatColor,
+		RedAccountID:     redAccountID,
+		BlackAccountID:   blackAccountID,
+		ReadyPlayers:     readyPlayers,
+		Start:            item.State == "playing" && readyPlayers >= capacity,
+		Capacity:         capacity,
+		SeatIndex:        seatIndex,
+		PlayerAccountIDs: append([]string(nil), players...),
 	}
+}
+
+// SeatIndexFor 返回服务端分配的四人麻将座位，也供其他多座位游戏复用。
+func (m *Manager) SeatIndexFor(roomID string, accountID string) (int, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current, ok := m.assignments[accountID]
+	if !ok || current.RoomID != roomID {
+		return -1, false
+	}
+	for index, player := range m.playersByRoom[roomID] {
+		if player == accountID {
+			return index, true
+		}
+	}
+	return -1, false
+}
+
+// MahjongPlayersFor 仅为已满座且四人准备完成的麻将房间返回权威座位表。
+func (m *Manager) MahjongPlayersFor(roomID string) ([4]string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var seats [4]string
+	item, ok := m.rooms.Get(roomID)
+	if !ok || item.GameID != "mahjong" || item.State != "playing" {
+		return seats, false
+	}
+	players := m.playersByRoom[roomID]
+	if len(players) != 4 || m.readyCountLocked(roomID) != 4 {
+		return seats, false
+	}
+	copy(seats[:], players)
+	return seats, true
+}
+
+func capacityFor(gameID string) int {
+	if gameID == "mahjong" {
+		return 4
+	}
+	return 2
+}
+
+func containsPlayer(players []string, accountID string) bool {
+	for _, player := range players {
+		if player == accountID {
+			return true
+		}
+	}
+	return false
 }
 
 // SeatFor（查询权威座位）供实时对局层校验红/黑身份，禁止客户端自行声明阵营。
