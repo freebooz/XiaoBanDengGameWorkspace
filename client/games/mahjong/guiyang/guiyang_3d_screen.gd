@@ -5,9 +5,15 @@ signal request_return_to_lobby
 
 const ART := "res://modules/games/mahjong/guiyang/assets/"
 const API_SCRIPT = preload("res://modules/foundation/network/api_client.gd")
+const STAGE_SCRIPT = preload("res://modules/game_framework/tabletop3d/tabletop_stage.gd")
+const TABLE_SCENE = preload("res://modules/games/mahjong/guiyang/assets/models/mahjong_table.glb")
+const TILE_SCENE = preload("res://modules/games/mahjong/guiyang/assets/models/mahjong_tile.glb")
+const QUALITY_FILE := "user://mahjong_visuals.cfg"
+const QUALITY_SIZES := [Vector2i(700, 630), Vector2i(1000, 900), Vector2i(1400, 1260)]
 
 var product: Dictionary = {}
 var match_context: Dictionary = {}
+var training_mode := false
 var _socket := WebSocketPeer.new()
 var _joined := false
 var _state: Dictionary = {}
@@ -17,21 +23,67 @@ var _auto_played := false
 var _reconnect_wait := 0.0
 var _status: Label
 var _header: Label
-var _hand_root: Control
 var _actions_root: Control
-var _table_root: Control
 var _seat_root: Control
 var _overlay_root: Control
+var _board_view: TextureRect
+var _board_viewport: SubViewport
+var _stage: Node3D
+var _camera: Camera3D
+var _pieces_root: Node3D
+var _hand_models: Array[Node3D] = []
+var _hand_ids: Array[int] = []
+var _face_materials: Dictionary = {}
+var _quality := 1
+var _quality_option: OptionButton
 
 
 func _ready() -> void:
+	_load_quality()
 	_build_static_ui()
-	_connect_socket()
-	set_process(true)
+	if training_mode:
+		_start_training()
+		set_process(false)
+	else:
+		_connect_socket()
+		set_process(true)
 
 
 func _exit_tree() -> void:
-	_socket.close()
+	if not training_mode:
+		_socket.close()
+
+
+func _load_quality() -> void:
+	var config := ConfigFile.new()
+	if config.load(QUALITY_FILE) == OK:
+		_quality = clampi(int(config.get_value("rendering", "quality", 1)), 0, 2)
+
+
+func _set_quality(index: int) -> void:
+	_quality = clampi(index, 0, 2)
+	_board_viewport.size = QUALITY_SIZES[_quality]
+	_board_viewport.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_4X, Viewport.MSAA_8X][_quality]
+	_stage.get_node("KeyLight").shadow_enabled = _quality > 0
+	var config := ConfigFile.new()
+	config.set_value("rendering", "quality", _quality)
+	config.save(QUALITY_FILE)
+
+
+func _start_training() -> void:
+	var hand: Array = []
+	for index in range(14):
+		var suit: String = ["wan", "tong", "tiao"][int(index / 5) % 3]
+		hand.append({"id": index + 1, "suit": suit, "rank": index % 9 + 1})
+	_state = {
+		"room_id": "训练", "status": "playing", "phase": "turn", "turn": 0, "your_seat": 0,
+		"players": ["我", "练习位一", "练习位二", "练习位三"], "hand": hand,
+		"hand_counts": [14, 13, 13, 13], "scores": [0, 0, 0, 0],
+		"melds": [[], [], [], []], "discards": [], "remaining": 55,
+		"options": [{"type": "play"}], "winners": []
+	}
+	_render()
+	_status.text = "单人训练 · 点击三维手牌，再点击“打出”"
 
 
 func _texture(path: String) -> Texture2D:
@@ -92,29 +144,22 @@ func _build_static_ui() -> void:
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(background)
-	var board := TextureRect.new()
-	board.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	board.stretch_mode = TextureRect.STRETCH_SCALE
-	board.texture = _texture(ART + "backgrounds/T_BG_GameTable_GreenFelt.png")
-	board.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(board)
-	board.position = Vector2(10, 277)
-	board.size = Vector2(700, 394)
+	_build_3d_table()
 	_header = _label(self, "小板凳麻将 · 贵阳麻将", 24, 17, 520, 50, 29)
 	_label(self, "房间 %s" % str(match_context.get("room_id", "")), 530, 18, 170, 45, 17, Color("#dfbd83"))
+	_quality_option = OptionButton.new()
+	_quality_option.position = Vector2(530, 72)
+	_quality_option.size = Vector2(165, 45)
+	for title in ["低画质", "中画质", "高画质"]:
+		_quality_option.add_item(title)
+	_quality_option.select(_quality)
+	_quality_option.item_selected.connect(_set_quality)
+	add_child(_quality_option)
 	_status = _label(self, "正在连接实时对局……", 30, 1100, 660, 70, 19)
-	_table_root = Control.new()
-	_table_root.position = Vector2(10, 277)
-	_table_root.size = Vector2(700, 394)
-	add_child(_table_root)
 	_seat_root = Control.new()
 	_seat_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_seat_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_seat_root)
-	_hand_root = Control.new()
-	_hand_root.position = Vector2(0, 790)
-	_hand_root.size = Vector2(720, 190)
-	add_child(_hand_root)
 	_actions_root = Control.new()
 	_actions_root.position = Vector2(0, 1000)
 	_actions_root.size = Vector2(720, 90)
@@ -123,7 +168,65 @@ func _build_static_ui() -> void:
 	_overlay_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_overlay_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_overlay_root)
-	_label(self, "点击手牌选中，再点击“打出”", 30, 1187, 660, 50, 16, Color("#c9a771"))
+	_label(self, "点击桌上的三维手牌选中，再点击“打出”", 30, 1187, 660, 50, 16, Color("#c9a771"))
+
+
+func _build_3d_table() -> void:
+	_board_viewport = SubViewport.new()
+	_board_viewport.name = "Mahjong3DViewport"
+	_board_viewport.size = QUALITY_SIZES[_quality]
+	_board_viewport.transparent_bg = false
+	_board_viewport.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_4X, Viewport.MSAA_8X][_quality]
+	_board_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(_board_viewport)
+	var world := Node3D.new()
+	world.name = "MahjongWorld"
+	_board_viewport.add_child(world)
+	_stage = STAGE_SCRIPT.new()
+	world.add_child(_stage)
+	_camera = _stage.configure(2.0, Vector3(0, 2.0, 0.88), Vector3(0, 0, 0), true, 43.0)
+	_stage.get_node("Floor").visible = false
+	_stage.get_node("KeyLight").shadow_enabled = _quality > 0
+	var table := TABLE_SCENE.instantiate()
+	table.name = "ImportedMahjongTable"
+	world.add_child(table)
+	_pieces_root = Node3D.new()
+	_pieces_root.name = "ThreeDimensionalTiles"
+	world.add_child(_pieces_root)
+	_board_view = TextureRect.new()
+	_board_view.name = "Mahjong3DTableView"
+	_board_view.texture = _board_viewport.get_texture()
+	_board_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_board_view.stretch_mode = TextureRect.STRETCH_SCALE
+	_board_view.position = Vector2(10, 277)
+	_board_view.size = Vector2(700, 620)
+	_board_view.gui_input.connect(_on_board_input)
+	add_child(_board_view)
+
+
+func _on_board_input(event: InputEvent) -> void:
+	var touch_position := Vector2.ZERO
+	if event is InputEventMouseButton:
+		if not event.pressed or event.button_index != MOUSE_BUTTON_LEFT:
+			return
+		touch_position = event.position
+	elif event is InputEventScreenTouch:
+		if not event.pressed:
+			return
+		touch_position = event.position
+	else:
+		return
+	var local: Vector2 = touch_position * Vector2(_board_viewport.size) / _board_view.size
+	var nearest_id := 0
+	var nearest_distance := 52.0
+	for index in range(_hand_models.size()):
+		var projected := _camera.unproject_position(_hand_models[index].global_position)
+		var distance := local.distance_to(projected)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_id = _hand_ids[index]
+	if nearest_id > 0:
+		_select_tile(nearest_id)
 
 
 func _connect_socket() -> void:
@@ -185,9 +288,10 @@ func _array(key: String) -> Array:
 
 
 func _render() -> void:
-	_clear(_table_root)
+	_clear(_pieces_root)
+	_hand_models.clear()
+	_hand_ids.clear()
 	_clear(_seat_root)
-	_clear(_hand_root)
 	_clear(_actions_root)
 	_clear(_overlay_root)
 	_selected_id = _selected_id if _hand_contains(_selected_id) else 0
@@ -226,7 +330,7 @@ func _render_seats() -> void:
 	var players: Array = _array("players")
 	var counts: Array = _array("hand_counts")
 	var scores: Array = _array("scores")
-	var places := [Vector2(165, 705), Vector2(490, 204), Vector2(170, 104), Vector2(10, 204)]
+	var places := [Vector2(165, 912), Vector2(490, 204), Vector2(170, 104), Vector2(10, 204)]
 	var widths := [390.0, 220.0, 380.0, 220.0]
 	var titles := ["我的手牌", "右家", "对家", "左家"]
 	for seat in range(4):
@@ -252,16 +356,32 @@ func _tile_path(tile: Dictionary) -> String:
 	return ART + "tiles/T_Tile_%s_%02d.png" % [prefix, int(tile.get("rank", 1))]
 
 
-func _tile_image(parent: Node, tile: Dictionary, x: float, y: float, width: float, height: float) -> TextureRect:
-	var image := TextureRect.new()
-	image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	image.stretch_mode = TextureRect.STRETCH_SCALE
-	image.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	image.texture = _texture(_tile_path(tile))
-	parent.add_child(image)
-	image.position = Vector2(x, y)
-	image.size = Vector2(width, height)
-	return image
+func _face_material(tile: Dictionary) -> StandardMaterial3D:
+	var path := _tile_path(tile)
+	if _face_materials.has(path):
+		return _face_materials[path]
+	var material := StandardMaterial3D.new()
+	material.albedo_texture = _texture(path)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.roughness = 0.32
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_face_materials[path] = material
+	return material
+
+
+func _tile_model(tile: Dictionary, location: Vector3, relative: int = 0, concealed: bool = false) -> Node3D:
+	var model := TILE_SCENE.instantiate() as Node3D
+	model.position = location
+	model.scale = Vector3.ONE * 1.17
+	model.rotation.y = float(relative) * PI / 2.0
+	_pieces_root.add_child(model)
+	var face := model.find_child("TileFace", true, false) as MeshInstance3D
+	if face != null:
+		face.material_override = _face_material(tile)
+		face.visible = not concealed
+	if concealed:
+		model.rotation.x = PI
+	return model
 
 
 func _render_opponent_hands() -> void:
@@ -272,16 +392,17 @@ func _render_opponent_hands() -> void:
 			continue
 		var count := mini(int(counts[seat]), 14)
 		for index in range(count):
-			if relative == 2:
-				_tile_image(_seat_root, {}, 190.0 + index * 24.0, 226.0, 25.0, 38.0)
+			var along := (float(index) - float(count - 1) / 2.0) * 0.068
+			var position := Vector3(along, 0.052, -0.54)
+			if relative == 1:
+				position = Vector3(0.54, 0.052, along)
 			elif relative == 3:
-				_tile_image(_seat_root, {}, 23.0, 325.0 + index * 21.0, 26.0, 34.0)
-			else:
-				_tile_image(_seat_root, {}, 671.0, 325.0 + index * 21.0, 26.0, 34.0)
+				position = Vector3(-0.54, 0.052, along)
+			var model := _tile_model({}, position, relative, true)
+			model.scale = Vector3.ONE * 1.70
 
 
 func _render_discards() -> void:
-	var zones := [Vector2(245, 268), Vector2(490, 165), Vector2(245, 35), Vector2(52, 165)]
 	var per_seat := [[], [], [], []]
 	for raw in _array("discards"):
 		if typeof(raw) == TYPE_DICTIONARY:
@@ -289,54 +410,55 @@ func _render_discards() -> void:
 			if seat >= 0 and seat < 4 and not bool(raw.get("claimed", false)):
 				per_seat[seat].append(raw.get("tile", {}))
 	for seat in range(4):
-		var pos: Vector2 = zones[_relative_seat(seat)]
+		var relative := _relative_seat(seat)
 		for index in range(per_seat[seat].size()):
 			var col := index % 6
-			var row := index / 6
-			_tile_image(_table_root, per_seat[seat][index], pos.x + col * 32.0, pos.y + row * 39.0, 29, 38)
+			var row := int(index / 6)
+			var along := (float(col) - 2.5) * 0.046
+			var position := Vector3(along, 0.002, 0.16 + float(row) * 0.067)
+			if relative == 2:
+				position = Vector3(-along, 0.002, -0.16 - float(row) * 0.067)
+			elif relative == 1:
+				position = Vector3(0.16 + float(row) * 0.067, 0.002, along)
+			elif relative == 3:
+				position = Vector3(-0.16 - float(row) * 0.067, 0.002, -along)
+			_tile_model(per_seat[seat][index], position, relative)
 
 
 func _render_melds() -> void:
 	var meld_groups: Array = _array("melds")
-	var positions := [Vector2(5, 355), Vector2(470, 285), Vector2(245, 4), Vector2(5, 285)]
 	for seat in range(mini(4, meld_groups.size())):
-		var pos: Vector2 = positions[_relative_seat(seat)]
+		var relative := _relative_seat(seat)
 		var melds: Array = meld_groups[seat]
 		for index in range(melds.size()):
 			var meld: Dictionary = melds[index]
 			var tiles: Array = meld.get("tiles", [])
-			_label(_table_root, _meld_name(str(meld.get("kind", ""))), pos.x + index * 75, pos.y, 70, 23, 13, Color("#f2d292"))
 			for tile_index in range(mini(4, tiles.size())):
-				_tile_image(_table_root, tiles[tile_index], pos.x + index * 75 + tile_index * 17, pos.y + 24, 17, 26)
-
-
-func _meld_name(kind: String) -> String:
-	match kind:
-		"peng": return "碰"
-		"ming_gang": return "明杠"
-		"an_gang": return "暗杠"
-		"bu_gang": return "补杠"
-	return kind
+				var along := (float(index) * 4.0 + float(tile_index) - 5.0) * 0.047
+				var position := Vector3(along, 0.002, 0.41)
+				if relative == 2:
+					position = Vector3(-along, 0.002, -0.41)
+				elif relative == 1:
+					position = Vector3(0.41, 0.002, along)
+				elif relative == 3:
+					position = Vector3(-0.41, 0.002, -along)
+				_tile_model(tiles[tile_index], position, relative)
 
 
 func _render_hand() -> void:
 	var hand: Array = _array("hand")
 	if hand.is_empty():
 		return
-	var tile_width := minf(47.0, 660.0 / float(hand.size()))
-	var start_x := (720.0 - tile_width * float(hand.size())) / 2.0
+	_hand_models.clear()
+	_hand_ids.clear()
 	for index in range(hand.size()):
 		var tile: Dictionary = hand[index]
 		var id := int(tile.get("id", 0))
-		var button := TextureButton.new()
-		button.texture_normal = _texture(_tile_path(tile))
-		button.ignore_texture_size = true
-		button.stretch_mode = TextureButton.STRETCH_SCALE
-		button.position = Vector2(start_x + float(index) * tile_width, 80 if id == _selected_id else 96)
-		button.size = Vector2(tile_width + 2, 88)
-		button.pressed.connect(_select_tile.bind(id))
-		_hand_root.add_child(button)
-	_label(_hand_root, "我的手牌", 20, 15, 680, 50, 18, Color("#e2be7d"))
+		var along := (float(index) - float(hand.size() - 1) / 2.0) * 0.068
+		var model := _tile_model(tile, Vector3(along, 0.026 if id == _selected_id else 0.002, 0.54))
+		model.scale = Vector3.ONE * 1.70
+		_hand_models.append(model)
+		_hand_ids.append(id)
 
 
 func _select_tile(id: int) -> void:
@@ -345,8 +467,8 @@ func _select_tile(id: int) -> void:
 
 
 func _render_hand_only() -> void:
-	_clear(_hand_root)
-	_render_hand()
+	for index in range(_hand_models.size()):
+		_hand_models[index].position.y = 0.026 if _hand_ids[index] == _selected_id else 0.002
 
 
 func _hand_contains(id: int) -> bool:
@@ -366,8 +488,9 @@ func _render_actions() -> void:
 	var options := _options()
 	if options.is_empty():
 		return
-	var button_width := minf(120.0, 680.0 / float(options.size()))
-	var start_x := (720.0 - button_width * float(options.size())) / 2.0
+	var count := options.size() + (1 if training_mode else 0)
+	var button_width := minf(150.0, 680.0 / float(count))
+	var start_x := (720.0 - button_width * float(count)) / 2.0
 	for index in range(options.size()):
 		var option: Dictionary = options[index]
 		var kind := str(option.get("type", ""))
@@ -377,6 +500,8 @@ func _render_actions() -> void:
 			_button(_actions_root, text_value, start_x + index * button_width, 0, button_width - 5, 72, _on_play)
 		else:
 			_button(_actions_root, text_value, start_x + index * button_width, 0, button_width - 5, 72, _send_action.bind(kind, tile_id))
+	if training_mode:
+		_button(_actions_root, "返回大厅", start_x + options.size() * button_width, 0, button_width - 5, 72, func(): request_return_to_lobby.emit())
 
 
 func _action_name(kind: String) -> String:
@@ -399,8 +524,32 @@ func _on_play() -> void:
 
 
 func _send_action(kind: String, tile_id: int = 0) -> void:
+	if training_mode:
+		if kind == "play":
+			_training_play(tile_id)
+		return
 	_send({"type": "mahjong_action", "action": kind, "tile_id": tile_id})
 	_selected_id = 0
+
+
+func _training_play(tile_id: int) -> void:
+	if tile_id <= 0:
+		return
+	var hand: Array = _array("hand")
+	for index in range(hand.size()):
+		if int(hand[index].get("id", 0)) != tile_id:
+			continue
+		var discards: Array = _array("discards")
+		discards.append({"seat": 0, "tile": hand[index], "claimed": false})
+		hand.remove_at(index)
+		var next_id := 1000 + discards.size()
+		var suit: String = ["wan", "tong", "tiao"][discards.size() % 3]
+		hand.append({"id": next_id, "suit": suit, "rank": discards.size() % 9 + 1})
+		_state["remaining"] = maxi(0, int(_state.get("remaining", 0)) - 1)
+		_selected_id = 0
+		_render()
+		_status.text = "单人训练 · 已打出 %d 张 · 点击下一张手牌" % discards.size()
+		return
 
 
 func _render_settlement() -> void:

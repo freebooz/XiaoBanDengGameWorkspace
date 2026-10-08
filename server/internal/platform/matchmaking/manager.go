@@ -325,11 +325,41 @@ func (m *Manager) MahjongPlayersFor(roomID string) ([4]string, bool) {
 	return seats, true
 }
 
+// LandlordPlayersFor 返回已经满座且完成准备的三人斗地主座位。
+func (m *Manager) LandlordPlayersFor(roomID string) ([3]string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var seats [3]string
+	item, ok := m.rooms.Get(roomID)
+	if !ok || item.GameID != "landlord" || item.State != "playing" {
+		return seats, false
+	}
+	players := m.playersByRoom[roomID]
+	if len(players) != 3 || m.readyCountLocked(roomID) != 3 {
+		return seats, false
+	}
+	copy(seats[:], players)
+	return seats, true
+}
+
 func capacityFor(gameID string) int {
-	if gameID == "mahjong" {
+	if gameID == "mahjong" || gameID == "guandan" {
 		return 4
 	}
+	if gameID == "landlord" {
+		return 3
+	}
 	return 2
+}
+
+// GuandanPlayersFor 仅返回已经满座并完成准备的四人掼蛋搭档座位。
+func (m *Manager) GuandanPlayersFor(roomID string) ([4]string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var seats [4]string
+	item,ok:=m.rooms.Get(roomID)
+	if !ok || item.GameID!="guandan" || item.State!="playing" || len(m.playersByRoom[roomID])!=4 || m.readyCountLocked(roomID)!=4 {return seats,false}
+	copy(seats[:],m.playersByRoom[roomID]);return seats,true
 }
 
 func containsPlayer(players []string, accountID string) bool {

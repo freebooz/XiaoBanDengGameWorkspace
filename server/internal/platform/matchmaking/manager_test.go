@@ -7,6 +7,36 @@ import (
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/room"
 )
 
+func TestLandlordNeedsThreeReadyPlayers(t *testing.T) {
+	m := NewManager(room.NewManager())
+	base := QuickMatchRequest{ProductID: "xbd_landlord", GameID: "landlord", RuleSetID: "classic_three_player", RuleVersion: "1.0.0"}
+	var roomID string
+	for seat := 0; seat < 3; seat++ {
+		base.AccountID = fmt.Sprintf("landlord-%d", seat)
+		result, err := m.QuickMatch(base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		roomID = result.RoomID
+		if result.Capacity != 3 || result.SeatIndex != seat || (seat == 2 && result.Status != StatusMatched) {
+			t.Fatalf("seat %d: %+v", seat, result)
+		}
+	}
+	for seat := 0; seat < 3; seat++ {
+		result, err := m.Ready(RoomReadyRequest{AccountID: fmt.Sprintf("landlord-%d", seat), RoomID: roomID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Start != (seat == 2) {
+			t.Fatalf("early/late start: %+v", result)
+		}
+	}
+	players, ok := m.LandlordPlayersFor(roomID)
+	if !ok || players[2] != "landlord-2" {
+		t.Fatalf("bad seats %+v", players)
+	}
+}
+
 func TestQuickMatchPairsTwoAccountsIntoSameRoom(t *testing.T) {
 	rooms := room.NewManager()
 	manager := NewManager(rooms)

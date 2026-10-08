@@ -30,6 +30,8 @@ type Server struct {
 	ai          *ai.Service
 	chess       *chessHub
 	mahjong     *mahjongHub
+	landlord    *landlordHub
+	guandan     *guandanHub
 	admin       adminReader
 	matchmaking *matchmaking.Manager
 	upgrader    websocket.Upgrader
@@ -42,7 +44,7 @@ func New(cfg config.Config, db *pgxpool.Pool, redisClient *redis.Client) http.Ha
 	s := &Server{
 		cfg: cfg, db: db, redis: redisClient,
 		accounts: account.NewService(db), wallets: wallet.NewService(db),
-		rooms: roomManager, ai: ai.NewService(), chess: newChessHub(matchManager), mahjong: newMahjongHub(matchManager),
+		rooms: roomManager, ai: ai.NewService(), chess: newChessHub(matchManager), mahjong: newMahjongHub(matchManager), landlord: newLandlordHub(matchManager), guandan:newGuandanHub(matchManager),
 		admin:       adminplatform.NewService(db, roomManager),
 		matchmaking: matchManager,
 		upgrader:    websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
@@ -140,6 +142,10 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	defer s.chess.disconnect(client)
 	mahjongClient := newMahjongClient(client)
 	defer s.mahjong.disconnect(mahjongClient)
+	landlordClient := newLandlordClient(client)
+	defer s.landlord.disconnect(landlordClient)
+	guandanClient:=newGuandanClient(client)
+	defer s.guandan.disconnect(guandanClient)
 	_ = client.writeJSON(map[string]any{"type": "connected", "message": "小板凳实时连接已建立"})
 	for {
 		var message map[string]any
@@ -153,6 +159,10 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		if s.mahjong.handle(mahjongClient, message) {
 			continue
 		}
+		if s.landlord.handle(landlordClient, message) {
+			continue
+		}
+		if s.guandan.handle(guandanClient,message) {continue}
 		_ = client.writeJSON(map[string]any{"type": "ack", "payload": message})
 	}
 }

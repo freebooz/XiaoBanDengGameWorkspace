@@ -1,0 +1,12 @@
+{
+  "card": "poker_card.glb",
+  "table": "poker_table.glb",
+  "card_dimensions_m": [
+    0.063,
+    0.088,
+    0.0013
+  ],
+  "card_face_node": "CardFace",
+  "card_back_node": "CardBack",
+  "source": "SourceAssets/Poker"
+}

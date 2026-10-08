@@ -7,5 +7,7 @@ func Catalog() []domain.GameDescriptor {
 	return []domain.GameDescriptor{
 		{ProductID: domain.ProductChineseChess, Category: domain.CategoryBoard, GameID: domain.GameChineseChess, RuleSetID: domain.RuleChineseChessStandard, RuleVersion: "1.0.0", Name: "小板凳象棋", Enabled: true},
 		{ProductID: domain.ProductMahjong, Category: domain.CategoryTile, GameID: domain.GameMahjong, RuleSetID: domain.RuleMahjongGuiyang, RuleVersion: "2.0.0", Name: "小板凳麻将·贵阳麻将", Enabled: true},
+		{ProductID: domain.ProductLandlord, Category: domain.CategoryCard, GameID: domain.GameLandlord, RuleSetID: domain.RuleLandlordClassic, RuleVersion: "1.0.0", Name: "小板凳斗地主", Enabled: true},
+		{ProductID: domain.ProductGuandan, Category: domain.CategoryCard, GameID: domain.GameGuandan, RuleSetID: domain.RuleGuandanClassic, RuleVersion: "1.0.0", Name: "小板凳掼蛋", Enabled: true},
 	}
 }

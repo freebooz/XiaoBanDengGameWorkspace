@@ -6,6 +6,7 @@ signal request_return_to_lobby
 ## 服务端棋盘坐标始终保持统一，客户端只旋转摄像机，不旋转权威棋局数据。
 
 const STAGE_SCRIPT = preload("res://modules/game_framework/tabletop3d/tabletop_stage.gd")
+const TRAINING_RULES_SCRIPT = preload("res://modules/games/chinese_chess/chess_training_rules.gd")
 const PBR_FACTORY = preload("res://modules/game_framework/tabletop3d/pbr_material_factory.gd")
 const COUNTDOWN_CLOCK_SCRIPT = preload("res://modules/foundation/ui/turn_countdown_clock.gd")
 const WARNING_SOUND_SCRIPT = preload("res://modules/foundation/audio/turn_warning_sound.gd")
@@ -54,6 +55,7 @@ enum LayoutMode {
 
 var product: Dictionary = {}
 var match_context: Dictionary = {}
+var training_mode := false
 var _landscape_texture: Texture2D
 var _portrait_texture: Texture2D
 var _board_surface_texture: Texture2D
@@ -174,8 +176,18 @@ func _ready() -> void:
 	_show_preview_position()
 	resized.connect(_layout_hud)
 	_layout_hud()
-	_connect_socket()
-	set_process(true)
+	if training_mode:
+		_joined = true
+		_your_color = "red"
+		_turn = "red"
+		_room_status = "playing"
+		_apply_player_view()
+		_update_hud()
+		_status_label.text = "双人同机训练 · 红方先走，点击棋子与目标格"
+		set_process(false)
+	else:
+		_connect_socket()
+		set_process(true)
 
 
 func _notification(what: int) -> void:
@@ -211,6 +223,13 @@ func _on_board_gui_input(event: InputEvent) -> void:
 		var mouse_event := event as InputEventMouseButton
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
 			var board_pos := _screen_to_board(mouse_event.position)
+			if board_pos != INVALID_POS:
+				_on_board_pressed(board_pos)
+				_board_view.accept_event()
+	elif event is InputEventScreenTouch:
+		var touch_event := event as InputEventScreenTouch
+		if touch_event.pressed:
+			var board_pos := _screen_to_board(touch_event.position)
 			if board_pos != INVALID_POS:
 				_on_board_pressed(board_pos)
 				_board_view.accept_event()
@@ -1411,6 +1430,12 @@ func _update_hud() -> void:
 		return
 
 	_round_status_label.text = "第 %d 步" % _move_number
+	if training_mode:
+		_role_label.text = "训练模式 · 红黑轮流"
+		_turn_status_label.text = "训练结束 · %s获胜" % _color_name(_winner) if _winner != "" else "轮到%s走棋" % _color_name(_turn)
+		_turn_label.text = "双人同机练习"
+		_update_player_panels()
+		return
 	if _your_color == "":
 		_role_label.text = "我方：观战"
 	else:
@@ -1459,8 +1484,8 @@ func _update_player_panels() -> void:
 
 	var left_active := _room_status == "playing" and _turn == left_color
 	var right_active := _room_status == "playing" and _turn == right_color
-	_left_rank_label.text = "● 执棋中" if left_active else ("● 在线" if _room_status == "playing" else "● 等待")
-	_right_rank_label.text = "● 执棋中" if right_active else ("● 在线" if _room_status == "playing" else "● 等待")
+	_left_rank_label.text = "● 执棋中" if left_active else ("● 同机练习" if training_mode else ("● 在线" if _room_status == "playing" else "● 等待"))
+	_right_rank_label.text = "● 执棋中" if right_active else ("● 同机练习" if training_mode else ("● 在线" if _room_status == "playing" else "● 等待"))
 	_left_rank_label.add_theme_color_override("font_color", Color("#f2c978") if left_active else Color("#7fcf9b"))
 	_right_rank_label.add_theme_color_override("font_color", Color("#f2c978") if right_active else Color("#7fcf9b"))
 	_update_player_card_visual(_left_card, left_active)
@@ -1803,24 +1828,25 @@ func _on_board_pressed(pos: Vector2i) -> void:
 	if _winner != "" or _end_reason != "" or _room_status == "finished":
 		_status_label.text = "状态：本局已经结束。"
 		return
-	if _turn != _your_color:
+	if not training_mode and _turn != _your_color:
 		_status_label.text = "状态：当前不是你的回合。"
 		return
+	var active_color := _turn if training_mode else _your_color
 
 	var clicked_piece := _piece_at(pos)
 	if _selected == INVALID_POS:
 		if clicked_piece.is_empty():
 			_status_label.text = "请选择自己的三维棋子。"
 			return
-		if str(clicked_piece.get("color", "")) != _your_color:
+		if str(clicked_piece.get("color", "")) != active_color:
 			_status_label.text = "不能选择对方棋子。"
 			return
 		_selected = pos
-		_status_label.text = "已选择%s，请点击目标格。" % _piece_symbol(_your_color, str(clicked_piece.get("type", "")))
+		_status_label.text = "已选择%s，请点击目标格。" % _piece_symbol(active_color, str(clicked_piece.get("type", "")))
 		_update_selection()
 		return
 
-	if not clicked_piece.is_empty() and str(clicked_piece.get("color", "")) == _your_color:
+	if not clicked_piece.is_empty() and str(clicked_piece.get("color", "")) == active_color:
 		_selected = pos
 		_status_label.text = "已切换选择，请点击目标格。"
 		_update_selection()
@@ -1830,6 +1856,27 @@ func _on_board_pressed(pos: Vector2i) -> void:
 	if selected_piece.is_empty():
 		_selected = INVALID_POS
 		_update_selection()
+		return
+	if training_mode:
+		var reason: String = TRAINING_RULES_SCRIPT.validate(_pieces_by_pos, _selected, pos, _turn)
+		if reason != "":
+			_status_label.text = reason
+			return
+		var captured: Dictionary = _piece_at(pos)
+		_pieces_by_pos.erase(_selected)
+		_pieces_by_pos[pos] = selected_piece
+		_selected = INVALID_POS
+		_move_number += 1
+		if str(captured.get("type", "")) == "general":
+			_winner = _turn
+			_room_status = "finished"
+			_status_label.text = "%s吃将，训练结束" % _color_name(_winner)
+		else:
+			_turn = "black" if _turn == "red" else "red"
+			_status_label.text = "双人同机训练 · 轮到%s" % _color_name(_turn)
+		_rebuild_piece_models()
+		_update_selection()
+		_update_hud()
 		return
 
 	_send_json({

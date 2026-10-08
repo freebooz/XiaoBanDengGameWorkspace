@@ -1,6 +1,6 @@
 ﻿param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet("chinese_chess","mahjong")]
+    [ValidateSet("chinese_chess","mahjong","landlord","guandan")]
     [string]$Product
 )
 
@@ -38,6 +38,12 @@ foreach($module in $config.modules){
 # 麻将使用独立四人大厅，避免象棋的双座位流程和界面进入麻将产品。
 if($Product -eq "mahjong"){
     Copy-Item (Join-Path $workspace "client\games\mahjong\guiyang\mahjong_app.gd") (Join-Path $target "scripts\main.gd") -Force
+}
+if($Product -eq "landlord"){
+    Copy-Item (Join-Path $workspace "client\games\landlord\landlord_app.gd") (Join-Path $target "scripts\main.gd") -Force
+}
+if($Product -eq "guandan"){
+    Copy-Item (Join-Path $workspace "client\games\guandan\guandan_app.gd") (Join-Path $target "scripts\main.gd") -Force
 }
 
 # 产品名和Android包名在生成工程中进行最小差异替换。

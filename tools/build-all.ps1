@@ -7,6 +7,8 @@ $workspace = Split-Path -Parent $PSScriptRoot
 Write-Host "1/3 Compose Godot product projects"
 & (Join-Path $PSScriptRoot "compose-godot.ps1") chinese_chess
 & (Join-Path $PSScriptRoot "compose-godot.ps1") mahjong
+& (Join-Path $PSScriptRoot "compose-godot.ps1") landlord
+& (Join-Path $PSScriptRoot "compose-godot.ps1") guandan
 
 Write-Host "2/3 Build Docker services"
 Push-Location $workspace
@@ -23,7 +25,7 @@ if($null -eq $godot){
     exit 0
 }
 
-foreach($product in @("chinese_chess","mahjong")){
+foreach($product in @("chinese_chess","mahjong","landlord","guandan")){
     $projectPath = Join-Path $workspace ("client\.generated\" + $product)
     & godot --headless --path $projectPath --editor --quit
     if($LASTEXITCODE -ne 0){ throw "Godot validation failed: $product" }

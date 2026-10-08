@@ -19,6 +19,7 @@ var _auto_flow := false
 var _status: Label
 var _ready_button: Button
 var _seat_labels: Array[Label] = []
+var _server_field: LineEdit
 
 
 func _ready() -> void:
@@ -60,6 +61,7 @@ func _reset(next_state: String, background: String) -> void:
 		child.queue_free()
 	_status = null
 	_ready_button = null
+	_server_field = null
 	_seat_labels.clear()
 	var image := TextureRect.new()
 	image.texture = _texture(ART + "backgrounds/" + background)
@@ -122,10 +124,40 @@ func _header(subtitle: String) -> void:
 	_label("贵阳麻将 · " + subtitle, 45, 153, 630, 48, 22, Color("#dfba76"))
 
 
+func _server_input(y: float) -> void:
+	_server_field = LineEdit.new()
+	_server_field.placeholder_text = "服务器地址，例如 http://192.168.1.10:8080"
+	_server_field.text = _api.base_url
+	_server_field.position = Vector2(85, y)
+	_server_field.size = Vector2(550, 62)
+	_server_field.add_theme_font_size_override("font_size", 22)
+	_server_field.add_theme_color_override("font_color", Color("#fff0cc"))
+	_server_field.add_theme_color_override("font_placeholder_color", Color("#c3ab83"))
+	_server_field.add_theme_stylebox_override("normal", _style(Color("#092c26ec"), Color("#d9a441"), 8))
+	_server_field.add_theme_stylebox_override("focus", _style(Color("#0e4438f4"), Color("#ffe2a1"), 8))
+	_screen.add_child(_server_field)
+
+
+func _apply_server() -> bool:
+	if _server_field == null or not _api.set_base_url(_server_field.text):
+		if _status != null:
+			_status.text = "请输入以 http:// 或 https:// 开头的服务器地址"
+		return false
+	return true
+
+
+func _retry_server() -> void:
+	if _apply_server():
+		_status.text = "正在连接 %s" % _api.base_url
+		_request_health()
+
+
 func _show_boot() -> void:
 	_reset("boot", "T_BG_Login_Guiyang.png")
 	_header("正在连接")
-	_status = _label("正在检查小板凳服务……", 100, 560, 520, 70, 22)
+	_status = _label("正在检查小板凳服务……", 100, 520, 520, 70, 22)
+	_server_input(650)
+	_button("连接服务器", 180, 760, 360, 70, _retry_server)
 
 
 func _request_health() -> void:
@@ -139,13 +171,16 @@ func _show_login() -> void:
 	_header("以牌会友 · 乐在其中")
 	_label("四人同桌 · 万筒条 108 张 · 贵阳玩法", 55, 425, 610, 90, 25)
 	_button("游客登录", 145, 690, 430, 80, _login)
-	_status = _label("与平台账号和房间服务互通", 80, 804, 560, 60, 18)
+	_server_input(830)
+	_status = _label("与平台账号和房间服务互通", 80, 920, 560, 60, 18)
 	if _auto_flow:
 		call_deferred("_login")
 
 
 func _login() -> void:
 	if _state != "login":
+		return
+	if not _apply_server():
 		return
 	_status.text = "正在登录……"
 	_request_kind = "login"
@@ -157,8 +192,9 @@ func _show_lobby() -> void:
 	_header("大厅")
 	_label("欢迎，%s" % str(_account.get("display_name", "棋友")), 55, 290, 610, 70, 28)
 	_label("贵阳麻将 · 四人真人对局", 65, 400, 590, 70, 27)
-	_button("快速对局", 145, 605, 430, 90, _start_match)
-	_label("碰 · 杠 · 胡 · 七对 · 过", 70, 735, 580, 55, 20, Color("#e6c991"))
+	_button("快速对局", 145, 565, 430, 90, _start_match)
+	_button("单人训练", 145, 690, 430, 90, _enter_training)
+	_label("碰 · 杠 · 胡 · 七对 · 过", 70, 815, 580, 55, 20, Color("#e6c991"))
 	_status = _label("等待加入对局", 80, 1030, 560, 80, 18)
 	if _auto_flow:
 		call_deferred("_start_match")
@@ -339,6 +375,22 @@ func _enter_game() -> void:
 		game.request_return_to_lobby.connect(_return_to_lobby)
 	_screen.add_child(game)
 	print("MAHJONG_ROOM=%s" % str(_match.get("room_id", "")))
+
+
+func _enter_training() -> void:
+	if _state != "lobby":
+		return
+	_reset("training", "T_BG_GameTable_GreenFelt.png")
+	var screen_script = load(GAME_SCRIPT)
+	if screen_script == null:
+		_status = _label("麻将训练模块加载失败", 60, 580, 600, 80, 22)
+		return
+	var game = screen_script.new()
+	game.training_mode = true
+	game.match_context = {"room_id": "训练", "account_id": str(_account.get("account_id", "")), "seat_index": 0}
+	game.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	game.request_return_to_lobby.connect(_return_to_lobby)
+	_screen.add_child(game)
 
 
 func _return_to_lobby() -> void:

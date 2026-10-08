@@ -35,6 +35,7 @@ var _primary_button: Button
 var _auto_flow := false
 var _terms_checkbox: CheckBox
 var _local_ready := false
+var _server_field: LineEdit
 
 # 房间页动态控件引用。
 var _room_red_label: Label
@@ -105,6 +106,35 @@ func _clear_screen() -> void:
 	_room_ready_count_label = null
 	_room_status_label = null
 	_room_ready_button = null
+	_server_field = null
+
+
+func _make_server_field(y: float) -> void:
+	_server_field = LineEdit.new()
+	_server_field.name = "ServerAddress"
+	_server_field.text = _api.base_url
+	_server_field.placeholder_text = "服务器地址，如 http://192.168.1.10:8080"
+	_server_field.position = Vector2(80, y)
+	_server_field.size = Vector2(560, 56)
+	_server_field.add_theme_font_size_override("font_size", 21)
+	_server_field.add_theme_color_override("font_color", Color("#fff3d7"))
+	_server_field.add_theme_color_override("font_placeholder_color", Color("#ddc499"))
+	_server_field.add_theme_stylebox_override("normal", _panel_style(Color("#321f17ed"), Color("#d8a86c"), 9))
+	_server_field.add_theme_stylebox_override("focus", _panel_style(Color("#51301ded"), Color("#ffe1a6"), 9))
+	_screen_root.add_child(_server_field)
+
+
+func _apply_server_field() -> bool:
+	if _server_field != null and _api.set_base_url(_server_field.text):
+		return true
+	if _status_label != null:
+		_status_label.text = "请输入以 http:// 或 https:// 开头的服务器地址。"
+	return false
+
+
+func _retry_server_address() -> void:
+	if _apply_server_field():
+		_request_health()
 
 
 func _load_png_texture(path: String, fallback: Color = Color("#5c3a25")) -> Texture2D:
@@ -307,15 +337,16 @@ func _show_boot_error(message: String) -> void:
 	if _status_label != null:
 		_status_label.text = "启动失败：%s" % message
 	if _primary_button == null:
+		_make_server_field(930)
 		_primary_button = _make_action_button(
 			"重新连接",
 			UI_ROOT + "icon_quick.png",
 			Color("#c8792f"),
 			Color("#f0b45a"),
-			_request_health,
+			_retry_server_address,
 			58
 		)
-		_primary_button.position = Vector2(180, 860)
+		_primary_button.position = Vector2(180, 1010)
 		_primary_button.size = Vector2(360, 64)
 		_screen_root.add_child(_primary_button)
 
@@ -394,9 +425,10 @@ func _show_login() -> void:
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status_label.custom_minimum_size = Vector2(0, 44)
 	box.add_child(_status_label)
+	_make_server_field(1120)
 
 	var footer := _make_label("小板凳 · 大快乐 · 棋聚好时光", 14, Color("#f4d39d"))
-	footer.position = Vector2(80, 1170)
+	footer.position = Vector2(80, 1200)
 	footer.size = Vector2(560, 44)
 	_screen_root.add_child(footer)
 
@@ -489,20 +521,20 @@ func _show_lobby() -> void:
 	friend.custom_minimum_size = Vector2(329, 150)
 	grid.add_child(friend)
 	var ai := _make_mode_button(
-		"AI陪练",
-		"多种难度 · 提升棋艺",
+		"双人训练",
+		"轮流走棋 · 熟悉规则",
 		UI_ROOT + "icon_ai.png",
 		Color("#65d68b"),
-		_on_lobby_feature.bind("AI陪练")
+		_on_lobby_feature.bind("双人训练")
 	)
 	ai.custom_minimum_size = Vector2(329, 150)
 	grid.add_child(ai)
 	var puzzle := _make_mode_button(
-		"残局训练",
-		"经典残局 · 步步为赢",
+		"走子练习",
+		"标准开局 · 基础练习",
 		UI_ROOT + "icon_puzzle.png",
 		Color("#b995ff"),
-		_on_lobby_feature.bind("残局训练")
+		_on_lobby_feature.bind("走子练习")
 	)
 	puzzle.custom_minimum_size = Vector2(329, 150)
 	grid.add_child(puzzle)
@@ -771,6 +803,8 @@ func _on_wechat_login() -> void:
 func _on_guest_login() -> void:
 	if _state != FlowState.LOGIN:
 		return
+	if not _apply_server_field():
+		return
 	if _terms_checkbox != null and not _terms_checkbox.button_pressed:
 		_status_label.text = "请先勾选并同意《用户协议》和《隐私政策》。"
 		return
@@ -883,8 +917,33 @@ func _on_invite_friend() -> void:
 
 
 func _on_lobby_feature(feature: String) -> void:
+	if feature == "双人训练" or feature == "走子练习":
+		_enter_training()
+		return
 	if _status_label != null:
 		_status_label.text = "%s 已进入一期功能规划；当前请体验“快速对局”。" % feature
+
+
+func _enter_training() -> void:
+	if _state != FlowState.LOBBY:
+		return
+	_set_state(FlowState.GAME)
+	_clear_screen()
+	var screen_script = load("res://modules/games/chinese_chess/chinese_chess_3d_screen.gd")
+	if screen_script == null:
+		_show_lobby()
+		return
+	var screen = screen_script.new()
+	screen.product = _product
+	screen.training_mode = true
+	screen.match_context = {
+		"room_id": "训练", "account_id": str(_account.get("account_id", "")),
+		"display_name": str(_account.get("display_name", "我")),
+		"opponent_display_name": "同机练习"
+	}
+	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	screen.request_return_to_lobby.connect(_on_game_return_to_lobby)
+	_screen_root.add_child(screen)
 
 
 func _on_info_tool(tool_name: String) -> void:

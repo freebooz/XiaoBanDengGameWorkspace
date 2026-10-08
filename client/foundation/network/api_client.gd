@@ -4,10 +4,34 @@ class_name XbdApiClient
 ## 只连接“小板凳”业务服务端，不允许直接访问外部AI或支付平台密钥接口。
 
 var base_url: String = "http://127.0.0.1:8080"
+const SERVER_FILE := "user://xbd_server_url.txt"
 
 
-func _init(url: String = "http://127.0.0.1:8080") -> void:
-	base_url = url
+func _init(url: String = "") -> void:
+	var chosen := url.strip_edges()
+	if chosen == "":
+		for arg in OS.get_cmdline_user_args():
+			if arg.begins_with("--server-url="):
+				chosen = arg.trim_prefix("--server-url=")
+				break
+	if chosen == "":
+		chosen = OS.get_environment("XBD_SERVER_URL").strip_edges()
+	if chosen == "" and FileAccess.file_exists(SERVER_FILE):
+		chosen = FileAccess.get_file_as_string(SERVER_FILE).strip_edges()
+	if chosen != "":
+		set_base_url(chosen, false)
+
+
+func set_base_url(url: String, persist: bool = true) -> bool:
+	var cleaned := url.strip_edges().trim_suffix("/")
+	if not (cleaned.begins_with("http://") or cleaned.begins_with("https://")):
+		return false
+	base_url = cleaned
+	if persist:
+		var file := FileAccess.open(SERVER_FILE, FileAccess.WRITE)
+		if file != null:
+			file.store_string(base_url)
+	return true
 
 
 func health_url() -> String:

@@ -1,0 +1,10 @@
+{
+  "display_name": "小板凳掼蛋",
+  "product_id": "xbd_guandan",
+  "game_category": "card",
+  "game_id": "guandan",
+  "rule_set_id": "classic_partnership",
+  "rule_version": "1.0.0",
+  "android_package": "com.freebooz.xiaobandeng.guandan",
+  "modules": ["foundation", "game_framework/tabletop3d", "game_framework/card3d", "games/guandan"]
+}

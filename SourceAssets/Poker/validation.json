@@ -1,0 +1,27 @@
+{
+  "poker_card_blend": {
+    "mesh_count": 3,
+    "bytes": 100522
+  },
+  "poker_card_glb": {
+    "mesh_count": 3,
+    "bytes": 27852,
+    "sha256": "36f48568577ae17b05e2b8fa1db90f12e6c70b591efbb187f131fc1bf2f88569"
+  },
+  "poker_table_blend": {
+    "mesh_count": 2,
+    "bytes": 128209
+  },
+  "poker_table_glb": {
+    "mesh_count": 4,
+    "bytes": 303892,
+    "sha256": "28c7f171561719fcbdbc2e2920a27609a78920b9b7a7864591414eaf222b34b1"
+  },
+  "textures": {
+    "count": 55,
+    "size": [
+      378,
+      528
+    ]
+  }
+}
