@@ -4,10 +4,11 @@ $workspace = Split-Path -Parent $PSScriptRoot
 $output = Join-Path $workspace 'client\game_framework\card3d\assets\cards'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 $ranks = @('3','4','5','6','7','8','9','10','J','Q','K','A','2')
+$blueInk = [System.Drawing.Color]::FromArgb(24,84,177)
 $suits = @(
-    @{Name='spade'; Symbol='♠'; Color=[System.Drawing.Color]::FromArgb(25,35,47)},
+    @{Name='spade'; Symbol='♠'; Color=$blueInk},
     @{Name='heart'; Symbol='♥'; Color=[System.Drawing.Color]::FromArgb(185,31,48)},
-    @{Name='club'; Symbol='♣'; Color=[System.Drawing.Color]::FromArgb(25,35,47)},
+    @{Name='club'; Symbol='♣'; Color=$blueInk},
     @{Name='diamond'; Symbol='♦'; Color=[System.Drawing.Color]::FromArgb(185,31,48)}
 )
 $width=378; $height=528
@@ -61,7 +62,7 @@ try {
                 } finally { $gold.Dispose() }
             } else {
                 $g.Clear([System.Drawing.Color]::FromArgb(255,252,245))
-                $color = if($kind -eq 'big_joker') {[System.Drawing.Color]::FromArgb(183,33,45)} else {[System.Drawing.Color]::FromArgb(33,43,59)}
+                $color = if($kind -eq 'big_joker') {[System.Drawing.Color]::FromArgb(183,33,45)} else {$blueInk}
                 $brush = [System.Drawing.SolidBrush]::new($color)
                 try {
                     $g.DrawString('JOKER',$jokerFont,$brush,27,39)

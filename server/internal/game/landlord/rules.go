@@ -2,13 +2,19 @@ package landlord
 
 import (
 	"errors"
+	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/game/poker"
 	"sort"
-"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/game/poker"
 )
 
 // Shared poker face schema; Landlord uses one deck, Guandan uses two.
 type Card = poker.Card
-func CardFromID(id int) Card { if id < 0 || id > 53 { return Card{} }; return poker.FromID(id) }
+
+func CardFromID(id int) Card {
+	if id < 0 || id > 53 {
+		return Card{}
+	}
+	return poker.FromID(id)
+}
 func NewDeck() []Card { return poker.Deck(1) }
 
 func SortHand(hand []Card) {

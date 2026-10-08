@@ -8,8 +8,11 @@ const API_SCRIPT = preload("res://modules/foundation/network/api_client.gd")
 const STAGE_SCRIPT = preload("res://modules/game_framework/tabletop3d/tabletop_stage.gd")
 const TABLE_SCENE = preload("res://modules/games/mahjong/guiyang/assets/models/mahjong_table.glb")
 const TILE_SCENE = preload("res://modules/games/mahjong/guiyang/assets/models/mahjong_tile.glb")
+const DISPLAY = preload("res://modules/foundation/ui/battle_display.gd")
+const CHROME = preload("res://modules/foundation/ui/battle_chrome.gd")
 const QUALITY_FILE := "user://mahjong_visuals.cfg"
-const QUALITY_SIZES := [Vector2i(700, 630), Vector2i(1000, 900), Vector2i(1400, 1260)]
+## 画质指定横向采样数；纵向采样始终由当前桌面比例计算。
+const QUALITY_SIZES := [Vector2i(960, 540), Vector2i(1440, 810), Vector2i(1920, 1080)]
 
 var product: Dictionary = {}
 var match_context: Dictionary = {}
@@ -22,10 +25,23 @@ var _selected_id := 0
 var _auto_played := false
 var _reconnect_wait := 0.0
 var _status: Label
-var _header: Label
 var _actions_root: Control
 var _seat_root: Control
 var _overlay_root: Control
+var _table_frame: Panel
+var _actions_panel: Panel
+var _turn_label: Label
+var _wall_label: Label
+var _selection_label: Label
+var _action_hint: Label
+var _instructions: Label
+var _table_caption: Label
+var _return_button: Button
+var _mode_label: Label
+var _seat_panels: Array[Panel] = []
+var _play_button: Button
+var _settlement_panel: Panel
+var _table_bounds := AABB(Vector3(-0.75, -0.065, -0.75), Vector3(1.5, 0.19, 1.5))
 var _board_view: TextureRect
 var _board_viewport: SubViewport
 var _stage: Node3D
@@ -39,8 +55,11 @@ var _quality_option: OptionButton
 
 
 func _ready() -> void:
+	DISPLAY.enter(self)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_load_quality()
 	_build_static_ui()
+	resized.connect(_layout_ui)
 	if training_mode:
 		_start_training()
 		set_process(false)
@@ -52,6 +71,7 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if not training_mode:
 		_socket.close()
+	DISPLAY.leave(self)
 
 
 func _load_quality() -> void:
@@ -62,7 +82,7 @@ func _load_quality() -> void:
 
 func _set_quality(index: int) -> void:
 	_quality = clampi(index, 0, 2)
-	_board_viewport.size = QUALITY_SIZES[_quality]
+	_sync_viewport_size()
 	_board_viewport.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_4X, Viewport.MSAA_8X][_quality]
 	_stage.get_node("KeyLight").shadow_enabled = _quality > 0
 	var config := ConfigFile.new()
@@ -100,82 +120,148 @@ func _texture(path: String) -> Texture2D:
 
 
 func _style(bg: Color, border: Color, radius: int = 12) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = bg
-	style.border_color = border
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(radius)
-	style.shadow_color = Color("#00000088")
-	style.shadow_size = 5
-	return style
+	return CHROME.style(bg, border, radius)
 
 
 func _label(parent: Node, value: String, x: float, y: float, width: float, height: float, size: int = 19, color: Color = Color("#ffe9bc")) -> Label:
-	var label := Label.new()
-	label.text = value
-	label.position = Vector2(x, y)
-	label.size = Vector2(width, height)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", size)
-	label.add_theme_color_override("font_color", color)
-	parent.add_child(label)
-	return label
+	return CHROME.label(parent, value, Rect2(x, y, width, height), size, color)
 
 
-func _button(parent: Node, value: String, x: float, y: float, width: float, height: float, action: Callable, accent: Color = Color("#d9a441")) -> Button:
+func _button(parent: Node, value: String, x: float, y: float, width: float, height: float, action: Callable, primary: bool = false) -> Button:
 	var button := Button.new()
 	button.text = value
 	button.position = Vector2(x, y)
 	button.size = Vector2(width, height)
-	button.add_theme_font_size_override("font_size", 19)
-	button.add_theme_color_override("font_color", Color("#fff1d3"))
-	button.add_theme_stylebox_override("normal", _style(Color("#073f36ed"), accent))
-	button.add_theme_stylebox_override("hover", _style(Color("#166b5bec"), Color("#ffe2a1")))
+	CHROME.skin_button(button, primary, false)
 	button.pressed.connect(action)
 	parent.add_child(button)
 	return button
 
 
 func _build_static_ui() -> void:
-	var background := ColorRect.new()
-	background.color = Color("#071a17")
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(background)
+	CHROME.backdrop(self, "小板凳麻将 · 贵阳麻将", "训练" if training_mode else str(match_context.get("room_id", "")))
+	_table_frame = Panel.new()
+	_table_frame.name = "MahjongTableFrame"
+	_table_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_table_frame.add_theme_stylebox_override("panel", _style(Color("#0b222184"), Color("#96774770"), 24))
+	add_child(_table_frame)
 	_build_3d_table()
-	_header = _label(self, "小板凳麻将 · 贵阳麻将", 24, 17, 520, 50, 29)
-	_label(self, "房间 %s" % str(match_context.get("room_id", "")), 530, 18, 170, 45, 17, Color("#dfbd83"))
+	_table_caption = _label(self, "贵阳麻将 · 练习桌" if training_mode else "贵阳麻将 · 四人对局", 0, 0, 400, 30, 17, Color("#a8b9a6"))
 	_quality_option = OptionButton.new()
-	_quality_option.position = Vector2(530, 72)
-	_quality_option.size = Vector2(165, 45)
 	for title in ["低画质", "中画质", "高画质"]:
 		_quality_option.add_item(title)
+	CHROME.skin_button(_quality_option, false, false)
+	_quality_option.add_theme_font_size_override("font_size", 18)
 	_quality_option.select(_quality)
 	_quality_option.item_selected.connect(_set_quality)
 	add_child(_quality_option)
-	_status = _label(self, "正在连接实时对局……", 30, 1100, 660, 70, 19)
+	if training_mode:
+		_return_button = _button(self, "返回大厅", 0, 0, 168, 48, func(): request_return_to_lobby.emit())
+	else:
+		_mode_label = _label(self, "四人实时桌", 0, 0, 168, 48, 18, CHROME.GOLD)
+	_actions_panel = Panel.new()
+	_actions_panel.name = "MahjongActionsPanel"
+	_actions_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_actions_panel.add_theme_stylebox_override("panel", _style(Color("#0e211feb"), Color("#9b7a486a"), 20))
+	add_child(_actions_panel)
+	_turn_label = _label(self, "正在入座", 0, 0, 216, 54, 29)
+	_wall_label = _label(self, "准备开始对局", 0, 0, 216, 36, 18, CHROME.GOLD)
+	_selection_label = _label(self, "请选择一张手牌", 0, 0, 216, 60, 22, CHROME.MUTED)
+	_action_hint = _label(self, "等待牌友入座", 0, 0, 216, 32, 16, CHROME.MUTED)
+	_status = _label(self, "正在连接实时对局……", 0, 0, 660, 48, 21)
+	_instructions = _label(self, "点击三维手牌选择 · 再点击打出", 0, 0, 660, 28, 16, CHROME.MUTED)
 	_seat_root = Control.new()
 	_seat_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_seat_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_seat_root)
 	_actions_root = Control.new()
-	_actions_root.position = Vector2(0, 1000)
-	_actions_root.size = Vector2(720, 90)
+	_actions_root.name = "MahjongActions"
+	_actions_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_actions_root)
 	_overlay_root = Control.new()
 	_overlay_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_overlay_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_overlay_root)
-	_label(self, "点击桌上的三维手牌选中，再点击“打出”", 30, 1187, 660, 50, 16, Color("#c9a771"))
+	_layout_ui()
+
+
+func _layout_ui() -> void:
+	if _board_view == null:
+		return
+	var width := size.x if size.x > 0 else 1440.0
+	var height := size.y if size.y > 0 else 810.0
+	var column_x := width - 280.0
+	_table_frame.position = Vector2(28, 104)
+	_table_frame.size = Vector2(column_x - 50.0, height - 208.0)
+	_board_view.position = _table_frame.position + Vector2(4, 4)
+	_board_view.size = _table_frame.size - Vector2(8, 8)
+	_actions_panel.position = Vector2(column_x, 110)
+	_actions_panel.size = Vector2(252, height - 225)
+	_quality_option.position = Vector2(width - 402, 24)
+	_quality_option.size = Vector2(180, 48)
+	if _return_button != null:
+		_return_button.position = Vector2(width - 196, 24)
+	if _mode_label != null:
+		_mode_label.position = Vector2(width - 196, 24)
+	_turn_label.position = Vector2(column_x + 18, 125)
+	_wall_label.position = Vector2(column_x + 18, 182)
+	_selection_label.position = Vector2(column_x + 18, 225)
+	_actions_root.position = Vector2(column_x + 18, 298)
+	_actions_root.size = Vector2(216, height - 442)
+	_action_hint.position = Vector2(column_x + 18, height - 136)
+	_status.position = Vector2(352, height - 86)
+	_status.size = Vector2(width - 680, 48)
+	_instructions.position = Vector2(352, height - 42)
+	_instructions.size = Vector2(width - 680, 26)
+	_table_caption.position = Vector2(_board_view.position.x + _board_view.size.x * 0.5 - 200, 204)
+	_sync_viewport_size()
+	for index in range(_seat_panels.size()):
+		if is_instance_valid(_seat_panels[index]):
+			var rect := _seat_rect(index)
+			_seat_panels[index].position = rect.position
+			_seat_panels[index].size = rect.size
+	if is_instance_valid(_settlement_panel):
+		_settlement_panel.position = (Vector2(width, height) - _settlement_panel.size) * 0.5
+
+
+func _seat_rect(relative: int) -> Rect2:
+	var center := _board_view.position.x + _board_view.size.x * 0.5
+	match relative:
+		0: return Rect2(32, size.y - 88, 300, 70)
+		1: return Rect2(_board_view.position.x + _board_view.size.x - 254, 238, 240, 80)
+		2: return Rect2(center - 150, 112, 300, 78)
+	return Rect2(_board_view.position.x + 14, 238, 240, 80)
+
+
+func _sync_viewport_size() -> void:
+	if _board_viewport == null or _board_view == null or _board_view.size.y <= 0:
+		return
+	var pixels: int = QUALITY_SIZES[_quality].x
+	_board_viewport.size = Vector2i(pixels, maxi(1, roundi(float(pixels) * _board_view.size.y / _board_view.size.x)))
+	_fit_camera()
+
+
+func _fit_camera() -> void:
+	if _camera == null:
+		return
+	# 投影模型边界求垂直视角，宽屏、平板扩展画面都保留真实比例。
+	var aspect := _board_view.size.x / _board_view.size.y
+	var inverse := _camera.global_transform.affine_inverse()
+	var tangent := 0.0
+	for index in range(8):
+		var point: Vector3 = inverse * _table_bounds.get_endpoint(index)
+		var depth := maxf(0.1, -point.z)
+		tangent = maxf(tangent, absf(point.x) / (depth * aspect * 0.94))
+		tangent = maxf(tangent, absf(point.y) / (depth * 0.91))
+	_camera.fov = clampf(rad_to_deg(2.0 * atan(tangent)), 26.0, 60.0)
 
 
 func _build_3d_table() -> void:
 	_board_viewport = SubViewport.new()
 	_board_viewport.name = "Mahjong3DViewport"
 	_board_viewport.size = QUALITY_SIZES[_quality]
-	_board_viewport.transparent_bg = false
+	_board_viewport.transparent_bg = true
+	_board_viewport.own_world_3d = true
 	_board_viewport.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_4X, Viewport.MSAA_8X][_quality]
 	_board_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(_board_viewport)
@@ -184,7 +270,8 @@ func _build_3d_table() -> void:
 	_board_viewport.add_child(world)
 	_stage = STAGE_SCRIPT.new()
 	world.add_child(_stage)
-	_camera = _stage.configure(2.0, Vector3(0, 2.0, 0.88), Vector3(0, 0, 0), true, 43.0)
+	_camera = _stage.configure(2.0, Vector3(0, 1.38, 1.65), Vector3(0, 0, 0), true, 34.0)
+	_stage.get_node("WorldEnvironment").environment.background_mode = Environment.BG_CLEAR_COLOR
 	_stage.get_node("Floor").visible = false
 	_stage.get_node("KeyLight").shadow_enabled = _quality > 0
 	var table := TABLE_SCENE.instantiate()
@@ -198,8 +285,6 @@ func _build_3d_table() -> void:
 	_board_view.texture = _board_viewport.get_texture()
 	_board_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_board_view.stretch_mode = TextureRect.STRETCH_SCALE
-	_board_view.position = Vector2(10, 277)
-	_board_view.size = Vector2(700, 620)
 	_board_view.gui_input.connect(_on_board_input)
 	add_child(_board_view)
 
@@ -216,12 +301,11 @@ func _on_board_input(event: InputEvent) -> void:
 		touch_position = event.position
 	else:
 		return
-	var local: Vector2 = touch_position * Vector2(_board_viewport.size) / _board_view.size
 	var nearest_id := 0
-	var nearest_distance := 52.0
+	var nearest_distance := 36.0
 	for index in range(_hand_models.size()):
-		var projected := _camera.unproject_position(_hand_models[index].global_position)
-		var distance := local.distance_to(projected)
+		var projected := _camera.unproject_position(_hand_models[index].global_position) * _board_view.size / Vector2(_board_viewport.size)
+		var distance := touch_position.distance_to(projected)
 		if distance < nearest_distance:
 			nearest_distance = distance
 			nearest_id = _hand_ids[index]

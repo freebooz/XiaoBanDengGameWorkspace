@@ -23,7 +23,7 @@ func _run() -> void:
 		"players":["我","电脑一","我的搭档","电脑二"], "hand_counts":[27,27,27,27], "hand":hand,
 		"level_rank":2,"team_levels":[2,2],"round":1,"has_last_play":false}
 	screen._render()
-	if screen._hand_nodes.size()!=27 or screen.seat_count!=4 or screen.game_protocol!="guandan":
+	if screen._hand_nodes.size()!=27 or screen.seat_count!=4 or screen.game_protocol!="guandan" or not screen._viewport.own_world_3d:
 		push_error("Incorrect Guandan screen state")
 		quit(2)
 		return
@@ -50,11 +50,20 @@ func _run() -> void:
 		push_error("Duplicate card instances must be selectable independently")
 		quit(5)
 		return
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	touch.index = 0
+	touch.position = screen._camera.unproject_position(screen._hand_nodes[26].global_position) / Vector2(screen._viewport.size) * screen._board_view.size
+	screen._on_board_input(touch)
+	if not screen._selected.has(107):
+		push_error("Second-row touch selection failed")
+		quit(7)
+		return
 	for frame in range(24): await process_frame
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--screen-out="):
 			if root.get_texture().get_image().save_png(arg.trim_prefix("--screen-out=")) != OK:
 				quit(6)
 				return
-	print("GUANDAN_3D_SMOKE_OK hand=27 unique_ids=27 shared_duplicate_mesh_material=true picking=true quality=3")
+	print("GUANDAN_3D_SMOKE_OK hand=27 unique_ids=27 shared_duplicate_mesh_material=true mouse=true touch=true quality=3")
 	quit()

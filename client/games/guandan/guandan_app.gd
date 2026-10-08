@@ -2,7 +2,6 @@ extends Control
 ## 小板凳掼蛋独立产品壳：账号、四人匹配、准备及牌局均复用平台服务端。
 
 const API_SCRIPT = preload("res://modules/foundation/network/api_client.gd")
-const ART := "res://modules/games/guandan/assets/"
 const GAME_SCRIPT := "res://modules/games/guandan/guandan_3d_screen.gd"
 
 var _api
@@ -16,6 +15,8 @@ var _state := "boot"
 var _request_kind := ""
 var _local_ready := false
 var _auto_flow := false
+var _cancel_pending := false
+var _cancel_requested := false
 var _status: Label
 var _ready_button: Button
 var _seat_labels: Array[Label] = []
@@ -186,6 +187,8 @@ func _login() -> void:
 
 
 func _show_lobby() -> void:
+	_cancel_pending = false
+	_cancel_requested = false
 	_reset("lobby", "T_BG_Lobby_JiaxiuTower.png")
 	_header("大厅")
 	_label("欢迎，%s" % str(_account.get("display_name", "棋友")), 55, 290, 610, 70, 28)
@@ -271,12 +274,24 @@ func _cancel() -> void:
 	if _auto_flow:
 		return
 	_timer.stop()
+	_cancel_requested = true
+	_cancel_pending = true
+	if _http.get_http_client_status() != HTTPClient.STATUS_DISCONNECTED:
+		_status.text = "正在取消，请稍候……"
+		return
+	_request_cancel()
+
+func _request_cancel() -> void:
+	_cancel_pending = false
 	_request_kind = "cancel"
 	_post(_api.cancel_match_url(), {"account_id": str(_account.get("account_id", ""))})
 
 
 func _on_poll() -> void:
-	if _state == "matching":
+	if _cancel_requested and (_state == "matching" or _state == "room"):
+		if _http.get_http_client_status() == HTTPClient.STATUS_DISCONNECTED: _request_cancel()
+		else: _timer.start()
+	elif _state == "matching":
 		_request_match()
 	elif _state == "room":
 		if _local_ready:
@@ -313,8 +328,18 @@ func _post(url: String, payload: Dictionary) -> void:
 
 
 func _on_response(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	var parsed = JSON.parse_string(body.get_string_from_utf8())
+	var parsed = null if body.is_empty() else JSON.parse_string(body.get_string_from_utf8())
+	if _cancel_pending:
+		if result == HTTPRequest.RESULT_SUCCESS and typeof(parsed) == TYPE_DICTIONARY and bool(parsed.get("start", false)):
+			_match.merge(parsed, true)
+			_enter_game(true)
+			_cancel_pending = false
+		else: call_deferred("_request_cancel")
+		return
 	if result != HTTPRequest.RESULT_SUCCESS or code < 200 or code >= 300:
+		if _request_kind == "cancel" and typeof(parsed) == TYPE_DICTIONARY and str(parsed.get("error", "")).contains("对局已经开始"):
+			_enter_game(true)
+			return
 		if _status != null:
 			_status.text = "连接失败：%s" % str(parsed.get("error", code) if typeof(parsed) == TYPE_DICTIONARY else code)
 		if _state == "matching" or _state == "room":
@@ -360,7 +385,7 @@ func _on_response(result: int, code: int, _headers: PackedStringArray, body: Pac
 			_show_lobby()
 
 
-func _enter_game() -> void:
+func _enter_game(exit_after_join: bool = false) -> void:
 	_timer.stop()
 	_reset("game", "T_BG_GameTable_GreenFelt.png")
 	var screen_script = load(GAME_SCRIPT)
@@ -368,6 +393,7 @@ func _enter_game() -> void:
 		_status = _label("掼蛋对局模块加载失败", 60, 580, 600, 80, 22)
 		return
 	var game = screen_script.new()
+	game.leave_on_join = exit_after_join or _cancel_requested
 	game.product = _product
 	game.match_context = {"room_id": str(_match.get("room_id", "")), "account_id": str(_account.get("account_id", "")), "seat_index": int(_match.get("seat_index", -1))}
 	game.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

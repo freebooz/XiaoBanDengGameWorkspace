@@ -2,12 +2,19 @@ extends "res://modules/game_framework/card3d/poker_screen.gd"
 ## 掼蛋使用统一扑克工厂，仅负责四人搭档布局和掼蛋操作。
 
 var _leave_requested := false
+var leave_on_join := false
 
 func _init() -> void:
 	game_protocol = "guandan"
 	game_title = "小板凳 · 掼蛋"
 	seat_count = 4
 	quality_file = "user://guandan_visuals.cfg"
+
+func _handle_packet(raw: String) -> void:
+	super._handle_packet(raw)
+	if leave_on_join and not _state.is_empty():
+		leave_on_join = false
+		_request_leave()
 
 func _rank_name(rank: int) -> String:
 	match rank:
@@ -77,9 +84,10 @@ func _render_other_hands() -> void:
 		var count := mini(int(counts[seat]), 9)
 		for index in range(count):
 			var along := (float(index)-float(count-1)/2.0)*0.047
-			var location := Vector3(along, -0.0218, -0.64)
-			if relative == 1: location = Vector3(0.56, -0.0218, along-0.10)
-			elif relative == 3: location = Vector3(-0.56, -0.0218, along-0.10)
+			var stack_y := -0.0218+index*0.0014
+			var location := Vector3(along, stack_y, -0.64)
+			if relative == 1: location = Vector3(0.56, stack_y, along-0.10)
+			elif relative == 3: location = Vector3(-0.56, stack_y, along-0.10)
 			var model := _card_model({}, location, 1.0, true)
 			if relative != 2: model.rotation.y = 0.12 if relative == 1 else -0.12
 
@@ -92,8 +100,8 @@ func _render_last_play() -> void:
 	var cards: Array = last.get("cards", [])
 	for index in range(cards.size()):
 		var along := (float(index)-float(cards.size()-1)/2.0)*minf(0.078,0.85/maxf(1.0,float(cards.size())))
-		_card_model(cards[index], Vector3(along, -0.0215+index*0.00015, -0.09), 1.30)
-	_label(_seat_layer, "上手：" + _pattern_name(str(last.get("pattern", {}).get("kind", ""))), 210, 643, 300, 32, 17, Color("#efcf99"))
+		_card_model(cards[index], Vector3(along, -0.0215+index*0.0018, -0.09), 1.30)
+	_label(_seat_layer, "上手：" + _pattern_name(str(last.get("pattern", {}).get("kind", ""))), 210, 566, 300, 32, 17, Color("#efcf99"))
 
 func _render_my_hand() -> void:
 	var hand := _array("hand")
@@ -105,12 +113,20 @@ func _render_my_hand() -> void:
 		var count := first_row if row == 0 else hand.size()-first_row
 		var card: Dictionary = hand[index]
 		var id := int(card.get("id", -1))
-		var along := (float(column)-float(count-1)/2.0)*0.064
-		var model := _card_model(card, Vector3(along, -0.010 if _selected.has(id) else -0.0215, 0.35+row*0.23), 1.72)
+		var along := (float(column)-float(count-1)/2.0)*0.093
+		var rest_y := 0.020+column*0.0034
+		var model := _card_model(card, Vector3(along, rest_y+0.05 if _selected.has(id) else rest_y, 0.34+row*0.31), 2.45)
+		model.rotation.x = deg_to_rad(12.0)
+		model.set_meta("rest_y", rest_y)
 		model.set_meta("card_id", id)
 		model.set_meta("wild", str(card.get("suit", "")) == "heart" and (2 if int(card.get("rank", 0)) == 15 else int(card.get("rank", 0))) == int(_state.get("level_rank", 2)))
 		_hand_nodes.append(model)
 		_hand_ids.append(id)
+
+func _update_selected() -> void:
+	for index in range(_hand_nodes.size()):
+		_hand_nodes[index].position.y = float(_hand_nodes[index].get_meta("rest_y"))+ (0.05 if _selected.has(_hand_ids[index]) else 0.0)
+	_status.text = "已选 %d 张 · 点击出牌提交" % _selected.size()
 
 func _render_actions() -> void:
 	_button(_action_layer, "返回大厅" if training_mode else "离开", 5, 0, 125, 74, _request_leave)

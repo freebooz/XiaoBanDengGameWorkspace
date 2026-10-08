@@ -357,9 +357,12 @@ func (m *Manager) GuandanPlayersFor(roomID string) ([4]string, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var seats [4]string
-	item,ok:=m.rooms.Get(roomID)
-	if !ok || item.GameID!="guandan" || item.State!="playing" || len(m.playersByRoom[roomID])!=4 || m.readyCountLocked(roomID)!=4 {return seats,false}
-	copy(seats[:],m.playersByRoom[roomID]);return seats,true
+	item, ok := m.rooms.Get(roomID)
+	if !ok || item.GameID != "guandan" || item.State != "playing" || len(m.playersByRoom[roomID]) != 4 || m.readyCountLocked(roomID) != 4 {
+		return seats, false
+	}
+	copy(seats[:], m.playersByRoom[roomID])
+	return seats, true
 }
 
 func containsPlayer(players []string, accountID string) bool {

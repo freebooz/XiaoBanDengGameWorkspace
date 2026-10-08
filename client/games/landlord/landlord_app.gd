@@ -2,7 +2,6 @@ extends Control
 ## 小板凳斗地主独立产品壳：账号、三人匹配、准备及牌局均复用平台服务端。
 
 const API_SCRIPT = preload("res://modules/foundation/network/api_client.gd")
-const ART := "res://modules/games/landlord/assets/"
 const GAME_SCRIPT := "res://modules/games/landlord/landlord_3d_screen.gd"
 
 var _api

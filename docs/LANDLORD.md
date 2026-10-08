@@ -10,11 +10,11 @@
 
 ## 三维资源
 
-- `tools/build_landlord_models.py` 在 Blender 中创建牌桌和实心、圆角、有厚度的 63×88×1.3 毫米扑克牌；牌面、牌背各有独立 UV 面。
-- 可编辑源文件：`artifacts/landlord_models/poker_card.blend`、`poker_table.blend`。
-- Godot 资源：`client/games/landlord/assets/models/poker_card.glb`、`poker_table.glb`。
-- `tools/build_landlord_card_faces.ps1` 生成 54 张牌面和 1 张牌背纹理；客户端将每张牌面纹理贴到独立的三维牌模型。
-- `tools/validate_landlord_models.py` 重新打开 Blender 源文件和 GLB，检查尺寸、UV、对象层级及纹理数量。
+- `tools/build_poker_models.py` 在 Blender 中创建公共牌桌和实心、圆角、有厚度的 63×88×1.3 毫米扑克牌；牌面、牌背各有独立 UV 面。
+- 可编辑源文件：`SourceAssets/Poker/poker_card.blend`、`poker_table.blend`。
+- Godot 资源：`client/game_framework/card3d/assets/models/poker_card.glb`、`poker_table.glb`。斗地主与掼蛋引用同一工厂、网格、牌面和材质，不保存游戏专属模型副本。
+- `tools/build_poker_card_faces.ps1` 生成 54 张牌面和 1 张牌背纹理；客户端将每张牌面纹理贴到独立的三维牌模型。
+- `tools/validate_poker_models.py` 重新打开 Blender 源文件和 GLB，检查尺寸、UV、对象层级及纹理数量。原有 `*_landlord_*` 工具作为兼容入口转调公共工具。
 
 ## 玩法范围
 
@@ -29,5 +29,5 @@
 
 - Go：在 `server/` 运行 `go test ./...`。
 - Godot：生成工程后运行导入及 `res://modules/games/landlord/landlord_screen_smoke.gd`，检查三维模型节点和实际渲染。
-- Blender：`blender -b --factory-startup --python tools/validate_landlord_models.py`；结果写入 `artifacts/landlord_models/validation.json`。
+- Blender：`blender -b --factory-startup --python tools/validate_poker_models.py`；结果写入 `SourceAssets/Poker/validation.json`。
 - Android 包和真实手机、平板设备仍需实际导出与设备验收；当前已验证桌面 Godot 渲染。

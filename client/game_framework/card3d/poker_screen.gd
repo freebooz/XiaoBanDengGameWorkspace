@@ -5,6 +5,8 @@ signal request_return_to_lobby
 
 const API_SCRIPT = preload("res://modules/foundation/network/api_client.gd")
 const STAGE_SCRIPT = preload("res://modules/game_framework/tabletop3d/tabletop_stage.gd")
+const DISPLAY = preload("res://modules/foundation/ui/battle_display.gd")
+const CHROME = preload("res://modules/foundation/ui/battle_chrome.gd")
 const TABLE_SCENE = preload("res://modules/game_framework/card3d/assets/models/poker_table.glb")
 const CARD_SCENE = preload("res://modules/game_framework/card3d/assets/models/poker_card.glb")
 const CARD_ART := "res://modules/game_framework/card3d/assets/cards/"
@@ -12,7 +14,7 @@ var quality_file := "user://landlord_visuals.cfg"
 var game_protocol := "landlord"
 var game_title := "小板凳 · 斗地主"
 var seat_count := 3
-const QUALITY_SIZES := [Vector2i(700, 790), Vector2i(1050, 1185), Vector2i(1400, 1580)]
+const QUALITY_SIZES := [Vector2i(900, 500), Vector2i(1350, 750), Vector2i(1800, 1000)]
 
 var product: Dictionary = {}
 var match_context: Dictionary = {}
@@ -38,17 +40,25 @@ var _action_layer: Control
 var _overlay_layer: Control
 var _status: Label
 var _quality_option: OptionButton
+var _back_button: Button
+var _instruction: Label
+var _table_rect := Rect2(116, 102, 1098, 610)
+var _menu_open := false
 
 
 func _ready() -> void:
+	DISPLAY.enter(self)
 	_load_quality()
 	_build_ui()
+	resized.connect(_layout_ui)
+	call_deferred("_layout_ui")
 	_connect_socket()
 	set_process(true)
 
 
 func _exit_tree() -> void:
 	_socket.close()
+	DISPLAY.leave(self)
 
 
 func _load_quality() -> void:
@@ -62,111 +72,145 @@ func _set_quality(index: int) -> void:
 	_viewport.size = QUALITY_SIZES[_quality]
 	_viewport.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_4X, Viewport.MSAA_8X][_quality]
 	_stage.get_node("KeyLight").shadow_enabled = _quality > 0
+	_stage.get_node("KeyLight").directional_shadow_max_distance = 5.0
+	_stage.get_node("KeyLight").shadow_bias = 0.01
+	_stage.get_node("KeyLight").shadow_normal_bias = 0.1
 	var config := ConfigFile.new()
 	config.set_value("rendering", "quality", _quality)
 	config.save(quality_file)
 
 
 func _style(bg: Color, border: Color, radius: int = 14) -> StyleBoxFlat:
-	var box := StyleBoxFlat.new()
-	box.bg_color = bg
-	box.border_color = border
-	box.set_border_width_all(2)
-	box.set_corner_radius_all(radius)
-	box.shadow_color = Color("#00000088")
-	box.shadow_size = 5
-	return box
+	return CHROME.style(bg, border, radius)
 
 
 func _label(parent: Node, value: String, x: float, y: float, w: float, h: float, size: int = 20, color: Color = Color("#fff0d6")) -> Label:
-	var node := Label.new()
-	node.text = value
-	node.position = Vector2(x, y)
-	node.size = Vector2(w, h)
-	node.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	node.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	node.add_theme_font_size_override("font_size", size)
-	node.add_theme_color_override("font_color", color)
-	parent.add_child(node)
-	return node
+	return CHROME.label(parent, value, Rect2(x, y, w, h), size, color)
 
 
-func _button(parent: Node, value: String, x: float, y: float, w: float, h: float, action: Callable, accent: Color = Color("#d3aa62")) -> Button:
+func _button(parent: Node, value: String, x: float, y: float, w: float, h: float, action: Callable, primary: bool = false, danger: bool = false) -> Button:
 	var node := Button.new()
 	node.text = value
 	node.position = Vector2(x, y)
 	node.size = Vector2(w, h)
-	node.add_theme_font_size_override("font_size", 19)
-	node.add_theme_color_override("font_color", Color("#fff4dc"))
-	node.add_theme_stylebox_override("normal", _style(Color("#132e2e"), accent))
-	node.add_theme_stylebox_override("hover", _style(Color("#1d4945"), Color("#f7d38c")))
+	CHROME.skin_button(node, primary, danger)
 	node.pressed.connect(action)
 	parent.add_child(node)
 	return node
 
 
 func _build_ui() -> void:
-	var background := ColorRect.new()
-	background.color = Color("#090d0e")
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(background)
+	CHROME.backdrop(self, game_title, str(match_context.get("room_id", "")))
 	_build_table()
-	_label(self, game_title, 20, 15, 460, 58, 31)
-	_label(self, "房间 %s" % str(match_context.get("room_id", "")), 490, 20, 205, 47, 17, Color("#d6b06f"))
 	_quality_option = OptionButton.new()
-	_quality_option.position = Vector2(535, 75)
-	_quality_option.size = Vector2(155, 45)
+	_quality_option.size = Vector2(148, 44)
 	for title in ["低画质", "中画质", "高画质"]:
 		_quality_option.add_item(title)
 	_quality_option.select(_quality)
 	_quality_option.item_selected.connect(_set_quality)
+	CHROME.skin_button(_quality_option)
+	_quality_option.add_theme_font_size_override("font_size", 18)
 	add_child(_quality_option)
+	_back_button = _button(self, "返回大厅" if training_mode else "牌桌菜单", 0, 22, 160, 44, _request_leave)
+	_back_button.add_theme_font_size_override("font_size", 18)
 	_seat_layer = Control.new()
 	_seat_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_seat_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_seat_layer)
 	_action_layer = Control.new()
-	_action_layer.position = Vector2(10, 1065)
-	_action_layer.size = Vector2(700, 92)
+	_action_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_action_layer)
-	_status = _label(self, "正在连接对局……", 32, 1168, 656, 67, 19, Color("#f3cf91"))
+	_status = _label(self, "正在连接对局……", 0, 0, 700, 36, 21, Color("#f3cf91"))
+	_instruction = _label(self, "轻触手牌选中 · 再次轻触取消", 0, 0, 700, 25, 15, Color("#9badab"))
 	_overlay_layer = Control.new()
 	_overlay_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_overlay_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_overlay_layer)
-	_label(self, "点击三维手牌可多选 · 出牌由服务端判定", 30, 1235, 660, 35, 15, Color("#aa9271"))
+	_layout_ui()
+
+
+func _canvas_size() -> Vector2:
+	return size if size.x > 0 and size.y > 0 else Vector2(1440, 810)
+
+
+func _layout_ui() -> void:
+	if _board_view == null or _status == null: return
+	var canvas := _canvas_size()
+	var available := Vector2(canvas.x - 342, canvas.y - 184)
+	var width := minf(available.x, available.y * 1.8)
+	var board_size := Vector2(width, width / 1.8)
+	_table_rect = Rect2(Vector2(116 + (available.x - width) * 0.5, 102 + (available.y - board_size.y) * 0.5), board_size)
+	_board_view.position = _table_rect.position
+	_board_view.size = _table_rect.size
+	_quality_option.position = Vector2(canvas.x - 352, 22)
+	_back_button.position = Vector2(canvas.x - 188, 22)
+	_action_layer.position = Vector2(canvas.x - 216, canvas.y - 424)
+	_action_layer.size = Vector2(188, 308)
+	_status.position = Vector2(324, canvas.y - 83)
+	_status.size = Vector2(canvas.x - 582, 36)
+	_instruction.position = Vector2(324, canvas.y - 45)
+	_instruction.size = Vector2(canvas.x - 582, 25)
+	if not _state.is_empty(): _render()
+
+
+func _seat_rect(relative: int) -> Rect2:
+	var canvas := _canvas_size()
+	match relative:
+		0: return Rect2(28, canvas.y - 87, 276, 68)
+		1: return Rect2(canvas.x - 228, 234 + (canvas.y - 810) * 0.3, 200, 88)
+		2:
+			if seat_count == 4: return Rect2(_table_rect.get_center().x - 142, 102, 284, 74)
+	return Rect2(28, 234 + (canvas.y - 810) * 0.3, 200, 88)
+
+
+func _table_point(location: Vector3) -> Vector2:
+	return _table_rect.position + _camera.unproject_position(location) / Vector2(_viewport.size) * _table_rect.size
+
+
+func _action_button(value: String, index: int, total: int, action: Callable, primary: bool = false) -> Button:
+	return _button(_action_layer, value, 0, _action_layer.size.y - total * 72 + index * 72, _action_layer.size.x, 62, action, primary)
+
+
+func _action_heading(value: String) -> void:
+	_label(_action_layer, value, 0, -40, _action_layer.size.x, 32, 19, Color("#deb879"))
 
 
 func _build_table() -> void:
 	_viewport = SubViewport.new()
-	_viewport.name = "Landlord3DViewport"
+	_viewport.name = "Poker3DViewport"
+	_viewport.own_world_3d = true
+	_viewport.transparent_bg = true
 	_viewport.size = QUALITY_SIZES[_quality]
 	_viewport.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_4X, Viewport.MSAA_8X][_quality]
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(_viewport)
 	var world := Node3D.new()
-	world.name = "LandlordWorld"
+	world.name = "PokerWorld"
 	_viewport.add_child(world)
 	_stage = STAGE_SCRIPT.new()
 	world.add_child(_stage)
-	_camera = _stage.configure(2.0, Vector3(0, 2.58, 1.46), Vector3(0, 0, 0.14), true, 42.0)
+	_camera = _stage.configure(2.5, Vector3(0, 2.65, 1.65), Vector3(0, 0, 0.06), true, 47.0)
+	_camera.keep_aspect = Camera3D.KEEP_WIDTH
+	_stage.get_node("WorldEnvironment").environment.background_color = Color("#08141100")
 	_stage.get_node("Floor").visible = false
 	_stage.get_node("KeyLight").shadow_enabled = _quality > 0
+	_stage.get_node("KeyLight").directional_shadow_max_distance = 5.0
+	_stage.get_node("KeyLight").shadow_bias = 0.01
+	_stage.get_node("KeyLight").shadow_normal_bias = 0.1
 	var table := TABLE_SCENE.instantiate()
 	table.name = "ImportedPokerTable"
+	table.rotation.y = PI * 0.5
 	world.add_child(table)
 	_cards_root = Node3D.new()
 	_cards_root.name = "ThreeDimensionalCards"
 	world.add_child(_cards_root)
 	_board_view = TextureRect.new()
-	_board_view.name = "Landlord3DTableView"
+	_board_view.name = "Poker3DTableView"
 	_board_view.texture = _viewport.get_texture()
 	_board_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_board_view.stretch_mode = TextureRect.STRETCH_SCALE
-	_board_view.position = Vector2(10, 210)
-	_board_view.size = Vector2(700, 790)
+	_board_view.position = _table_rect.position
+	_board_view.size = _table_rect.size
 	_board_view.gui_input.connect(_on_board_input)
 	add_child(_board_view)
 
@@ -239,13 +283,15 @@ func _on_board_input(event: InputEvent) -> void:
 		return
 	var viewport_point: Vector2 = touch * Vector2(_viewport.size) / _board_view.size
 	var best := -1
-	var distance := 55.0 * float(_viewport.size.x) / 700.0
-	for index in range(_hand_nodes.size()):
-		var projected := _camera.unproject_position(_hand_nodes[index].global_position)
-		var candidate := viewport_point.distance_to(projected)
-		if candidate < distance:
-			distance = candidate
+	# Test the actual modeled card footprint, with the foremost overlapping card first.
+	for index in range(_hand_nodes.size() - 1, -1, -1):
+		var model := _hand_nodes[index]
+		var footprint := PackedVector2Array()
+		for corner in [Vector3(-0.0315, 0, -0.044), Vector3(0.0315, 0, -0.044), Vector3(0.0315, 0, 0.044), Vector3(-0.0315, 0, 0.044)]:
+			footprint.append(_camera.unproject_position(model.to_global(corner)))
+		if Geometry2D.is_point_in_polygon(viewport_point, footprint):
 			best = index
+			break
 	if best >= 0:
 		var id := _hand_ids[best]
 		if _selected.has(id): _selected.erase(id)
@@ -305,6 +351,8 @@ func _render() -> void:
 		_status.text = "轮到你出牌 · 已选 %d 张 · 倍数 %d" % [_selected.size(), int(_state.get("multiplier", 1))]
 	else:
 		_status.text = "等待牌友出牌 · 倍数 %d" % int(_state.get("multiplier", 1))
+	_instruction.text = "轻触手牌选中 · 再次轻触取消"
+	if _menu_open and phase != "finished": _render_leave_menu()
 	print("LANDLORD_STATE room=%s phase=%s turn=%s seat=%s hand=%d" % [str(_state.get("room_id", "")), phase, str(_state.get("turn", "")), str(_state.get("your_seat", "")), hand.size()])
 
 
@@ -313,17 +361,17 @@ func _render_seats() -> void:
 	var counts := _array("hand_counts")
 	for seat in range(mini(3, players.size())):
 		var relative := _relative_seat(seat)
-		var position: Vector2 = [Vector2(125, 1005), Vector2(465, 127), Vector2(15, 127)][relative]
-		var title := "我" if relative == 0 else "牌友"
-		var role := "地主" if seat == int(_state.get("landlord", -1)) else "农民"
+		var title := ["我", "下家", "上家"][relative]
+		var role := "待叫地主" if int(_state.get("landlord", -1)) < 0 else ("地主" if seat == int(_state.get("landlord", -1)) else "农民")
 		var name := str(players[seat]).right(8)
 		var count := int(counts[seat]) if seat < counts.size() else 0
-		var text_value := "%s · %s · %s · %d张" % [title, name, role, count]
-		var label := _label(_seat_layer, text_value, position.x, position.y, 330 if relative == 0 else 230, 52, 17)
-		if seat == int(_state.get("turn", -1)):
-			label.add_theme_color_override("font_color", Color("#ffd36f"))
+		var active := seat == int(_state.get("turn", -1)) and str(_state.get("status", "")) == "playing" and str(_state.get("phase", "")) != "finished"
+		CHROME.player(_seat_layer, "%s · %s" % [title, name], "%s  ·  %d 张%s" % [role, count, "  ·  行动中" if active else ""], _seat_rect(relative), active, seat)
 	var bid := int(_state.get("highest_bid", 0))
-	_label(_seat_layer, "叫分 %d  ·  倍数 %d" % [bid, int(_state.get("multiplier", 1))], 245, 174, 230, 30, 16, Color("#dfbb79"))
+	var center := _table_rect.get_center().x
+	_label(_seat_layer, "叫分 %d   ·   倍数 ×%d" % [bid, int(_state.get("multiplier", 1))], center - 180, 113, 360, 38, 20, Color("#dfbb79"))
+	var bottom_point := _table_point(Vector3(0, 0, -0.46))
+	_label(_seat_layer, "地主底牌", bottom_point.x - 80, bottom_point.y - 58, 160, 26, 16, Color("#a9b8a7"))
 
 
 func _render_other_hands() -> void:
@@ -333,18 +381,18 @@ func _render_other_hands() -> void:
 		if relative == 0: continue
 		var count := mini(int(counts[seat]), 12)
 		for index in range(count):
-			var along := (float(index) - float(count-1)/2.0) * 0.037
-			var x := -0.56 if relative == 2 else 0.56
-			var card := _card_model({}, Vector3(x, -0.0218, along-0.13), 1.0, true)
-			card.rotation.y = -0.15 if relative == 2 else 0.15
+			var along := (float(index) - float(count-1)/2.0) * 0.030
+			var x := -0.84 if relative == 2 else 0.84
+			var card := _card_model({}, Vector3(x, -0.017 + index * 0.0006, along - 0.16), 1.15, true)
+			card.rotation.y = PI * 0.5 if relative == 2 else -PI * 0.5
 
 
 func _render_bottom() -> void:
 	var bottom := _array("bottom")
 	if bottom.is_empty():
-		for index in range(3): _card_model({}, Vector3((index-1)*0.10, -0.0215, -0.34), 1.2, true)
+		for index in range(3): _card_model({}, Vector3((index-1)*0.125, -0.016, -0.46), 1.65, true)
 	else:
-		for index in range(bottom.size()): _card_model(bottom[index], Vector3((index-1)*0.11, -0.0215, -0.34), 1.2)
+		for index in range(bottom.size()): _card_model(bottom[index], Vector3((index-1)*0.125, -0.016, -0.46), 1.65)
 
 
 func _render_last_play() -> void:
@@ -352,9 +400,14 @@ func _render_last_play() -> void:
 	var last: Dictionary = _state.get("last_play", {})
 	var cards: Array = last.get("cards", [])
 	for index in range(cards.size()):
-		var along := (float(index) - float(cards.size()-1)/2.0) * minf(0.078, 0.85/maxf(1.0,float(cards.size())))
-		_card_model(cards[index], Vector3(along, -0.0215+index*0.0001, -0.04), 1.3)
-	_label(_seat_layer, "上手 %s" % str(last.get("pattern", {}).get("kind", "")), 205, 682, 310, 32, 15, Color("#ead1a7"))
+		var along := (float(index) - float(cards.size()-1)/2.0) * minf(0.094, 1.12/maxf(1.0,float(cards.size()-1)))
+		_card_model(cards[index], Vector3(along, -0.014+index*0.0005, -0.055), 1.65)
+	var point := _table_point(Vector3(0, 0, -0.055))
+	_label(_seat_layer, "上手 · " + _pattern_name(str(last.get("pattern", {}).get("kind", ""))), point.x - 190, point.y - 72, 380, 28, 17, Color("#ead1a7"))
+
+
+func _pattern_name(kind: String) -> String:
+	return {"single":"单张", "pair":"对子", "triple":"三张", "triple_single":"三带一", "triple_pair":"三带二", "straight":"顺子", "pair_straight":"连对", "airplane":"飞机", "airplane_single":"飞机带单", "airplane_pair":"飞机带对", "four_two_single":"四带二", "four_two_pair":"四带两对", "bomb":"炸弹", "rocket":"王炸"}.get(kind, kind)
 
 
 func _render_my_hand() -> void:
@@ -362,33 +415,41 @@ func _render_my_hand() -> void:
 	for index in range(hand.size()):
 		var card: Dictionary = hand[index]
 		var id := int(card.get("id", -1))
-		var along := (float(index)-float(hand.size()-1)/2.0) * minf(0.062,1.08/maxf(1.0,float(hand.size())))
-		var model := _card_model(card, Vector3(along, -0.010 if _selected.has(id) else -0.0215, 0.54), 1.62)
+		var along := (float(index)-float(hand.size()-1)/2.0) * minf(0.117,1.85/maxf(1.0,float(hand.size()-1)))
+		var rest_y := 0.020 + index * 0.0007
+		var model := _card_model(card, Vector3(along, rest_y + (0.075 if _selected.has(id) else 0.0), 0.49), 2.45)
+		model.rotation.x = deg_to_rad(15)
+		model.set_meta("rest_y", rest_y)
+		model.set_meta("card_id", id)
 		_hand_nodes.append(model)
 		_hand_ids.append(id)
 
 
 func _update_selected() -> void:
 	for index in range(_hand_nodes.size()):
-		_hand_nodes[index].position.y = -0.010 if _selected.has(_hand_ids[index]) else -0.0215
+		_hand_nodes[index].position.y = float(_hand_nodes[index].get_meta("rest_y", 0.020)) + (0.075 if _selected.has(_hand_ids[index]) else 0.0)
 	_status.text = "已选 %d 张 · 点击出牌提交" % _selected.size()
 
 
 func _render_actions() -> void:
-	if training_mode:
-		_button(_action_layer, "返回大厅", 10, 0, 145, 74, func(): request_return_to_lobby.emit())
 	if str(_state.get("status", "")) != "playing": return
-	if int(_state.get("turn", -1)) != int(_state.get("your_seat", -2)): return
+	if int(_state.get("turn", -1)) != int(_state.get("your_seat", -2)):
+		_action_heading("等待牌友行动")
+		return
 	if str(_state.get("phase", "")) == "bid":
 		var high := int(_state.get("highest_bid", 0))
-		_button(_action_layer, "不叫", 170, 0, 115, 74, _send_bid.bind(0))
+		var total := 4 - high
+		_action_heading("轮到你叫地主")
+		_action_button("不叫", 0, total, _send_bid.bind(0))
 		for amount in range(high+1, 4):
-			_button(_action_layer, "%d分" % amount, 170+(amount-high)*120, 0, 110, 74, _send_bid.bind(amount))
+			_action_button("叫 %d 分" % amount, amount - high, total, _send_bid.bind(amount), amount == 3)
 	elif str(_state.get("phase", "")) == "play":
-		_button(_action_layer, "重选", 170, 0, 115, 74, _clear_selection)
-		if bool(_state.get("has_last_play", false)):
-			_button(_action_layer, "不出", 305, 0, 115, 74, _send_pass)
-		_button(_action_layer, "出牌", 450, 0, 225, 74, _send_play, Color("#e4bd70"))
+		var may_pass := bool(_state.get("has_last_play", false)) and int(_state.get("last_play", {}).get("seat", -1)) != int(_state.get("your_seat", -2))
+		var total := 3 if may_pass else 2
+		_action_heading("轮到你出牌")
+		_action_button("重选", 0, total, _clear_selection)
+		if may_pass: _action_button("不出", 1, total, _send_pass)
+		_action_button("出牌", total - 1, total, _send_play, true)
 
 
 func _clear_selection() -> void:

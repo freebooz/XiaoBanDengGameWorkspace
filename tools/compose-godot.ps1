@@ -50,7 +50,7 @@ if($Product -eq "guandan"){
 $projectFile = Join-Path $target "project.godot"
 $projectText = Get-Content $projectFile -Raw -Encoding UTF8
 $projectText = $projectText.Replace('config/name="XiaoBanDeng Product"', 'config/name="' + $config.display_name + '"')
-# 客户端默认采用移动端9:16竖屏设计基线（720x1280）；PC调试仍可通过窗口参数覆盖尺寸，界面按宽高比响应式布局。
+# 登录/大厅保留竖屏基线；对局由公共显示模块切换为1440×810横屏，并在返回大厅时恢复。
 [System.IO.File]::WriteAllText($projectFile, $projectText, [System.Text.UTF8Encoding]::new($false))
 
 $exportFile = Join-Path $target "export_presets.cfg"

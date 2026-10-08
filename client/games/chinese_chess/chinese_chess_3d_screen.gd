@@ -1,7 +1,7 @@
 extends Control
 signal request_return_to_lobby
 ## ChineseChess3DScreen（小板凳象棋三维在线对局界面）
-## 参考国风竖屏对弈布局：山水背景、厚木棋盘、立体棋子与双人信息区。
+## 国风横屏对弈布局：上下玩家侧栏、厚木棋盘、立体棋子与独立操作区。
 ## 红黑双方分别从自己的棋盘一侧观察，黑方相机与红方相差180度。
 ## 服务端棋盘坐标始终保持统一，客户端只旋转摄像机，不旋转权威棋局数据。
 
@@ -10,6 +10,8 @@ const TRAINING_RULES_SCRIPT = preload("res://modules/games/chinese_chess/chess_t
 const PBR_FACTORY = preload("res://modules/game_framework/tabletop3d/pbr_material_factory.gd")
 const COUNTDOWN_CLOCK_SCRIPT = preload("res://modules/foundation/ui/turn_countdown_clock.gd")
 const WARNING_SOUND_SCRIPT = preload("res://modules/foundation/audio/turn_warning_sound.gd")
+const DISPLAY = preload("res://modules/foundation/ui/battle_display.gd")
+const CHROME = preload("res://modules/foundation/ui/battle_chrome.gd")
 const LANDSCAPE_TEXTURE_PATH := "res://modules/games/chinese_chess/assets/ink_landscape_background.png"
 const PORTRAIT_TEXTURE_PATH := "res://modules/games/chinese_chess/assets/player_portraits.png"
 const BOARD_SURFACE_TEXTURE_PATH := "res://modules/games/chinese_chess/assets/engraved_chessboard.png"
@@ -78,7 +80,7 @@ var _finished_at_ms: int = 0
 var _room_status := "waiting"
 var _selected := INVALID_POS
 var _move_number := 1
-var _layout_mode := LayoutMode.PHONE_PORTRAIT
+var _layout_mode := LayoutMode.PHONE_LANDSCAPE
 var _last_reported_layout_mode := -1
 
 var _stage
@@ -103,12 +105,12 @@ var _left_player_label: Label
 var _left_timer_label: Label
 var _right_player_label: Label
 var _right_timer_label: Label
-var _background: ColorRect
-var _top_shade: ColorRect
-var _bottom_shade: ColorRect
-var _title_label: Label
-var _subtitle_label: Label
-var _seal_label: Label
+var _chrome: Control
+var _match_info_panel: Panel
+var _action_panel: Panel
+var _action_title: Label
+var _action_hint: Label
+var _status_panel: Panel
 var _left_card: Panel
 var _right_card: Panel
 var _left_avatar: TextureRect
@@ -119,9 +121,9 @@ var _board_frame: Panel
 var _board_view: TextureRect
 var _action_buttons: Array[Button] = []
 var _footer_label: Label
-var _brand_stool: TextureRect
 var _music_quick_button: Button
 var _settings_quick_button: Button
+var _menu_overlay: ColorRect
 var _menu_panel: Panel
 var _menu_label: Label
 var _menu_close: Button
@@ -158,6 +160,7 @@ var _last_countdown_second: int = -999
 
 
 func _ready() -> void:
+	DISPLAY.enter(self)
 	_room_id = str(match_context.get("room_id", DEFAULT_ROOM_ID))
 	_client_id = str(match_context.get("account_id", ""))
 	if _client_id == "":
@@ -188,6 +191,10 @@ func _ready() -> void:
 	else:
 		_connect_socket()
 		set_process(true)
+
+
+func _exit_tree() -> void:
+	DISPLAY.leave(self)
 
 
 func _notification(what: int) -> void:
@@ -620,77 +627,39 @@ func _load_svg_texture(path: String) -> Texture2D:
 
 
 func _build_hud() -> void:
-	# Warm near-black lacquer backdrop keeps the board and golden controls legible.
-	_background = ColorRect.new()
-	_background.color = Color("#0b0d0e")
-	var backdrop_shader := Shader.new()
-	backdrop_shader.code = "shader_type canvas_item; void fragment() { float edge = smoothstep(0.16, 0.85, distance(UV, vec2(0.5, 0.48))); vec3 ink = mix(vec3(0.055, 0.057, 0.055), vec3(0.026, 0.024, 0.022), edge); COLOR = vec4(ink, 1.0); }"
-	var backdrop_material := ShaderMaterial.new()
-	backdrop_material.shader = backdrop_shader
-	_background.material = backdrop_material
-	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(_background)
-	var outer_frame := Panel.new()
-	outer_frame.name = "DuelGoldFrame"
-	outer_frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	outer_frame.add_theme_stylebox_override("panel", _flat_style(Color.TRANSPARENT, Color("#6d5634"), 24, 1))
-	outer_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(outer_frame)
-
-	_top_shade = ColorRect.new()
-	_top_shade.color = Color.TRANSPARENT
-	_top_shade.visible = false
-	_top_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_top_shade)
-	_bottom_shade = ColorRect.new()
-	_bottom_shade.color = Color.TRANSPARENT
-	_bottom_shade.visible = false
-	_bottom_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_bottom_shade)
-
-	_brand_stool = TextureRect.new()
-	_brand_stool.name = "BrandStool"
-	_brand_stool.texture = _load_png_texture(BRAND_STOOL_PATH, Color.TRANSPARENT)
-	_brand_stool.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_brand_stool.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_brand_stool.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_brand_stool)
-	_title_label = _make_label(self, "小板凳", 56, Color("#fff0d1"))
-	var brush_font := SystemFont.new()
-	brush_font.font_names = PackedStringArray(["KaiTi", "STKaiti", "Noto Serif CJK SC"])
-	_title_label.add_theme_font_override("font", brush_font)
-	_subtitle_label = _make_label(self, "以棋会友 · 乐在棋中", 22, Color("#e8c891"))
+	_chrome = CHROME.backdrop(self, "小板凳 · 象棋", "训练" if training_mode else _room_id)
+	_chrome.name = "ChessBattleChrome"
 	_music_quick_button = Button.new()
 	_music_quick_button.name = "MusicQuickButton"
+	_music_quick_button.text = "音乐"
+	_music_quick_button.tooltip_text = "开启或暂停背景音乐"
 	_music_quick_button.pressed.connect(_toggle_bgm)
 	add_child(_music_quick_button)
 	_settings_quick_button = Button.new()
 	_settings_quick_button.name = "SettingsQuickButton"
+	_settings_quick_button.text = "设置"
 	_settings_quick_button.pressed.connect(_on_action_pressed.bind("菜单"))
 	add_child(_settings_quick_button)
 	for quick_button in [_music_quick_button, _settings_quick_button]:
-		quick_button.add_theme_stylebox_override("normal", _flat_style(Color("#151515"), Color("#be965d"), 60, 2, 4))
-		quick_button.add_theme_stylebox_override("hover", _flat_style(Color("#32271d"), Color("#f2c978"), 60, 2, 4))
-		quick_button.add_theme_stylebox_override("pressed", _flat_style(Color("#503123"), Color("#f2c978"), 60, 2))
-		var quick_icon := TextureRect.new()
-		quick_icon.name = "QuickIcon"
-		quick_icon.texture = _load_svg_texture(ACTION_ICON_ROOT + ("icon_music.svg" if quick_button == _music_quick_button else "icon_settings.svg"))
-		quick_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		quick_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		quick_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		quick_button.add_child(quick_icon)
-	_match_duration_label = _make_label(self, "对局时长 00:00", 18, Color("#f5c76e"))
-	_seal_label = _make_label(self, "象\n棋", 22, Color.WHITE)
-	_seal_label.add_theme_stylebox_override("normal", _flat_style(Color("#9e211d"), Color("#d68b63"), 8, 1))
+		CHROME.skin_button(quick_button)
 
 	_left_card = _create_player_card(true)
 	_right_card = _create_player_card(false)
+	_match_info_panel = Panel.new()
+	_match_info_panel.name = "DuelInformation"
+	_match_info_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_match_info_panel.add_theme_stylebox_override("panel", CHROME.style(Color("#102925e8"), Color("#58684a"), 18))
+	add_child(_match_info_panel)
+	_role_label = _make_label(_match_info_panel, "我方：连接中", 18, CHROME.MUTED)
+	_turn_label = _make_label(_match_info_panel, "当前：等待", 18, CHROME.TEXT)
+	_turn_status_label = _make_label(_match_info_panel, "等待双方进入对局", 25, CHROME.GOLD)
+	_round_status_label = _make_label(_match_info_panel, "第 1 步", 18, CHROME.MUTED)
+	_match_duration_label = _make_label(_match_info_panel, "对局时长 00:00", 20, CHROME.TEXT)
 
 	_board_frame = Panel.new()
 	_board_frame.name = "WoodBoardFrame"
 	_board_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_board_frame.add_theme_stylebox_override("panel", _flat_style(Color.TRANSPARENT, Color.TRANSPARENT, 0, 0, 0))
+	_board_frame.add_theme_stylebox_override("panel", CHROME.style(Color("#09171355"), Color("#806b4355"), 18))
 	add_child(_board_frame)
 	_board_view = TextureRect.new()
 	_board_view.name = "InteractiveBoard"
@@ -700,58 +669,67 @@ func _build_hud() -> void:
 	_board_view.mouse_filter = Control.MOUSE_FILTER_STOP
 	_board_view.gui_input.connect(_on_board_gui_input)
 	_board_frame.add_child(_board_view)
-	_match_duration_label.move_to_front()
 
-	_role_label = _make_label(self, "阵营：连接中", 18, GOLD)
-	_turn_label = _make_label(self, "回合：等待", 20, Color("#fff4de"))
-	_turn_status_label = _make_label(self, "等待双方进入对局", 26, Color("#f4cf7a"))
-	_round_status_label = _make_label(self, "第 1 步", 15, Color("#9f9488"))
-	_status_label = _make_label(self, "正在连接本地服务端，棋盘显示开局预览", 17, Color("#fff1d7"))
-	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-
+	_action_panel = Panel.new()
+	_action_panel.name = "ChessActions"
+	_action_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_action_panel.add_theme_stylebox_override("panel", CHROME.style(Color("#0e2422ed"), Color("#71633f"), 18))
+	add_child(_action_panel)
+	_action_title = _make_label(_action_panel, "对局操作", 26, CHROME.GOLD)
+	_action_hint = _make_label(_action_panel, "点击棋子，再选择落点", 17, CHROME.MUTED)
 	for item in [
 		["菜单", "icon_menu.png"], ["悔棋", "icon_undo.png"], ["提示", "icon_hint.png"],
 		["求和", "icon_draw.png"], ["认输", "icon_resign.png"], ["离开", "icon_exit.png"]
 	]:
 		var button := Button.new()
 		button.name = "Action_" + str(item[0])
-		button.add_theme_stylebox_override("normal", _flat_style(Color.TRANSPARENT, Color.TRANSPARENT, 0, 0))
-		button.add_theme_stylebox_override("hover", _flat_style(Color.TRANSPARENT, Color.TRANSPARENT, 0, 0))
-		button.add_theme_stylebox_override("pressed", _flat_style(Color.TRANSPARENT, Color.TRANSPARENT, 0, 0))
-		var disc := Panel.new()
-		disc.name = "IconDisc"
-		disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		disc.add_theme_stylebox_override("panel", _flat_style(Color("#501913") if str(item[0]) == "离开" else Color("#131514"), Color("#c89f63"), 90, 2, 3))
-		button.add_child(disc)
+		button.tooltip_text = str(item[0])
+		CHROME.skin_button(button, str(item[0]) == "菜单", str(item[0]) == "认输" or str(item[0]) == "离开")
 		var icon := TextureRect.new()
 		icon.name = "ActionIcon"
 		icon.texture = _load_svg_texture(ACTION_ICON_ROOT + "icon_exit_gold.svg") if str(item[0]) == "离开" else _load_png_texture(ACTION_ICON_ROOT + str(item[1]), GOLD)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		disc.add_child(icon)
-		var caption := _make_label(button, str(item[0]), 16, GOLD)
+		button.add_child(icon)
+		var caption := _make_label(button, str(item[0]), 22, Color("#221a0e") if str(item[0]) == "菜单" else CHROME.TEXT)
 		caption.name = "ActionCaption"
 		button.pressed.connect(_on_action_pressed.bind(str(item[0])))
-		add_child(button)
+		_action_panel.add_child(button)
 		_action_buttons.append(button)
 
-	_footer_label = _make_label(self, "以棋会友 · 乐在棋中", 16, Color("#7f7468"))
+	_status_panel = Panel.new()
+	_status_panel.name = "MoveInformation"
+	_status_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_status_panel.add_theme_stylebox_override("panel", CHROME.style(Color("#091815"), Color("#394f42"), 12))
+	_action_panel.add_child(_status_panel)
+	_status_label = _make_label(_status_panel, "正在连接对局，棋盘显示开局预览", 19, CHROME.TEXT)
+	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status_label.clip_text = false
+	_footer_label = _make_label(_action_panel, "以棋会友 · 步步从容", 16, CHROME.MUTED)
+
+	_menu_overlay = ColorRect.new()
+	_menu_overlay.name = "MenuShade"
+	_menu_overlay.color = Color("#030c0bb3")
+	_menu_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_menu_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_menu_overlay.visible = false
+	add_child(_menu_overlay)
 	_menu_panel = Panel.new()
-	_menu_panel.add_theme_stylebox_override("panel", _flat_style(Color("#251a15f2"), Color("#dcb67b"), 20, 2, 18))
+	_menu_panel.name = "ChessSettings"
+	_menu_panel.add_theme_stylebox_override("panel", CHROME.style(Color("#102b27fa"), CHROME.GOLD, 22))
 	_menu_panel.visible = false
 	add_child(_menu_panel)
 	_menu_label = _make_label(_menu_panel, "小板凳象棋", 22, Color("#f3d8ab"))
 	_menu_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_menu_label.clip_text = false
 	_bgm_toggle_button = Button.new()
-	_bgm_toggle_button.add_theme_font_size_override("font_size", 16)
-	_bgm_toggle_button.add_theme_stylebox_override("normal", _flat_style(Color("#533023"), Color("#c89558"), 8, 1))
+	CHROME.skin_button(_bgm_toggle_button)
 	_bgm_toggle_button.pressed.connect(_toggle_bgm)
 	_menu_panel.add_child(_bgm_toggle_button)
 
 	_sfx_toggle_button = Button.new()
-	_sfx_toggle_button.add_theme_font_size_override("font_size", 16)
-	_sfx_toggle_button.add_theme_stylebox_override("normal", _flat_style(Color("#533023"), Color("#c89558"), 8, 1))
+	CHROME.skin_button(_sfx_toggle_button)
 	_sfx_toggle_button.pressed.connect(_toggle_sfx)
 	_menu_panel.add_child(_sfx_toggle_button)
 
@@ -764,45 +742,48 @@ func _build_hud() -> void:
 	_quality_option.select(_render_quality)
 	_quality_option.add_theme_font_size_override("font_size", 16)
 	_quality_option.add_theme_color_override("font_color", GOLD)
-	_quality_option.add_theme_stylebox_override("normal", _flat_style(Color("#533023"), Color("#c89558"), 8, 1))
+	_quality_option.add_theme_stylebox_override("normal", CHROME.style(Color("#152b2a"), Color("#706447"), 12))
 	_quality_option.item_selected.connect(_apply_render_quality)
 	_menu_panel.add_child(_quality_option)
 
 	_menu_close = Button.new()
 	_menu_close.text = "返回棋局"
-	_menu_close.add_theme_font_size_override("font_size", 18)
-	_menu_close.add_theme_stylebox_override("normal", _flat_style(Color("#9e542f"), GOLD, 8, 1))
-	_menu_close.pressed.connect(func() -> void: _menu_panel.visible = false)
+	CHROME.skin_button(_menu_close, true)
+	_menu_close.pressed.connect(func() -> void:
+		_menu_panel.visible = false
+		_menu_overlay.visible = false
+	)
 	_menu_panel.add_child(_menu_close)
 
 	_settlement_overlay = ColorRect.new()
-	_settlement_overlay.color = Color("#09050399")
+	_settlement_overlay.color = Color("#030c0bb3")
 	_settlement_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_settlement_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_settlement_overlay.visible = false
 	add_child(_settlement_overlay)
 
 	_settlement_panel = Panel.new()
-	_settlement_panel.add_theme_stylebox_override("panel", _flat_style(Color("#3c1d17f7"), Color("#e3ad63"), 22, 3, 24))
+	_settlement_panel.name = "ChessSettlement"
+	_settlement_panel.add_theme_stylebox_override("panel", CHROME.style(Color("#102b27fa"), CHROME.GOLD, 22))
 	_settlement_panel.visible = false
 	add_child(_settlement_panel)
 	_settlement_title = _make_label(_settlement_panel, "对局结算", 30, Color("#ffe1a5"))
 	_settlement_detail = _make_label(_settlement_panel, "", 18, Color("#fff1da"))
 	_settlement_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_settlement_detail.clip_text = false
 	_settlement_stats = _make_label(_settlement_panel, "", 15, Color("#d9b990"))
 	_settlement_stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_settlement_stats.clip_text = false
 
 	_settlement_review_button = Button.new()
 	_settlement_review_button.text = "查看棋局"
-	_settlement_review_button.add_theme_font_size_override("font_size", 17)
-	_settlement_review_button.add_theme_stylebox_override("normal", _flat_style(Color("#5d3828"), Color("#c89558"), 10, 1))
+	CHROME.skin_button(_settlement_review_button)
 	_settlement_review_button.pressed.connect(_hide_settlement_for_review)
 	_settlement_panel.add_child(_settlement_review_button)
 
 	_settlement_lobby_button = Button.new()
 	_settlement_lobby_button.text = "返回大厅"
-	_settlement_lobby_button.add_theme_font_size_override("font_size", 17)
-	_settlement_lobby_button.add_theme_stylebox_override("normal", _flat_style(Color("#a95c2d"), Color("#f0c16d"), 10, 1))
+	CHROME.skin_button(_settlement_lobby_button, true)
 	_settlement_lobby_button.pressed.connect(_return_to_lobby)
 	_settlement_panel.add_child(_settlement_lobby_button)
 
@@ -907,13 +888,10 @@ func _create_player_card(left_side: bool) -> Panel:
 
 
 func _resolve_layout_mode(w: float, h: float) -> LayoutMode:
-	var landscape := w >= h
-	if not landscape:
-		return LayoutMode.PHONE_PORTRAIT if w < 900.0 else LayoutMode.TABLET_PORTRAIT
 	var ratio := w / maxf(h, 1.0)
 	if h < 680.0:
 		return LayoutMode.PHONE_LANDSCAPE
-	if w < 1300.0 or ratio < 1.48:
+	if ratio < 1.48:
 		return LayoutMode.TABLET_LANDSCAPE
 	if ratio >= 2.0:
 		return LayoutMode.WIDE_DESKTOP
@@ -923,270 +901,192 @@ func _resolve_layout_mode(w: float, h: float) -> LayoutMode:
 func _layout_hud() -> void:
 	if _board_frame == null or size.x < 100.0 or size.y < 100.0:
 		return
-
 	var w := size.x
 	var h := size.y
+	var ui_scale := clampf(minf(w / 1440.0, h / 810.0), 0.55, 1.25)
 	_layout_mode = _resolve_layout_mode(w, h)
 	if _last_reported_layout_mode != int(_layout_mode):
 		_last_reported_layout_mode = int(_layout_mode)
 		print("CHESS_LAYOUT mode=%s size=%dx%d" % [LayoutMode.keys()[_layout_mode], int(w), int(h)])
 
-	var board_w: float
-	var board_h: float
-	var board_x: float
-	var board_y: float
-	var card_w: float
-	var card_h: float
-	var card_y: float
-	var avatar_size: float
-	var scale_factor: float
-	var action_y: float
-	var action_h: float
-	var action_gap: float
-	var action_columns := 6
-	var action_rows := 1
-	var action_area_w: float
-
-	var is_portrait := _layout_mode == LayoutMode.PHONE_PORTRAIT or _layout_mode == LayoutMode.TABLET_PORTRAIT
-	var is_phone_portrait := _layout_mode == LayoutMode.PHONE_PORTRAIT
-	var is_phone_landscape := _layout_mode == LayoutMode.PHONE_LANDSCAPE
-	var is_desktop := _layout_mode == LayoutMode.DESKTOP or _layout_mode == LayoutMode.WIDE_DESKTOP
-
-	if is_portrait:
-		var margin_x := clampf(w * .028, 10.0, 24.0)
-		var header_h := clampf(h * .11, 82.0, 140.0)
-		card_h = clampf(h * .088, 60.0, 108.0)
-		action_h = clampf(h * .10, 74.0, 104.0)
-		card_y = header_h + 8.0
-		board_y = card_y + card_h + 10.0
-		var available_board_h := h - board_y - card_h - action_h - 38.0
-		board_w = minf(w - margin_x * 2.0, available_board_h / 1.09)
-		board_h = board_w * 1.09
-		board_x = (w - board_w) * 0.5
-		card_w = board_w
-		avatar_size = card_h - 10.0
-		scale_factor = clampf(w / 600.0, .78, 1.16)
-		var stool_size := clampf(w * .17, 70.0, 112.0)
-		_brand_stool.position = Vector2(board_x, 5.0)
-		_brand_stool.size = Vector2(stool_size, header_h - 10.0)
-		var title_x := board_x + stool_size + 5.0
-		_title_label.position = Vector2(title_x, header_h * .19)
-		_title_label.size = Vector2(minf(w * .43, 260.0), header_h * .48)
-		_subtitle_label.position = Vector2(title_x, header_h * .62)
-		_subtitle_label.size = Vector2(minf(w * .44, 270.0), header_h * .27)
-		_seal_label.position = Vector2(title_x + _title_label.size.x - 18.0, header_h * .13)
-		_seal_label.size = Vector2(27.0, clampf(header_h * .46, 36.0, 52.0))
-		var quick_size := clampf(w * .09, 40.0, 57.0)
-		_music_quick_button.position = Vector2(w - quick_size * 2.0 - 19.0, header_h * .28)
-		_settings_quick_button.position = Vector2(w - quick_size - 12.0, header_h * .28)
-		_music_quick_button.size = Vector2.ONE * quick_size
-		_settings_quick_button.size = Vector2.ONE * quick_size
-		for quick_button in [_music_quick_button, _settings_quick_button]:
-			quick_button.get_node("QuickIcon").position = Vector2.ONE * (quick_size * .25)
-			quick_button.get_node("QuickIcon").size = Vector2.ONE * (quick_size * .50)
-		var header_shift := h * .039
-		for header_item in [_brand_stool, _title_label, _subtitle_label, _seal_label, _music_quick_button, _settings_quick_button]:
-			header_item.position.y += header_shift
-		_turn_status_label.visible = false
-		_round_status_label.visible = false
-		_match_duration_label.visible = false
-		_role_label.visible = false
-		_turn_label.visible = false
-		_status_label.visible = false
-		_footer_label.visible = false
-		_right_card.position = Vector2(board_x, card_y + h * .055)
-		_left_card.position = Vector2(board_x, board_y + board_h + 10.0)
-		action_columns = 6
-		action_rows = 1
-		action_gap = clampf(w * .008, 3.0, 8.0)
-		action_y = _left_card.position.y + card_h + 10.0
-		action_area_w = board_w
-	else:
-		_turn_status_label.visible = true
-		_round_status_label.visible = true
-		_match_duration_label.visible = true
-		_role_label.visible = true
-		_turn_label.visible = true
-		_status_label.visible = true
-		var board_height_ratio := 0.76 if is_phone_landscape else (0.74 if _layout_mode == LayoutMode.TABLET_LANDSCAPE else 0.72)
-		board_h = minf(h * board_height_ratio, (w * (0.64 if is_phone_landscape else 0.52)) * 1.14)
-		board_w = board_h / 1.14
-		board_x = (w - board_w) * 0.5
-		board_y = maxf(56.0, h * (0.085 if is_phone_landscape else 0.095))
-
-		scale_factor = clampf(h / (720.0 if is_phone_landscape else 900.0), 0.72, 1.12)
-		var side_space := (w - board_w) * 0.5
-		card_w = clampf(side_space - 34.0, 190.0, 360.0)
-		card_h = clampf(h * (0.16 if is_phone_landscape else 0.17), 88.0, 160.0)
-		avatar_size = minf(card_h - 16.0, card_w * 0.31)
-		card_y = board_y + board_h * 0.18
-
-		_title_label.position = Vector2(board_x + board_w * 0.12, 2.0)
-		_brand_stool.position = Vector2(_title_label.position.x - 85.0, 1.0)
-		_brand_stool.size = Vector2(82.0, 75.0)
-		_title_label.size = Vector2(board_w * 0.76, clampf(h * 0.055, 42.0, 64.0))
-		_subtitle_label.position = Vector2(board_x + board_w * 0.18, h * 0.052)
-		_subtitle_label.size = Vector2(board_w * 0.64, clampf(h * 0.032, 26.0, 38.0))
-		_seal_label.position = Vector2(board_x + board_w * 0.84, 7.0)
-		_seal_label.size = Vector2(34.0, 48.0)
-		_music_quick_button.position = Vector2(w - 116.0, 12.0)
-		_settings_quick_button.position = Vector2(w - 60.0, 12.0)
-		_music_quick_button.size = Vector2(46.0, 46.0)
-		_settings_quick_button.size = Vector2(46.0, 46.0)
-		for quick_button in [_music_quick_button, _settings_quick_button]:
-			quick_button.get_node("QuickIcon").position = Vector2(11.0, 11.0)
-			quick_button.get_node("QuickIcon").size = Vector2(24.0, 24.0)
-
-		_turn_status_label.position = Vector2(board_x + board_w * 0.12, board_y - 42.0)
-		_turn_status_label.size = Vector2(board_w * 0.76, 34.0)
-		_round_status_label.position = Vector2(board_x - card_w - 18.0, board_y - 34.0)
-		_round_status_label.size = Vector2(card_w, 28.0)
-		_match_duration_label.position = Vector2(board_x + board_w + 18.0, board_y - 34.0)
-		_match_duration_label.size = Vector2(card_w, 28.0)
-
-		_left_card.position = Vector2(maxf(12.0, board_x - card_w - 20.0), card_y)
-		_right_card.position = Vector2(minf(w - card_w - 12.0, board_x + board_w + 20.0), card_y)
-		_role_label.position = Vector2(_left_card.position.x, card_y + card_h + 12.0)
-		_role_label.size = Vector2(card_w, 32.0)
-		_turn_label.position = Vector2(_right_card.position.x, card_y + card_h + 12.0)
-		_turn_label.size = Vector2(card_w, 32.0)
-
-		action_columns = 6
-		action_rows = 1
-		action_gap = clampf(w * 0.008, 8.0, 18.0)
-		action_h = clampf(h * (0.088 if is_phone_landscape else 0.080), 54.0, 82.0)
-		action_y = minf(h - action_h - 18.0, board_y + board_h + 24.0)
-		action_area_w = minf(w * (0.76 if is_desktop else 0.88), maxf(board_w + 260.0, 660.0))
+	# Header stays clear of the shared title strip; all other content fits actual size.
+	var margin := 28.0 * ui_scale
+	var gutter := 24.0 * ui_scale
+	var content_top := maxf(104.0 * ui_scale, 100.0)
+	var content_h := h - content_top - margin
+	var aspect := float(BOARD_VIEW_SIZE.x) / float(BOARD_VIEW_SIZE.y)
+	var minimum_sidebar := 238.0 * ui_scale
+	var board_w := minf(content_h * aspect, w - 2.0 * (margin + gutter + minimum_sidebar))
+	var board_h := board_w / aspect
+	var board_x := (w - board_w) * 0.5
+	var board_y := content_top + (content_h - board_h) * 0.5
+	var sidebar_w := minf(340.0 * ui_scale, board_x - margin - gutter)
+	var players_x := board_x - gutter - sidebar_w
+	var actions_x := board_x + board_w + gutter
+	var card_h := minf(210.0 * ui_scale, content_h * 0.30)
 
 	_board_frame.position = Vector2(board_x, board_y)
 	_board_frame.size = Vector2(board_w, board_h)
 	_board_view.position = Vector2.ZERO
-	_board_view.size = Vector2(board_w, board_h)
+	_board_view.size = _board_frame.size
+	_right_card.position = Vector2(players_x, content_top)
+	_left_card.position = Vector2(players_x, content_top + content_h - card_h)
+	_left_card.size = Vector2(sidebar_w, card_h)
+	_right_card.size = _left_card.size
+	_layout_player_card(_left_card, _left_avatar, _left_player_label, _left_rank_label, _left_timer_label, 72.0 * ui_scale, ui_scale)
+	_layout_player_card(_right_card, _right_avatar, _right_player_label, _right_rank_label, _right_timer_label, 72.0 * ui_scale, ui_scale)
 
-	_left_card.size = Vector2(card_w, card_h)
-	_right_card.size = Vector2(card_w, card_h)
-	_layout_player_card(_left_card, _left_avatar, _left_player_label, _left_rank_label, _left_timer_label, avatar_size, scale_factor)
-	_layout_player_card(_right_card, _right_avatar, _right_player_label, _right_rank_label, _right_timer_label, avatar_size, scale_factor)
+	_match_info_panel.position = Vector2(players_x, content_top + card_h + gutter)
+	_match_info_panel.size = Vector2(sidebar_w, content_h - 2.0 * card_h - 2.0 * gutter)
+	var info_w := sidebar_w - 32.0 * ui_scale
+	_turn_status_label.position = Vector2(16.0, 14.0) * ui_scale
+	_turn_status_label.size = Vector2(info_w, 40.0 * ui_scale)
+	_turn_label.position = Vector2(16.0, 58.0) * ui_scale
+	_turn_label.size = Vector2(info_w, 30.0 * ui_scale)
+	_round_status_label.position = Vector2(16.0, 94.0) * ui_scale
+	_round_status_label.size = Vector2(info_w, 28.0 * ui_scale)
+	_match_duration_label.position = Vector2(16.0, 126.0) * ui_scale
+	_match_duration_label.size = Vector2(info_w, 32.0 * ui_scale)
+	_role_label.position = Vector2(16.0, 166.0) * ui_scale
+	_role_label.size = Vector2(info_w, 30.0 * ui_scale)
+	_turn_status_label.add_theme_font_size_override("font_size", roundi(maxf(18.0, 25.0 * ui_scale)))
+	_turn_label.add_theme_font_size_override("font_size", roundi(maxf(16.0, 18.0 * ui_scale)))
+	_round_status_label.add_theme_font_size_override("font_size", roundi(maxf(15.0, 18.0 * ui_scale)))
+	_match_duration_label.add_theme_font_size_override("font_size", roundi(maxf(16.0, 20.0 * ui_scale)))
+	_role_label.add_theme_font_size_override("font_size", roundi(maxf(14.0, 17.0 * ui_scale)))
 
-	var action_w := (action_area_w - action_gap * float(action_columns - 1)) / float(action_columns)
-	var action_x := (w - action_area_w) * 0.5
+	_action_panel.position = Vector2(actions_x, content_top)
+	_action_panel.size = Vector2(sidebar_w, content_h)
+	_action_title.position = Vector2(18.0, 18.0) * ui_scale
+	_action_title.size = Vector2(sidebar_w - 36.0 * ui_scale, 34.0 * ui_scale)
+	_action_title.add_theme_font_size_override("font_size", roundi(maxf(19.0, 26.0 * ui_scale)))
+	_action_hint.position = Vector2(18.0, 58.0) * ui_scale
+	_action_hint.size = Vector2(sidebar_w - 36.0 * ui_scale, 38.0 * ui_scale)
+	_action_hint.add_theme_font_size_override("font_size", roundi(maxf(14.0, 17.0 * ui_scale)))
+	var action_gap := 12.0 * ui_scale
+	var action_w := (sidebar_w - 36.0 * ui_scale - action_gap) * 0.5
+	var action_h := 78.0 * ui_scale
 	for i in range(_action_buttons.size()):
-		var row := int(i / action_columns)
-		var column := i % action_columns
-		_action_buttons[i].position = Vector2(
-			action_x + float(column) * (action_w + action_gap),
-			action_y + float(row) * (action_h + 8.0)
-		)
-		_action_buttons[i].size = Vector2(action_w, action_h)
-		var disc: Panel = _action_buttons[i].get_node("IconDisc")
-		var diameter := minf(action_w - 2.0, action_h * .70)
-		disc.position = Vector2((action_w - diameter) * .5, 0.0)
-		disc.size = Vector2(diameter, diameter)
-		var icon: TextureRect = disc.get_node("ActionIcon")
-		icon.position = Vector2.ONE * (diameter * .20)
-		icon.size = Vector2.ONE * (diameter * .60)
-		var caption: Label = _action_buttons[i].get_node("ActionCaption")
-		caption.position = Vector2(0.0, diameter + 2.0)
-		caption.size = Vector2(action_w, action_h - diameter)
-		caption.add_theme_font_size_override("font_size", roundi(clampf(16.0 * scale_factor, 11.0, 20.0)))
+		var button := _action_buttons[i]
+		button.position = Vector2(18.0 * ui_scale + float(i % 2) * (action_w + action_gap), 114.0 * ui_scale + float(i / 2) * (action_h + action_gap))
+		button.size = Vector2(action_w, action_h)
+		var icon: TextureRect = button.get_node("ActionIcon")
+		icon.position = Vector2(12.0 * ui_scale, (action_h - 32.0 * ui_scale) * 0.5)
+		icon.size = Vector2.ONE * 32.0 * ui_scale
+		var caption: Label = button.get_node("ActionCaption")
+		caption.position = Vector2(50.0 * ui_scale, 0.0)
+		caption.size = Vector2(action_w - 58.0 * ui_scale, action_h)
+		caption.add_theme_font_size_override("font_size", roundi(maxf(16.0, 22.0 * ui_scale)))
 
-	var status_y := action_y + float(action_rows) * action_h + float(maxi(0, action_rows - 1)) * 8.0 + 6.0
-	_status_label.position = Vector2(maxf(12.0, (w - minf(action_area_w, board_w + 120.0)) * 0.5), status_y)
-	_status_label.size = Vector2(minf(action_area_w, board_w + 120.0), 34.0)
-	_footer_label.visible = not is_portrait and h - status_y > 48.0
-	_footer_label.position = Vector2(0, h - 30.0)
-	_footer_label.size = Vector2(w, 24.0)
+	_status_panel.position = Vector2(18.0, 398.0) * ui_scale
+	_status_panel.size = Vector2(sidebar_w - 36.0 * ui_scale, content_h - 468.0 * ui_scale)
+	_status_label.position = Vector2.ONE * 16.0 * ui_scale
+	_status_label.size = _status_panel.size - Vector2.ONE * 32.0 * ui_scale
+	_status_label.add_theme_font_size_override("font_size", roundi(maxf(16.0, 19.0 * ui_scale)))
+	_footer_label.position = Vector2(18.0 * ui_scale, content_h - 50.0 * ui_scale)
+	_footer_label.size = Vector2(sidebar_w - 36.0 * ui_scale, 30.0 * ui_scale)
+	_footer_label.add_theme_font_size_override("font_size", roundi(maxf(13.0, 16.0 * ui_scale)))
 
-	_title_label.add_theme_font_size_override("font_size", roundi(clampf(56.0 * scale_factor, 31.0, 62.0)))
-	_subtitle_label.add_theme_font_size_override("font_size", roundi(clampf(18.0 * scale_factor, 12.0, 24.0)))
-	_match_duration_label.add_theme_font_size_override("font_size", roundi(clampf(15.0 * scale_factor, 11.0, 18.0)))
-	_seal_label.add_theme_font_size_override("font_size", roundi(clampf(20.0 * scale_factor, 14.0, 24.0)))
-	_turn_status_label.add_theme_font_size_override("font_size", roundi(clampf(24.0 * scale_factor, 17.0, 30.0)))
-	_round_status_label.add_theme_font_size_override("font_size", roundi(clampf(14.0 * scale_factor, 11.0, 17.0)))
-	_role_label.add_theme_font_size_override("font_size", roundi(clampf(16.0 * scale_factor, 11.0, 18.0)))
-	_turn_label.add_theme_font_size_override("font_size", roundi(clampf(18.0 * scale_factor, 12.0, 21.0)))
+	var quick_w := 90.0 * ui_scale
+	var quick_h := maxf(44.0, 48.0 * ui_scale)
+	_music_quick_button.position = Vector2(w - margin - quick_w * 2.0 - 12.0 * ui_scale, 22.0)
+	_settings_quick_button.position = Vector2(w - margin - quick_w, 22.0)
+	for quick_button in [_music_quick_button, _settings_quick_button]:
+		quick_button.size = Vector2(quick_w, quick_h)
+		quick_button.add_theme_font_size_override("font_size", roundi(maxf(16.0, 20.0 * ui_scale)))
 
 	if _countdown_clock != null:
-		var clock_size := clampf(minf(board_w, board_h) * 0.31, 160.0, 240.0)
-		_countdown_clock.size = Vector2(clock_size, clock_size)
-		_countdown_clock.position = Vector2(
-			board_x + board_w * 0.5 - clock_size * 0.5,
-			board_y + board_h * 0.5 - clock_size * 0.5
-		)
-
+		var clock_scale := minf(ui_scale, board_w * 0.46 / 230.0)
+		_countdown_clock.size = Vector2(230.0, 230.0)
+		_countdown_clock.scale = Vector2.ONE * clock_scale
+		_countdown_clock.position = Vector2(board_x + board_w * 0.5, board_y + board_h * 0.5) - Vector2.ONE * 115.0 * clock_scale
 	_layout_modal_panels(w, h)
 
 
 func _layout_modal_panels(w: float, h: float) -> void:
-	_menu_panel.size = Vector2(minf(440.0, w * 0.84), minf(380.0, h - 24.0))
+	var ui_scale := clampf(minf(w / 1440.0, h / 810.0), 0.55, 1.25)
+	var pad := 24.0 * ui_scale
+	var row_h := maxf(44.0, 52.0 * ui_scale)
+	var gap := 12.0 * ui_scale
+	_menu_panel.size = Vector2(minf(560.0 * ui_scale, w - pad * 2.0), minf(500.0 * ui_scale, h - pad * 2.0))
 	_menu_panel.position = (size - _menu_panel.size) * 0.5
-	_menu_label.position = Vector2(20.0, 18.0)
-	var header_h := clampf(_menu_panel.size.y * .245, 50.0, 94.0)
-	var row_h := clampf((_menu_panel.size.y - 36.0 - header_h - 32.0 - 48.0) / 3.0, 26.0, 44.0)
-	var first_row_y := 18.0 + header_h + 8.0
-	_menu_label.size = Vector2(_menu_panel.size.x - 40.0, header_h)
-	_bgm_toggle_button.position = Vector2(28.0, first_row_y)
-	_bgm_toggle_button.size = Vector2(_menu_panel.size.x - 56.0, row_h)
-	_sfx_toggle_button.position = Vector2(28.0, first_row_y + row_h + 8.0)
-	_sfx_toggle_button.size = Vector2(_menu_panel.size.x - 56.0, row_h)
-	_quality_label.position = Vector2(28.0, first_row_y + (row_h + 8.0) * 2.0)
-	_quality_label.size = Vector2(86.0, row_h)
-	_quality_option.position = Vector2(126.0, _quality_label.position.y)
-	_quality_option.size = Vector2(_menu_panel.size.x - 154.0, row_h)
-	_menu_close.position = Vector2((_menu_panel.size.x - 150.0) * 0.5, _menu_panel.size.y - 66.0)
-	_menu_close.size = Vector2(150.0, 48.0)
+	_menu_label.position = Vector2(20.0, 20.0) * ui_scale
+	_menu_label.size = Vector2(_menu_panel.size.x - 40.0 * ui_scale, 108.0 * ui_scale)
+	_menu_label.add_theme_font_size_override("font_size", roundi(maxf(18.0, 23.0 * ui_scale)))
+	var first_row := 148.0 * ui_scale
+	_bgm_toggle_button.position = Vector2(pad, first_row)
+	_bgm_toggle_button.size = Vector2(_menu_panel.size.x - pad * 2.0, row_h)
+	_sfx_toggle_button.position = Vector2(pad, first_row + row_h + gap)
+	_sfx_toggle_button.size = _bgm_toggle_button.size
+	_quality_label.position = Vector2(pad, first_row + (row_h + gap) * 2.0)
+	_quality_label.size = Vector2(90.0 * ui_scale, row_h)
+	_quality_option.position = Vector2(pad + 104.0 * ui_scale, _quality_label.position.y)
+	_quality_option.size = Vector2(_menu_panel.size.x - pad * 2.0 - 104.0 * ui_scale, row_h)
+	_menu_close.position = Vector2(pad, _menu_panel.size.y - pad - row_h)
+	_menu_close.size = _bgm_toggle_button.size
+	for button in [_bgm_toggle_button, _sfx_toggle_button, _menu_close, _quality_option]:
+		button.add_theme_font_size_override("font_size", roundi(maxf(16.0, 20.0 * ui_scale)))
 
 	if _settlement_panel != null:
-		var settlement_w := minf(540.0, w * 0.88)
-		var settlement_h := minf(430.0, h * 0.58)
-		_settlement_panel.size = Vector2(settlement_w, settlement_h)
+		_settlement_panel.size = Vector2(minf(600.0 * ui_scale, w - pad * 2.0), minf(470.0 * ui_scale, h - pad * 2.0))
 		_settlement_panel.position = (size - _settlement_panel.size) * 0.5
-		_settlement_title.position = Vector2(22.0, 24.0)
-		_settlement_title.size = Vector2(settlement_w - 44.0, 54.0)
-		_settlement_detail.position = Vector2(32.0, 86.0)
-		_settlement_detail.size = Vector2(settlement_w - 64.0, 94.0)
-		_settlement_stats.position = Vector2(32.0, 184.0)
-		_settlement_stats.size = Vector2(settlement_w - 64.0, 110.0)
-		var settlement_button_w := (settlement_w - 78.0) * 0.5
-		_settlement_review_button.position = Vector2(28.0, settlement_h - 78.0)
-		_settlement_review_button.size = Vector2(settlement_button_w, 50.0)
-		_settlement_lobby_button.position = Vector2(50.0 + settlement_button_w, settlement_h - 78.0)
-		_settlement_lobby_button.size = Vector2(settlement_button_w, 50.0)
+		var settlement_w := _settlement_panel.size.x
+		var settlement_h := _settlement_panel.size.y
+		_settlement_title.position = Vector2(24.0, 26.0) * ui_scale
+		_settlement_title.size = Vector2(settlement_w - pad * 2.0, 56.0 * ui_scale)
+		_settlement_detail.position = Vector2(28.0, 100.0) * ui_scale
+		_settlement_detail.size = Vector2(settlement_w - 56.0 * ui_scale, 80.0 * ui_scale)
+		_settlement_stats.position = Vector2(28.0, 192.0) * ui_scale
+		_settlement_stats.size = Vector2(settlement_w - 56.0 * ui_scale, 118.0 * ui_scale)
+		_settlement_title.add_theme_font_size_override("font_size", roundi(maxf(24.0, 32.0 * ui_scale)))
+		_settlement_detail.add_theme_font_size_override("font_size", roundi(maxf(16.0, 20.0 * ui_scale)))
+		_settlement_stats.add_theme_font_size_override("font_size", roundi(maxf(15.0, 18.0 * ui_scale)))
+		var button_w := (settlement_w - pad * 2.0 - gap) * 0.5
+		_settlement_review_button.position = Vector2(pad, settlement_h - pad - row_h)
+		_settlement_review_button.size = Vector2(button_w, row_h)
+		_settlement_lobby_button.position = Vector2(pad + button_w + gap, _settlement_review_button.position.y)
+		_settlement_lobby_button.size = _settlement_review_button.size
+		for button in [_settlement_review_button, _settlement_lobby_button]:
+			button.add_theme_font_size_override("font_size", roundi(maxf(16.0, 20.0 * ui_scale)))
 
 
 func _layout_player_card(card: Panel, avatar: TextureRect, name_label: Label, rank_label: Label, timer_label: Label, avatar_size: float, scale_factor: float) -> void:
+	var pad := 18.0 * scale_factor
 	var frame: Panel = card.get_node("AvatarFrame")
-	frame.position = Vector2(5.0, (card.size.y - avatar_size) * 0.5)
-	frame.size = Vector2(avatar_size, avatar_size)
-	avatar.position = Vector2(3.0, 3.0)
-	avatar.size = frame.size - Vector2(6.0, 6.0)
-	var badge: Panel = card.get_node("SideBadge")
-	var badge_text: Label = badge.get_node("SideBadgeText")
-	var timer_frame: Panel = card.get_node("TimerFrame")
-	var watch: Label = timer_frame.get_node("TimerIcon")
-	var timer_w := clampf(card.size.x * .23, 84.0, 126.0)
-	timer_frame.position = Vector2(card.size.x - timer_w - 8.0, (card.size.y - 36.0) * .5)
-	timer_frame.size = Vector2(timer_w, 36.0)
-	watch.position = Vector2(4.0, 0.0)
-	watch.size = Vector2(26.0, 36.0)
-	timer_label.position = Vector2(26.0, 0.0)
-	timer_label.size = Vector2(timer_w - 29.0, 36.0)
-	var text_x := avatar_size + 15.0
-	var text_w := card.size.x - text_x - timer_w - 12.0
-	name_label.position = Vector2(text_x, maxf(3.0, card.size.y * .10))
-	name_label.size = Vector2(text_w, card.size.y * .39)
+	frame.position = Vector2(pad, 40.0 * scale_factor)
+	frame.size = Vector2.ONE * avatar_size
+	avatar.position = Vector2.ONE * 3.0 * scale_factor
+	avatar.size = frame.size - Vector2.ONE * 6.0 * scale_factor
+	var text_x := pad + avatar_size + 14.0 * scale_factor
+	var text_w := maxf(48.0, card.size.x - text_x - pad)
+	name_label.position = Vector2(text_x, 38.0 * scale_factor)
+	name_label.size = Vector2(text_w, 34.0 * scale_factor)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	badge.position = Vector2(text_x, card.size.y * .56)
-	badge.size = Vector2(40.0, 25.0)
+	rank_label.position = Vector2(text_x, 77.0 * scale_factor)
+	rank_label.size = Vector2(text_w, 28.0 * scale_factor)
+	rank_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	var seat_label: Label = card.get_node("SeatLabel")
+	seat_label.position = Vector2(pad, 11.0 * scale_factor)
+	seat_label.size = Vector2(card.size.x * 0.5, 22.0 * scale_factor)
+	seat_label.add_theme_font_size_override("font_size", roundi(maxf(13.0, 15.0 * scale_factor)))
+	var badge: Panel = card.get_node("SideBadge")
+	badge.position = Vector2(card.size.x - pad - 56.0 * scale_factor, 11.0 * scale_factor)
+	badge.size = Vector2(56.0, 24.0) * scale_factor
+	var badge_text: Label = badge.get_node("SideBadgeText")
 	badge_text.position = Vector2.ZERO
 	badge_text.size = badge.size
-	rank_label.position = Vector2(text_x + 47.0, card.size.y * .53)
-	rank_label.size = Vector2(maxf(20.0, text_w - 47.0), 29.0)
-	rank_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	name_label.add_theme_font_size_override("font_size", roundi(clampf(22.0 * scale_factor, 13.0, 24.0)))
-	rank_label.add_theme_font_size_override("font_size", roundi(clampf(15.0 * scale_factor, 10.0, 17.0)))
-	timer_label.add_theme_font_size_override("font_size", roundi(clampf(25.0 * scale_factor, 15.0, 27.0)))
-
+	badge_text.add_theme_font_size_override("font_size", roundi(maxf(12.0, 14.0 * scale_factor)))
+	var timer_frame: Panel = card.get_node("TimerFrame")
+	timer_frame.position = Vector2(pad, card.size.y - 62.0 * scale_factor)
+	timer_frame.size = Vector2(card.size.x - pad * 2.0, 44.0 * scale_factor)
+	var watch: Label = timer_frame.get_node("TimerIcon")
+	watch.position = Vector2(10.0 * scale_factor, 0.0)
+	watch.size = Vector2(30.0 * scale_factor, timer_frame.size.y)
+	timer_label.position = Vector2(42.0 * scale_factor, 0.0)
+	timer_label.size = Vector2(timer_frame.size.x - 52.0 * scale_factor, timer_frame.size.y)
+	name_label.add_theme_font_size_override("font_size", roundi(maxf(18.0, 24.0 * scale_factor)))
+	rank_label.add_theme_font_size_override("font_size", roundi(maxf(13.0, 16.0 * scale_factor)))
+	timer_label.add_theme_font_size_override("font_size", roundi(maxf(18.0, 25.0 * scale_factor)))
 
 func _on_action_pressed(action: String) -> void:
 	if action == "菜单":
