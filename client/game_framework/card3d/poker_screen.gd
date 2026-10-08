@@ -361,12 +361,14 @@ func _render_seats() -> void:
 	var counts := _array("hand_counts")
 	for seat in range(mini(3, players.size())):
 		var relative := _relative_seat(seat)
-		var title := ["我", "下家", "上家"][relative]
+		var title: String = ["我", "下家", "上家"][relative]
 		var role := "待叫地主" if int(_state.get("landlord", -1)) < 0 else ("地主" if seat == int(_state.get("landlord", -1)) else "农民")
 		var name := str(players[seat]).right(8)
 		var count := int(counts[seat]) if seat < counts.size() else 0
 		var active := seat == int(_state.get("turn", -1)) and str(_state.get("status", "")) == "playing" and str(_state.get("phase", "")) != "finished"
-		CHROME.player(_seat_layer, "%s · %s" % [title, name], "%s  ·  %d 张%s" % [role, count, "  ·  行动中" if active else ""], _seat_rect(relative), active, seat)
+		var player_title := "%s · %s" % [title, name] if relative == 0 else "%s%s" % [title, role if role != "待叫地主" else ""]
+		var detail := "%s  ·  %d 张%s" % [role, count, "  ·  行动中" if active else ""] if relative == 0 else "%s\n%d 张" % [name, count]
+		CHROME.player(_seat_layer, player_title, detail, _seat_rect(relative), active, seat)
 	var bid := int(_state.get("highest_bid", 0))
 	var center := _table_rect.get_center().x
 	_label(_seat_layer, "叫分 %d   ·   倍数 ×%d" % [bid, int(_state.get("multiplier", 1))], center - 180, 113, 360, 38, 20, Color("#dfbb79"))
@@ -475,16 +477,67 @@ func _send_play() -> void:
 
 
 func _render_settlement() -> void:
-	var panel := Panel.new()
-	panel.position = Vector2(90, 345)
-	panel.size = Vector2(540, 400)
-	panel.add_theme_stylebox_override("panel", _style(Color("#102825f4"), Color("#e3b663"), 24))
-	_overlay_layer.add_child(panel)
+	_menu_open = false
+	var panel := _modal_panel(Vector2(744, 434))
 	var winner := int(_state.get("winner", -1))
 	var landlord := int(_state.get("landlord", -1))
-	_label(panel, "本局结算", 20, 25, 500, 65, 34)
-	_label(panel, "地主胜利" if winner == landlord else "农民胜利", 30, 103, 480, 60, 26, Color("#f8d488"))
+	_label(panel, "本局结算", 24, 22, 696, 52, 32)
+	_label(panel, "地主胜利" if winner == landlord else "农民胜利", 24, 84, 696, 46, 29, Color("#f8d488"))
+	_label(panel, "本局倍数 ×%d" % int(_state.get("multiplier", 1)), 24, 136, 696, 28, 18, Color("#9badab"))
 	var scores := _array("scores")
+	var players := _array("players")
 	for seat in range(mini(3, scores.size())):
-		_label(panel, "%d 号位    %+d 分" % [seat+1, int(scores[seat])], 40, 173+seat*43, 460, 40, 21)
-	_button(panel, "返回大厅", 150, 326, 240, 55, func(): request_return_to_lobby.emit())
+		var x := 32 + seat * 232
+		var name := "我" if seat == int(_state.get("your_seat", -1)) else (str(players[seat]).right(8) if seat < players.size() else "%d 号位" % (seat + 1))
+		var role := "地主" if seat == landlord else "农民"
+		var tile := Panel.new()
+		tile.position = Vector2(x, 184)
+		tile.size = Vector2(216, 118)
+		tile.add_theme_stylebox_override("panel", _style(Color("#19362f"), Color("#496254")))
+		panel.add_child(tile)
+		_label(tile, "%s · %s" % [name, role], 8, 10, 200, 38, 19)
+		_label(tile, "%+d 分" % int(scores[seat]), 8, 58, 200, 45, 30, Color("#f8d488") if int(scores[seat]) >= 0 else Color("#9badab"))
+	_button(panel, "返回大厅", 232, 342, 280, 64, _return_now, true)
+
+
+func _modal_panel(panel_size: Vector2) -> Panel:
+	var shade := ColorRect.new()
+	shade.name = "BattleModalShade"
+	shade.color = Color("#020a0bc4")
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	_overlay_layer.add_child(shade)
+	var panel := Panel.new()
+	panel.position = (_canvas_size() - panel_size) * 0.5
+	panel.size = panel_size
+	panel.add_theme_stylebox_override("panel", _style(Color("#102825fc"), Color("#e3b663"), 24))
+	_overlay_layer.add_child(panel)
+	return panel
+
+
+func _request_leave() -> void:
+	if training_mode or str(_state.get("phase", "")) == "finished":
+		_return_now()
+		return
+	_menu_open = true
+	_clear(_overlay_layer)
+	_render_leave_menu()
+
+
+func _render_leave_menu() -> void:
+	var panel := _modal_panel(Vector2(584, 276))
+	_label(panel, "暂离牌桌", 24, 26, 536, 54, 30)
+	_label(panel, "返回大厅后，本局将继续托管", 24, 93, 536, 46, 22, Color("#c8cbb6"))
+	_button(panel, "继续对局", 32, 178, 240, 64, _close_leave_menu)
+	_button(panel, "返回大厅", 312, 178, 240, 64, _return_now, true)
+
+
+func _close_leave_menu() -> void:
+	_menu_open = false
+	_clear(_overlay_layer)
+
+
+func _return_now() -> void:
+	set_process(false)
+	_socket.close()
+	request_return_to_lobby.emit()

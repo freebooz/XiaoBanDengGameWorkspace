@@ -135,7 +135,10 @@ func TestLandlordTrainingUsesSameRules(t *testing.T) {
 	if err := conn.ReadJSON(&state); err != nil {
 		t.Fatal(err)
 	}
-	if state["phase"] != "play" || int(state["landlord"].(float64)) != 0 || len(state["hand"].([]any)) != 20 {
+	if state["phase"] != "double" || int(state["landlord"].(float64)) != 0 || len(state["hand"].([]any)) != 20 {
 		t.Fatalf("training bots did not finish bid %+v", state)
 	}
+	if err := conn.WriteJSON(map[string]any{"type": "landlord_action", "action": "double", "enabled": false}); err != nil { t.Fatal(err) }
+	if err := conn.ReadJSON(&state); err != nil { t.Fatal(err) }
+	if state["phase"] != "play" || int(state["turn"].(float64)) != 0 { t.Fatalf("training doubling did not begin play %+v", state) }
 }

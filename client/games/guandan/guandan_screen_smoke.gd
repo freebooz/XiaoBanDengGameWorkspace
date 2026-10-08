@@ -15,6 +15,8 @@ func _run() -> void:
 	root.add_child(screen)
 	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	screen.set_process(false)
+	await process_frame
+	screen._layout_ui()
 	var hand: Array = []
 	for id in [0,54,1,55,6,8,12,16,20,24,28,32,36,40,44,48,49,50,51,52,53,102,103,104,105,106,107]:
 		var face: int = id % 54
@@ -40,6 +42,10 @@ func _run() -> void:
 			return
 	screen._set_quality(1)
 	await process_frame
+	if screen._board_view.size.x <= screen._board_view.size.y or absf(screen._board_view.size.x / screen._board_view.size.y - float(screen._viewport.size.x) / screen._viewport.size.y) > 0.001:
+		push_error("Guandan table must retain its landscape render aspect")
+		quit(8)
+		return
 	var point: Vector2 = screen._camera.unproject_position(screen._hand_nodes[0].global_position)
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT
@@ -59,11 +65,17 @@ func _run() -> void:
 		push_error("Second-row touch selection failed")
 		quit(7)
 		return
+	screen._clear_selection()
+	for action in screen._action_layer.get_children():
+		if action is Button and not Rect2(Vector2.ZERO, screen.size).encloses(action.get_global_rect()):
+			push_error("Guandan action extends outside the landscape screen")
+			quit(9)
+			return
 	for frame in range(24): await process_frame
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--screen-out="):
 			if root.get_texture().get_image().save_png(arg.trim_prefix("--screen-out=")) != OK:
 				quit(6)
 				return
-	print("GUANDAN_3D_SMOKE_OK hand=27 unique_ids=27 shared_duplicate_mesh_material=true mouse=true touch=true quality=3")
+	print("GUANDAN_3D_SMOKE_OK hand=27 unique_ids=27 shared_duplicate_mesh_material=true mouse=true touch=true quality=3 landscape=true aspect=true actions_visible=true")
 	quit()

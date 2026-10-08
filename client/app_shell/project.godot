@@ -20,5 +20,8 @@ renderer/rendering_method="mobile"
 renderer/rendering_method.mobile="mobile"
 textures/default_filters/use_nearest_mipmap_filter=false
 
+[audio]
+driver/enable_input=true
+
 [network]
 limits/debugger/max_queued_messages=2048

@@ -50,6 +50,16 @@ static func label(parent: Node, value: String, rect: Rect2, font_size: int = 20,
 	parent.add_child(node)
 	return node
 
+static func portrait_material(portrait_index: int) -> ShaderMaterial:
+	# AtlasTexture forwards atlas UVs to canvas shaders; normalize the half atlas
+	# before applying a circular mask, otherwise each portrait becomes a semicircle.
+	var shader := Shader.new()
+	shader.code = "shader_type canvas_item; uniform float portrait_origin = 0.0; void fragment(){vec4 c=texture(TEXTURE,UV);vec2 local_uv=vec2((UV.x-portrait_origin)*2.0,UV.y);float d=distance(local_uv,vec2(.5));float rim=smoothstep(.445,.46,d);c.rgb=mix(c.rgb,vec3(.87,.71,.46),rim);c.a*=1.0-smoothstep(.48,.5,d);COLOR=c;}"
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("portrait_origin",0.5*float(portrait_index%2))
+	return material
+
 static func player(parent: Node, title: String, detail: String, rect: Rect2, active: bool = false, portrait_index: int = 0) -> Panel:
 	var panel := Panel.new()
 	panel.position = rect.position
@@ -58,6 +68,9 @@ static func player(parent: Node, title: String, detail: String, rect: Rect2, act
 	panel.add_theme_stylebox_override("panel",style(Color("#14352fe8") if active else Color("#101e21ed"),GOLD if active else Color("#415852"),16))
 	parent.add_child(panel)
 	var avatar := TextureRect.new()
+	avatar.name = "PlayerAvatar"
+	avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	var atlas := AtlasTexture.new()
 	atlas.atlas = load(ASSETS+"portraits.png")
 	var half := float(atlas.atlas.get_width())/2.0
@@ -66,14 +79,8 @@ static func player(parent: Node, title: String, detail: String, rect: Rect2, act
 	var diameter := minf(64,rect.size.y-18)
 	avatar.position = Vector2(12,(rect.size.y-diameter)/2)
 	avatar.size = Vector2.ONE*diameter
-	avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var round_shader := Shader.new()
-	round_shader.code = "shader_type canvas_item; void fragment(){vec4 c=texture(TEXTURE,UV);float d=distance(UV,vec2(.5));float rim=smoothstep(.445,.46,d);c.rgb=mix(c.rgb,vec3(.87,.71,.46),rim);c.a*=1.0-smoothstep(.48,.5,d);COLOR=c;}"
-	var mat := ShaderMaterial.new()
-	mat.shader = round_shader
-	avatar.material = mat
+	avatar.material = portrait_material(portrait_index)
 	panel.add_child(avatar)
 	var x := diameter+24
 	var name_label := label(panel,title,Rect2(x,10,rect.size.x-x-10,30),20,TEXT)
@@ -103,16 +110,17 @@ func _ready() -> void:
 	add_child(base)
 	base.show_behind_parent = true
 	var brand := TextureRect.new()
+	brand.name = "BrandStool"
+	brand.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	brand.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	brand.texture = load(ASSETS+"stool.png")
 	brand.position = Vector2(27,15)
 	brand.size = Vector2(58,58)
-	brand.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	brand.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	brand.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(brand)
 	_title = label(self,game_title,Rect2(96,12,430,38),29,TEXT)
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_subtitle = label(self,"以牌会友 · 乐在其中",Rect2(98,49,350,24),14,MUTED)
+	_subtitle = label(self,"以棋会友 · 乐在其中" if game_title.contains("象棋") else "以牌会友 · 乐在其中",Rect2(98,49,350,24),14,MUTED)
 	_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_room = label(self,"练习桌" if room_id=="训练" else "房间 "+room_id,Rect2(590,20,240,38),21,GOLD)
 	resized.connect(_layout)

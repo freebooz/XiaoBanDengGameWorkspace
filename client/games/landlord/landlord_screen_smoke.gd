@@ -16,6 +16,9 @@ func _run() -> void:
 	screen.match_context = {"room_id":"训练", "account_id":"smoke", "seat_index":0}
 	root.add_child(screen)
 	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	screen.set_process(false)
+	await process_frame
+	screen._layout_ui()
 	var hand: Array = []
 	for id in range(20):
 		hand.append({"id":id,"rank":int(id/4)+3,"suit":["spade","heart","club","diamond"][id%4]})
@@ -33,7 +36,30 @@ func _run() -> void:
 		push_error("Hand is not modeled in 3D")
 		quit(3)
 		return
-	print("LANDLORD_3D_SMOKE_OK cards=", screen._hand_nodes.size())
+	if screen._board_view.size.x <= screen._board_view.size.y or absf(screen._board_view.size.x / screen._board_view.size.y - float(screen._viewport.size.x) / screen._viewport.size.y) > 0.001:
+		push_error("Poker table must retain its landscape render aspect")
+		quit(6)
+		return
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = screen._camera.unproject_position(screen._hand_nodes[0].global_position) / Vector2(screen._viewport.size) * screen._board_view.size
+	screen._on_board_input(click)
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	touch.position = screen._camera.unproject_position(screen._hand_nodes[19].global_position) / Vector2(screen._viewport.size) * screen._board_view.size
+	screen._on_board_input(touch)
+	if not screen._selected.has(0) or not screen._selected.has(19):
+		push_error("Landscape poker hand must support mouse and touch selection")
+		quit(7)
+		return
+	screen._clear_selection()
+	for action in screen._action_layer.get_children():
+		if action is Button and not Rect2(Vector2.ZERO, screen.size).encloses(action.get_global_rect()):
+			push_error("Poker action extends outside the landscape screen")
+			quit(8)
+			return
+	print("LANDLORD_3D_SMOKE_OK cards=", screen._hand_nodes.size(), " landscape=true aspect=true mouse=true touch=true actions_visible=true")
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--screenshot-out="):
 			for frame in range(24):

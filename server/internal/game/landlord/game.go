@@ -9,6 +9,7 @@ import (
 
 const (
 	PhaseBid      = "bid"
+	PhaseDouble   = "double"
 	PhasePlay     = "play"
 	PhaseFinished = "finished"
 )
@@ -43,6 +44,10 @@ type Game struct {
 	LandlordPlays int
 	FarmerPlays   int
 	Epoch         int
+	// Opt in for the reference battle UI; existing NewGame callers retain bid -> play.
+	EnableDoubling bool
+	DoubleDecided  [3]bool
+	Doubled        [3]bool
 }
 
 func NewGame(players [3]string, seed int64) *Game {
@@ -80,6 +85,7 @@ func (g *Game) Bid(seat, amount int) error {
 			fresh.seed = g.seed
 			fresh.DealNumber = g.DealNumber + 1
 			fresh.Epoch = g.Epoch + 1
+			fresh.EnableDoubling = g.EnableDoubling
 			*g = *fresh
 			return nil
 		}
@@ -88,10 +94,103 @@ func (g *Game) Bid(seat, amount int) error {
 		SortHand(g.Hands[g.Landlord])
 		g.Turn = g.Landlord
 		g.Phase = PhasePlay
+		if g.EnableDoubling {
+			g.Phase = PhaseDouble
+		}
 	} else {
 		g.Turn = (g.Turn + 1) % 3
 	}
 	return nil
+}
+
+// Double uses a shared table multiplier: each player's affirmative decision doubles it.
+// Decisions are sequential from the landlord, so the existing action timer remains authoritative.
+func (g *Game) Double(seat int, enabled bool) error {
+	if seat < 0 || seat >= 3 || g.Phase != PhaseDouble || seat != g.Turn || g.DoubleDecided[seat] {
+		return errors.New("现在不是你的加倍回合，或已经决定")
+	}
+	g.DoubleDecided[seat], g.Doubled[seat] = true, enabled
+	if enabled {
+		g.Multiplier *= 2
+	}
+	g.Epoch++
+	for offset := 1; offset <= 3; offset++ {
+		next := (seat + offset) % 3
+		if !g.DoubleDecided[next] {
+			g.Turn = next
+			return nil
+		}
+	}
+	g.Phase, g.Turn = PhasePlay, g.Landlord
+	return nil
+}
+
+// SuggestedCards returns only owned cards accepted by the same classifier and comparison
+// used by PlayCards. It searches rank combinations (not duplicate suit permutations),
+// covering compound patterns and falling back to bombs/rocket without mutating the game.
+func (g *Game) SuggestedCards(seat int) []int {
+	if seat < 0 || seat >= 3 || g.Phase != PhasePlay || seat != g.Turn || len(g.Hands[seat]) == 0 {
+		return []int{}
+	}
+	hand := append([]Card(nil), g.Hands[seat]...)
+	SortHand(hand)
+	if !g.HasLastPlay || g.LastPlay.Seat == seat {
+		return []int{hand[0].ID}
+	}
+	previous := g.LastPlay.Pattern
+	if previous.Kind == "rocket" {
+		return []int{}
+	}
+	groups := [][]Card{}
+	for _, card := range hand {
+		if len(groups) == 0 || groups[len(groups)-1][0].Rank != card.Rank {
+			groups = append(groups, []Card{})
+		}
+		groups[len(groups)-1] = append(groups[len(groups)-1], card)
+	}
+	capacity := make([]int, len(groups)+1)
+	for index := len(groups)-1; index >= 0; index-- {
+		capacity[index] = capacity[index+1] + len(groups[index])
+	}
+	selected := []Card{}
+	var found []int
+	var search func(int, int) bool
+	search = func(index, remaining int) bool {
+		if remaining == 0 {
+			pattern, err := Classify(selected)
+			if err != nil || pattern.Kind != previous.Kind || !Beats(pattern, previous) {
+				return false
+			}
+			found = make([]int, len(selected))
+			for index, card := range selected { found[index] = card.ID }
+			return true
+		}
+		if index == len(groups) || remaining > capacity[index] { return false }
+		maximum := len(groups[index])
+		if maximum > remaining { maximum = remaining }
+		for count := maximum; count >= 0; count-- {
+			length := len(selected)
+			selected = append(selected, groups[index][:count]...)
+			if search(index+1, remaining-count) { return true }
+			selected = selected[:length]
+		}
+		return false
+	}
+	if search(0, previous.Length) { return found }
+	for _, group := range groups {
+		if len(group) < 4 { continue }
+		pattern, err := Classify(group[:4])
+		if err == nil && Beats(pattern, previous) {
+			return []int{group[0].ID,group[1].ID,group[2].ID,group[3].ID}
+		}
+	}
+	var small, big = -1, -1
+	for _, card := range hand {
+		if card.Rank == 16 { small = card.ID }
+		if card.Rank == 17 { big = card.ID }
+	}
+	if small >= 0 && big >= 0 { return []int{small,big} }
+	return []int{}
 }
 
 func (g *Game) PlayCards(seat int, ids []int) error {
@@ -198,6 +297,10 @@ func (g *Game) finish(winner int) {
 }
 
 func (g *Game) Timeout() {
+	if g.Phase == PhaseDouble {
+		_ = g.Double(g.Turn, false)
+		return
+	}
 	if g.Phase == PhaseBid {
 		_ = g.Bid(g.Turn, 0)
 		return
@@ -221,6 +324,9 @@ func (g *Game) BotTurn(seat int) error {
 	}
 	if g.Phase == PhaseBid {
 		return g.Bid(seat, 0)
+	}
+	if g.Phase == PhaseDouble {
+		return g.Double(seat, false)
 	}
 	if g.Phase != PhasePlay {
 		return nil
@@ -276,6 +382,7 @@ func (g *Game) SnapshotFor(seat int) map[string]any {
 	}
 	hand := append([]Card(nil), g.Hands[seat]...)
 	state := map[string]any{"type": "landlord_state", "phase": g.Phase, "turn": g.Turn, "your_seat": seat, "players": g.Players, "hand": hand, "hand_counts": counts, "bottom": bottom, "landlord": g.Landlord, "highest_bid": g.HighestBid, "bids": g.Bids, "deal_number": g.DealNumber, "last_play": g.LastPlay, "has_last_play": g.HasLastPlay, "pass_count": g.PassCount, "winner": g.Winner, "multiplier": g.Multiplier, "scores": g.Scores, "epoch": g.Epoch}
+	state["double_decided"], state["doubled"] = g.DoubleDecided, g.Doubled
 	if g.Phase == PhaseFinished {
 		state["hands_revealed"] = g.Hands
 	}

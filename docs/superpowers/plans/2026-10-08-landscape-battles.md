@@ -25,3 +25,12 @@
 - Mahjong reaction and poker bid/tribute/return/settlement controls remain available.
 - Shared black suits become blue for both poker games, red suits remain red.
 - Multiple clients retain independent 3D worlds and private hands.
+
+## User amendment: Landlord reference and functional controls
+
+The user supplied a lakeside pavilion / warm wood table reference and explicitly requested actual button logic. The Landlord subclass owns this presentation; other poker games keep their own landscape screen and the canonical models.
+
+- [ ] Generate a clean garden background, retain real 3D table/cards and arrange reference header, opponent sides, large bottom hand, colored action row and social toolbar.
+- [ ] Implement service-authoritative optional doubling phase, legal hints, bounded room chat/emote/prop/voice events and server action deadlines; preserve default rules constructor compatibility.
+- [ ] Implement real settings, free cosmetic selection saved locally, actual local settlement history, sort/collapse/exit flow, microphone capture and PCM playback.
+- [ ] Verify button actions and invalid operations, actual touch dispatch, server rules and three-client room/training flows. Capture final device-size rendering.

@@ -6,10 +6,12 @@ static func enter(owner: Control) -> void:
 	var users: Dictionary = window.get_meta("xbd_battle_users", {})
 	if users.has(owner.get_instance_id()): return
 	if users.is_empty():
-		window.set_meta("xbd_before_battle", {"design":window.content_scale_size, "aspect":window.content_scale_aspect, "window":window.size})
+		window.set_meta("xbd_before_battle", {"design":window.content_scale_size, "aspect":window.content_scale_aspect, "window":window.size, "orientation":DisplayServer.screen_get_orientation()})
 		window.content_scale_size = Vector2i(1440,810)
 		window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
-		if OS.has_feature("mobile"):
+		if DisplayServer.get_name() == "headless":
+			window.size = Vector2i(1440,810)
+		elif OS.has_feature("mobile"):
 			DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
 		elif window.size.x < window.size.y:
 			window.size = Vector2i(window.size.y, window.size.x)
@@ -28,5 +30,5 @@ static func leave(owner: Control) -> void:
 	window.content_scale_size = previous.design
 	window.content_scale_aspect = previous.aspect
 	if OS.has_feature("mobile"):
-		DisplayServer.screen_set_orientation(DisplayServer.SCREEN_PORTRAIT)
-	elif DisplayServer.get_name() != "headless": window.size = previous.window
+		DisplayServer.screen_set_orientation(int(previous.get("orientation",DisplayServer.SCREEN_PORTRAIT)))
+	else: window.size = previous.window

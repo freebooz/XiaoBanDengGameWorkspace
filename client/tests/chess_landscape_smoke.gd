@@ -19,6 +19,8 @@ func _inside(control: Control, bounds: Rect2) -> bool:
 
 
 func _run() -> void:
+	var before_design := root.content_scale_size
+	var before_aspect := root.content_scale_aspect
 	var screen_script = load("res://modules/games/chinese_chess/chinese_chess_3d_screen.gd")
 	if screen_script == null:
 		push_error("象棋横屏脚本无法加载")
@@ -29,6 +31,7 @@ func _run() -> void:
 	screen.match_context = {"room_id": "训练", "display_name": "横屏棋友", "opponent_display_name": "同机练习"}
 	root.add_child(screen)
 	await process_frame
+	_check(root.content_scale_size == Vector2i(1440, 810), "进入象棋对局未切换横屏设计尺寸")
 	_check(screen._board_viewport.own_world_3d, "棋盘必须使用独立三维世界")
 	_check(screen._pieces_by_pos.size() == 32, "横屏棋盘未保留标准开局")
 	for extent in [Vector2(1440, 810), Vector2(1800, 810), Vector2(1440, 1080), Vector2(960, 540)]:
@@ -53,6 +56,11 @@ func _run() -> void:
 		_check(_inside(screen._settlement_panel, bounds), "结算超出横屏：%s" % extent)
 		_check(screen._menu_panel.get_global_rect().get_center().distance_to(bounds.get_center()) < 1.0, "菜单没有居中：%s" % extent)
 		_check(screen._settlement_panel.get_global_rect().get_center().distance_to(bounds.get_center()) < 1.0, "结算没有居中：%s" % extent)
+		for control in [screen._bgm_toggle_button, screen._sfx_toggle_button, screen._quality_option, screen._menu_close]:
+			_check(_inside(control, screen._menu_panel.get_global_rect()), "菜单操作超出弹窗：%s" % extent)
+		_check(not screen._quality_option.get_global_rect().intersects(screen._menu_close.get_global_rect()), "画质与返回按钮重叠：%s" % extent)
+		for control in [screen._settlement_review_button, screen._settlement_lobby_button]:
+			_check(_inside(control, screen._settlement_panel.get_global_rect()), "结算操作超出弹窗：%s" % extent)
 		for side in ["red", "black"]:
 			screen._your_color = side
 			screen._apply_player_view()
@@ -79,6 +87,7 @@ func _run() -> void:
 	_check(screen._selected == Vector2i(0, 6), "鼠标无法选中自己的棋子")
 	screen.queue_free()
 	await process_frame
+	_check(root.content_scale_size == before_design and root.content_scale_aspect == before_aspect, "离开象棋未恢复大厅显示")
 	if _failures.is_empty():
 		print("CHESS_LANDSCAPE_SMOKE_OK sizes=4 views=2 actions=6 touch=1 mouse=1")
 	quit(0 if _failures.is_empty() else 1)

@@ -18,8 +18,8 @@ func _run() -> void:
 	if root.content_scale_size != Vector2i(1440,810):
 		quit(1)
 		return
-	CHROME.backdrop(first,"小板凳 · 横屏对局","1234")
-	CHROME.player(first,"我的搭档","27 张 · 等待出牌",Rect2(600,100,280,92),true,1)
+	var chrome := CHROME.backdrop(first,"小板凳 · 横屏对局","1234")
+	var player := CHROME.player(first,"我的搭档","27 张 · 等待出牌",Rect2(600,100,280,92),true,1)
 	var button := Button.new()
 	first.add_child(button)
 	button.position = Vector2(1160,620)
@@ -27,6 +27,12 @@ func _run() -> void:
 	button.text = "出牌"
 	CHROME.skin_button(button,true)
 	await process_frame
+	var avatar: TextureRect = player.get_node("PlayerAvatar")
+	var brand: TextureRect = chrome.get_node("BrandStool")
+	if not Rect2(Vector2.ZERO,player.size).encloses(avatar.get_rect()) or avatar.size.x>64 or brand.size!=Vector2(58,58):
+		push_error("Battle artwork exceeded its intended bounds")
+		quit(4)
+		return
 	DISPLAY.leave(first)
 	if root.content_scale_size!=Vector2i(1440,810):
 		push_error("One client closed another client's landscape battle")
@@ -37,5 +43,5 @@ func _run() -> void:
 		push_error("Lobby display was not restored")
 		quit(3)
 		return
-	print("BATTLE_DISPLAY_SMOKE_OK landscape=true multi_client=true lobby_restored=true")
+	print("BATTLE_DISPLAY_SMOKE_OK landscape=true multi_client=true lobby_restored=true artwork_bounds=true")
 	quit()

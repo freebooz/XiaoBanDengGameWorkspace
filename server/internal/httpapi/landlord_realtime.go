@@ -27,11 +27,18 @@ type landlordRoom struct {
 	lastActionAt    time.Time
 }
 type landlordClient struct {
+	trainingMu   sync.Mutex
 	wire         *chessClient
 	room         *landlordRoom
 	accountID    string
 	seat         int
 	trainingGame *landlord.Game
+	trainingTimer *time.Timer
+	trainingDeadline time.Time
+	disconnected bool
+	socialMu sync.Mutex
+	socialLastAt time.Time
+	socialIDs map[string]time.Time
 }
 
 func newLandlordHub(matches *matchmaking.Manager) *landlordHub {
@@ -47,13 +54,18 @@ func (c *landlordClient) fail(message string) {
 func (h *landlordHub) handle(client *landlordClient, message map[string]any) bool {
 	switch message["type"] {
 	case "landlord_join":
+		client.wire.conn.SetReadLimit(256 * 1024)
 		h.join(client, message)
 		return true
 	case "landlord_training_start":
+		client.wire.conn.SetReadLimit(256 * 1024)
 		h.startTraining(client)
 		return true
 	case "landlord_action":
 		h.action(client, message)
+		return true
+	case "landlord_social":
+		h.social(client, message)
 		return true
 	}
 	return false
@@ -75,6 +87,7 @@ func (h *landlordHub) roomFor(id string, players [3]string) *landlordRoom {
 		binary.LittleEndian.PutUint64(seed[:], uint64(time.Now().UnixNano()))
 	}
 	created := &landlordRoom{id: id, game: landlord.NewGame(players, int64(binary.LittleEndian.Uint64(seed[:]))), clients: map[*landlordClient]struct{}{}}
+	created.game.EnableDoubling = true
 	h.rooms[id] = created
 	return created
 }
@@ -129,7 +142,10 @@ func (r *landlordRoom) connectedSeats() int {
 }
 
 func (h *landlordHub) action(client *landlordClient, message map[string]any) {
-	if client.trainingGame != nil {
+	client.trainingMu.Lock()
+	training := client.trainingGame != nil
+	client.trainingMu.Unlock()
+	if training {
 		h.trainingAction(client, message)
 		return
 	}
@@ -155,6 +171,17 @@ func (h *landlordHub) action(client *landlordClient, message map[string]any) {
 	action, _ := message["action"].(string)
 	var err error
 	switch action {
+	case "hint":
+		if room.game.Phase != landlord.PhasePlay || room.game.Turn != client.seat {
+			client.fail("现在不是你的出牌回合")
+			return
+		}
+		_ = client.wire.writeJSON(map[string]any{"type":"landlord_hint", "card_ids":room.game.SuggestedCards(client.seat)})
+		return
+	case "double":
+		enabled, valid := message["enabled"].(bool)
+		if !valid { client.fail("加倍选择须为布尔值"); return }
+		err = room.game.Double(client.seat, enabled)
 	case "bid":
 		amount, valid := jsonInt(message["amount"])
 		if !valid {
@@ -195,6 +222,8 @@ func (h *landlordHub) action(client *landlordClient, message map[string]any) {
 }
 
 func (h *landlordHub) startTraining(client *landlordClient) {
+	client.trainingMu.Lock()
+	defer client.trainingMu.Unlock()
 	if client.room != nil {
 		client.fail("房间对局中不能开启训练")
 		return
@@ -204,7 +233,10 @@ func (h *landlordHub) startTraining(client *landlordClient) {
 		binary.LittleEndian.PutUint64(seed[:], uint64(time.Now().UnixNano()))
 	}
 	client.trainingGame = landlord.NewGame([3]string{"我", "电脑一", "电脑二"}, int64(binary.LittleEndian.Uint64(seed[:])))
+	client.trainingGame.EnableDoubling = true
 	client.seat = 0
+	client.disconnected = false
+	client.scheduleTrainingTimeoutLocked(h)
 	client.sendTraining()
 }
 
@@ -216,10 +248,16 @@ func (c *landlordClient) sendTraining() {
 		state["status"] = "finished"
 	}
 	state["connected_players"] = 3
+	state["action_timeout_seconds"] = int(landlordActionTimeout / time.Second)
+	state["server_now_ms"] = time.Now().UTC().UnixMilli()
+	state["action_deadline_ms"] = int64(0)
+	if c.trainingGame.Phase != landlord.PhaseFinished { state["action_deadline_ms"] = c.trainingDeadline.UnixMilli() }
 	_ = c.wire.writeJSON(state)
 }
 
 func (h *landlordHub) trainingAction(client *landlordClient, message map[string]any) {
+	client.trainingMu.Lock()
+	defer client.trainingMu.Unlock()
 	g := client.trainingGame
 	if g == nil {
 		return
@@ -227,6 +265,14 @@ func (h *landlordHub) trainingAction(client *landlordClient, message map[string]
 	action, _ := message["action"].(string)
 	var err error
 	switch action {
+	case "hint":
+		if g.Phase != landlord.PhasePlay || g.Turn != 0 { client.fail("现在不是你的出牌回合"); return }
+		_ = client.wire.writeJSON(map[string]any{"type":"landlord_hint", "card_ids":g.SuggestedCards(0)})
+		return
+	case "double":
+		enabled, valid := message["enabled"].(bool)
+		if !valid { client.fail("加倍选择须为布尔值"); return }
+		err = g.Double(0, enabled)
 	case "bid":
 		amount, ok := jsonInt(message["amount"])
 		if !ok {
@@ -265,7 +311,26 @@ func (h *landlordHub) trainingAction(client *landlordClient, message map[string]
 			break
 		}
 	}
+	client.scheduleTrainingTimeoutLocked(h)
 	client.sendTraining()
+}
+
+func (c *landlordClient) scheduleTrainingTimeoutLocked(h *landlordHub) {
+	if c.trainingTimer != nil { c.trainingTimer.Stop(); c.trainingTimer = nil }
+	if c.disconnected || c.trainingGame == nil || c.trainingGame.Phase == landlord.PhaseFinished { return }
+	c.trainingDeadline = time.Now().UTC().Add(landlordActionTimeout)
+	g, epoch := c.trainingGame, c.trainingGame.Epoch
+	c.trainingTimer = time.AfterFunc(landlordActionTimeout, func(){
+		c.trainingMu.Lock()
+		defer c.trainingMu.Unlock()
+		if c.disconnected || c.trainingGame != g || g.Epoch != epoch { return }
+		g.Timeout()
+		for steps := 0; steps < 4 && g.Phase != landlord.PhaseFinished && g.Turn != 0; steps++ {
+			if g.BotTurn(g.Turn) != nil { break }
+		}
+		c.scheduleTrainingTimeoutLocked(h)
+		c.sendTraining()
+	})
 }
 
 func (r *landlordRoom) scheduleTimeoutLocked(h *landlordHub) {
@@ -303,7 +368,10 @@ func (r *landlordRoom) broadcastLocked() {
 			state["status"] = "finished"
 		}
 		state["connected_players"] = r.connectedSeats()
-		state["action_deadline_ms"] = r.lastActionAt.Add(landlordActionTimeout).UnixMilli()
+		state["action_timeout_seconds"] = int(landlordActionTimeout / time.Second)
+		state["server_now_ms"] = time.Now().UTC().UnixMilli()
+		state["action_deadline_ms"] = int64(0)
+		if r.started && r.game.Phase != landlord.PhaseFinished { state["action_deadline_ms"] = r.lastActionAt.Add(landlordActionTimeout).UnixMilli() }
 		_ = client.wire.writeJSON(state)
 	}
 }
@@ -321,9 +389,14 @@ func (r *landlordRoom) finishIfNeededLocked(h *landlordHub) {
 }
 
 func (h *landlordHub) disconnect(client *landlordClient) {
-	if client == nil || client.room == nil {
+	if client == nil {
 		return
 	}
+	client.trainingMu.Lock()
+	client.disconnected = true
+	if client.trainingTimer != nil { client.trainingTimer.Stop(); client.trainingTimer = nil }
+	client.trainingMu.Unlock()
+	if client.room == nil { return }
 	room := client.room
 	room.mu.Lock()
 	defer room.mu.Unlock()

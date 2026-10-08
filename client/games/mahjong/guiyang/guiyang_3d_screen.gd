@@ -13,6 +13,11 @@ const CHROME = preload("res://modules/foundation/ui/battle_chrome.gd")
 const QUALITY_FILE := "user://mahjong_visuals.cfg"
 ## 画质指定横向采样数；纵向采样始终由当前桌面比例计算。
 const QUALITY_SIZES := [Vector2i(960, 540), Vector2i(1440, 810), Vector2i(1920, 1080)]
+const OWN_HAND_SCALE := 2.15
+const OWN_HAND_SPACING := 0.0915
+const OWN_HAND_TILT_DEGREES := 43.0
+const OWN_HAND_BASE_Y := 0.048
+const OWN_HAND_LIFT := 0.028
 
 var product: Dictionary = {}
 var match_context: Dictionary = {}
@@ -82,6 +87,7 @@ func _load_quality() -> void:
 
 func _set_quality(index: int) -> void:
 	_quality = clampi(index, 0, 2)
+	_quality_option.select(_quality)
 	_sync_viewport_size()
 	_board_viewport.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_4X, Viewport.MSAA_8X][_quality]
 	_stage.get_node("KeyLight").shadow_enabled = _quality > 0
@@ -183,6 +189,8 @@ func _build_static_ui() -> void:
 	_overlay_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_overlay_root)
 	_layout_ui()
+	_render_seats()
+	_render_actions()
 
 
 func _layout_ui() -> void:
@@ -242,7 +250,7 @@ func _sync_viewport_size() -> void:
 
 
 func _fit_camera() -> void:
-	if _camera == null:
+	if not is_instance_valid(_camera) or not _camera.is_inside_tree():
 		return
 	# 投影模型边界求垂直视角，宽屏、平板扩展画面都保留真实比例。
 	var aspect := _board_view.size.x / _board_view.size.y
@@ -270,7 +278,7 @@ func _build_3d_table() -> void:
 	_board_viewport.add_child(world)
 	_stage = STAGE_SCRIPT.new()
 	world.add_child(_stage)
-	_camera = _stage.configure(2.0, Vector3(0, 1.38, 1.65), Vector3(0, 0, 0), true, 34.0)
+	_camera = _stage.configure(2.0, Vector3(0, 0.9, 1.7), Vector3(0, 0, 0), true, 34.0)
 	_stage.get_node("WorldEnvironment").environment.background_mode = Environment.BG_CLEAR_COLOR
 	_stage.get_node("Floor").visible = false
 	_stage.get_node("KeyLight").shadow_enabled = _quality > 0
@@ -292,6 +300,9 @@ func _build_3d_table() -> void:
 func _on_board_input(event: InputEvent) -> void:
 	var touch_position := Vector2.ZERO
 	if event is InputEventMouseButton:
+		# ScreenTouch 已处理选牌；触屏产生的模拟鼠标不能再次选择抬起后的手牌。
+		if event.device == -1:
+			return
 		if not event.pressed or event.button_index != MOUSE_BUTTON_LEFT:
 			return
 		touch_position = event.position
@@ -302,15 +313,30 @@ func _on_board_input(event: InputEvent) -> void:
 	else:
 		return
 	var nearest_id := 0
-	var nearest_distance := 36.0
+	var nearest_distance := INF
 	for index in range(_hand_models.size()):
-		var projected := _camera.unproject_position(_hand_models[index].global_position) * _board_view.size / Vector2(_board_viewport.size)
-		var distance := touch_position.distance_to(projected)
+		var bounds := _projected_tile_rect(_hand_models[index])
+		if not bounds.grow(10.0).has_point(touch_position):
+			continue
+		var distance := touch_position.distance_to(bounds.get_center())
 		if distance < nearest_distance:
 			nearest_distance = distance
 			nearest_id = _hand_ids[index]
 	if nearest_id > 0:
 		_select_tile(nearest_id)
+
+
+func _projected_tile_rect(model: Node3D) -> Rect2:
+	var face := model.find_child("TileFace", true, false) as MeshInstance3D
+	if face == null:
+		return Rect2(Vector2(-10000, -10000), Vector2.ZERO)
+	var bounds := face.get_aabb()
+	var projected := _camera.unproject_position(face.global_transform * bounds.get_endpoint(0)) * _board_view.size / Vector2(_board_viewport.size)
+	var rect := Rect2(projected, Vector2.ZERO)
+	for index in range(1, 8):
+		projected = _camera.unproject_position(face.global_transform * bounds.get_endpoint(index)) * _board_view.size / Vector2(_board_viewport.size)
+		rect = rect.expand(projected)
+	return rect
 
 
 func _connect_socket() -> void:
@@ -376,8 +402,10 @@ func _render() -> void:
 	_hand_models.clear()
 	_hand_ids.clear()
 	_clear(_seat_root)
+	_seat_panels.clear()
 	_clear(_actions_root)
 	_clear(_overlay_root)
+	_settlement_panel = null
 	_selected_id = _selected_id if _hand_contains(_selected_id) else 0
 	_render_seats()
 	_render_opponent_hands()
@@ -385,6 +413,7 @@ func _render() -> void:
 	_render_melds()
 	_render_hand()
 	_render_actions()
+	_update_context_labels()
 	var phase := str(_state.get("phase", ""))
 	var status := str(_state.get("status", "waiting"))
 	if status == "waiting":
@@ -414,18 +443,45 @@ func _render_seats() -> void:
 	var players: Array = _array("players")
 	var counts: Array = _array("hand_counts")
 	var scores: Array = _array("scores")
-	var places := [Vector2(165, 912), Vector2(490, 204), Vector2(170, 104), Vector2(10, 204)]
-	var widths := [390.0, 220.0, 380.0, 220.0]
-	var titles := ["我的手牌", "右家", "对家", "左家"]
+	var titles := ["我", "右家", "对家", "左家"]
+	_seat_panels.resize(4)
 	for seat in range(4):
 		var relative := _relative_seat(seat)
-		var pos: Vector2 = places[relative]
-		var short_name := str(players[seat]).right(6) if seat < players.size() else ""
+		var short_name := str(players[seat]).left(8) if seat < players.size() else "等待入座"
 		var count := int(counts[seat]) if seat < counts.size() else 0
 		var score := int(scores[seat]) if seat < scores.size() else 0
-		var label := _label(_seat_root, "%s · %s\n%d 张   %d 分" % [titles[relative], short_name, count, score], pos.x, pos.y, widths[relative], 70, 18)
-		if seat == int(_state.get("turn", -1)) and str(_state.get("phase", "")) != "finished":
-			label.add_theme_color_override("font_color", Color("#ffcd55"))
+		var active := seat == int(_state.get("turn", -1)) and str(_state.get("phase", "")) != "finished"
+		var detail := "%d 张  ·  %+d 分" % [count, score]
+		if active and relative % 2 == 0:
+			detail += "  ·  出牌"
+		var panel := CHROME.player(_seat_root, "%s · %s" % [titles[relative], short_name], detail, _seat_rect(relative), active, seat)
+		panel.name = "MahjongSeat%d" % relative
+		for child in panel.get_children():
+			if child is Label:
+				child.autowrap_mode = TextServer.AUTOWRAP_OFF
+				child.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		_seat_panels[relative] = panel
+
+
+func _update_context_labels() -> void:
+	var phase := str(_state.get("phase", ""))
+	var status := str(_state.get("status", "waiting"))
+	var own_turn := int(_state.get("turn", -1)) == int(_state.get("your_seat", -2))
+	_turn_label.text = "轮到你出牌" if own_turn else "等待牌友"
+	_turn_label.add_theme_color_override("font_color", CHROME.GOLD if own_turn else CHROME.TEXT)
+	_wall_label.text = "牌墙剩余  %d 张" % int(_state.get("remaining", 0))
+	_action_hint.text = "选牌后点击「打出」" if own_turn else "好牌不怕等"
+	if status == "waiting":
+		_turn_label.text = "等待入座"
+		_wall_label.text = "已连接 %d / 4 位" % int(_state.get("connected_players", 0))
+		_action_hint.text = "四位牌友到齐后开局"
+	elif phase == "reaction":
+		_turn_label.text = "碰 · 杠 · 胡"
+		_action_hint.text = "响应上家弃牌" if not _options().is_empty() else "等待其他牌友响应"
+	elif phase == "finished":
+		_turn_label.text = "本局结束"
+		_action_hint.text = "查看本局结算"
+	_update_selection()
 
 
 func _tile_path(tile: Dictionary) -> String:
@@ -538,9 +594,10 @@ func _render_hand() -> void:
 	for index in range(hand.size()):
 		var tile: Dictionary = hand[index]
 		var id := int(tile.get("id", 0))
-		var along := (float(index) - float(hand.size() - 1) / 2.0) * 0.068
-		var model := _tile_model(tile, Vector3(along, 0.026 if id == _selected_id else 0.002, 0.54))
-		model.scale = Vector3.ONE * 1.70
+		var along := (float(index) - float(hand.size() - 1) / 2.0) * OWN_HAND_SPACING
+		var model := _tile_model(tile, Vector3(along, OWN_HAND_BASE_Y + (OWN_HAND_LIFT if id == _selected_id else 0.0), 0.54))
+		model.scale = Vector3.ONE * OWN_HAND_SCALE
+		model.rotation_degrees.x = OWN_HAND_TILT_DEGREES
 		_hand_models.append(model)
 		_hand_ids.append(id)
 
@@ -552,7 +609,26 @@ func _select_tile(id: int) -> void:
 
 func _render_hand_only() -> void:
 	for index in range(_hand_models.size()):
-		_hand_models[index].position.y = 0.026 if _hand_ids[index] == _selected_id else 0.002
+		_hand_models[index].position.y = OWN_HAND_BASE_Y + (OWN_HAND_LIFT if _hand_ids[index] == _selected_id else 0.0)
+	_update_selection()
+
+
+func _update_selection() -> void:
+	var selected_name := ""
+	for raw in _array("hand"):
+		if int(raw.get("id", 0)) == _selected_id:
+			selected_name = _tile_title(raw)
+			break
+	_selection_label.text = "已选  ·  " + selected_name if selected_name != "" else "请选择一张手牌"
+	_selection_label.add_theme_color_override("font_color", CHROME.GOLD if selected_name != "" else CHROME.MUTED)
+	if is_instance_valid(_play_button):
+		_play_button.disabled = selected_name == ""
+
+
+func _tile_title(tile: Dictionary) -> String:
+	var ranks := ["一", "二", "三", "四", "五", "六", "七", "八", "九"]
+	var suffix := {"wan": "万", "tong": "筒", "tiao": "条"}
+	return str(ranks[clampi(int(tile.get("rank", 1)) - 1, 0, 8)]) + str(suffix.get(str(tile.get("suit", "")), ""))
 
 
 func _hand_contains(id: int) -> bool:
@@ -569,23 +645,43 @@ func _options() -> Array:
 
 
 func _render_actions() -> void:
+	_play_button = null
 	var options := _options()
 	if options.is_empty():
+		_label(_actions_root, "等待对局进展", 0, 32, _actions_root.size.x, 70, 19, CHROME.MUTED)
 		return
-	var count := options.size() + (1 if training_mode else 0)
-	var button_width := minf(150.0, 680.0 / float(count))
-	var start_x := (720.0 - button_width * float(count)) / 2.0
+	var scroll := ScrollContainer.new()
+	scroll.name = "MahjongReactionScroll"
+	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_actions_root.add_child(scroll)
+	var grid := GridContainer.new()
+	grid.columns = 2 if options.size() > 4 else 1
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	scroll.add_child(grid)
 	for index in range(options.size()):
 		var option: Dictionary = options[index]
 		var kind := str(option.get("type", ""))
 		var tile_id := int(option.get("tile_id", 0))
 		var text_value := _action_name(kind)
+		if kind.ends_with("gang") and tile_id > 0:
+			for tile in _array("hand"):
+				if int(tile.get("id", 0)) == tile_id:
+					text_value += "\n" + _tile_title(tile)
+					break
+		var button: Button
 		if kind == "play":
-			_button(_actions_root, text_value, start_x + index * button_width, 0, button_width - 5, 72, _on_play)
+			button = _button(grid, text_value, 0, 0, 216, 72, _on_play, true)
+			_play_button = button
 		else:
-			_button(_actions_root, text_value, start_x + index * button_width, 0, button_width - 5, 72, _send_action.bind(kind, tile_id))
-	if training_mode:
-		_button(_actions_root, "返回大厅", start_x + options.size() * button_width, 0, button_width - 5, 72, func(): request_return_to_lobby.emit())
+			button = _button(grid, text_value, 0, 0, 100, 72, _send_action.bind(kind, tile_id), kind == "hu")
+		button.name = "MahjongAction%d_%s" % [index, kind]
+		button.custom_minimum_size = Vector2(100, 72)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if grid.columns == 2:
+			button.add_theme_font_size_override("font_size", 21)
 
 
 func _action_name(kind: String) -> String:
@@ -637,17 +733,33 @@ func _training_play(tile_id: int) -> void:
 
 
 func _render_settlement() -> void:
+	var dim := ColorRect.new()
+	dim.name = "MahjongSettlementDim"
+	dim.color = Color("#030b0bce")
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_overlay_root.add_child(dim)
 	var panel := Panel.new()
-	panel.position = Vector2(90, 315)
-	panel.size = Vector2(540, 440)
-	panel.add_theme_stylebox_override("panel", _style(Color("#082d26f4"), Color("#d9a441"), 24))
+	panel.name = "MahjongSettlement"
+	panel.size = Vector2(680, 540)
+	panel.position = (size - panel.size) * 0.5
+	panel.add_theme_stylebox_override("panel", _style(Color("#0e2825fa"), CHROME.GOLD, 24))
 	_overlay_root.add_child(panel)
-	var heading := _label(panel, "本局结算", 30, 24, 480, 60, 35)
-	heading.add_theme_color_override("font_color", Color("#ffe1a2"))
+	_settlement_panel = panel
+	_label(panel, "本局结算", 40, 24, 600, 62, 36, CHROME.GOLD)
 	var winners: Array = _array("winners")
 	var summary := "流局 · 牌墙已摸完" if winners.is_empty() else "胡牌座位：" + ", ".join(winners.map(func(value): return str(int(value) + 1)))
-	_label(panel, summary, 25, 105, 490, 75, 22)
+	_label(panel, summary, 40, 94, 600, 50, 22)
 	var scores: Array = _array("scores")
+	var players: Array = _array("players")
 	for seat in range(mini(4, scores.size())):
-		_label(panel, "%d 号位     %+d 分" % [seat + 1, int(scores[seat])], 60, 188 + seat * 43, 420, 40, 19)
-	_button(panel, "返回大厅", 140, 374, 260, 55, func(): request_return_to_lobby.emit())
+		var row := Panel.new()
+		row.position = Vector2(40, 162 + seat * 61)
+		row.size = Vector2(600, 52)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_theme_stylebox_override("panel", _style(Color("#183a3255"), Color("#527c5b44"), 9))
+		panel.add_child(row)
+		var name_value := str(players[seat]).left(14) if seat < players.size() else "%d 号位" % (seat + 1)
+		var name_label := _label(row, name_value, 20, 0, 350, 52, 21)
+		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		_label(row, "%+d 分" % int(scores[seat]), 390, 0, 180, 52, 26, CHROME.GOLD if int(scores[seat]) >= 0 else CHROME.MUTED)
+	_button(panel, "返回大厅", 195, 443, 290, 64, func(): request_return_to_lobby.emit(), true)

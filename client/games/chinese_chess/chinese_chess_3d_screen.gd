@@ -46,8 +46,6 @@ const QUALITY_MSAA := [Viewport.MSAA_2X, Viewport.MSAA_4X, Viewport.MSAA_8X]
 const INK := Color("#1b1713")
 const GOLD := Color("#efd1a0")
 enum LayoutMode {
-	PHONE_PORTRAIT,
-	TABLET_PORTRAIT,
 	PHONE_LANDSCAPE,
 	TABLET_LANDSCAPE,
 	DESKTOP,
@@ -226,6 +224,9 @@ func _process(_delta: float) -> void:
 
 
 func _on_board_gui_input(event: InputEvent) -> void:
+	# Touch generates an emulated mouse press before the real touch event.
+	if event is InputEventMouseButton and event.device == InputEvent.DEVICE_ID_EMULATION:
+		return
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
@@ -803,6 +804,8 @@ func _build_hud() -> void:
 func _make_label(parent: Node, value: String, font_size: int, color: Color) -> Label:
 	var label := Label.new()
 	label.text = value
+	label.clip_text = true
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", font_size)
@@ -830,10 +833,13 @@ func _flat_style(fill: Color, stroke: Color, radius: int, border: int, shadow: i
 
 func _create_player_card(left_side: bool) -> Panel:
 	var card := Panel.new()
-	card.name = "LeftPlayer" if left_side else "RightPlayer"
+	card.name = "OwnPlayer" if left_side else "OpponentPlayer"
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.add_theme_stylebox_override("panel", _flat_style(Color("#111313ed"), Color("#8b6a3d"), 18, 1))
+	card.add_theme_stylebox_override("panel", CHROME.style(Color("#101e21ed"), Color("#415852"), 18))
 	add_child(card)
+	var seat_label := _make_label(card, "我方" if left_side else "对手", 15, CHROME.GOLD)
+	seat_label.name = "SeatLabel"
+	seat_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 
 	var avatar_frame := Panel.new()
 	avatar_frame.name = "AvatarFrame"
@@ -849,11 +855,7 @@ func _create_player_card(left_side: bool) -> Panel:
 	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var round_shader := Shader.new()
-	round_shader.code = "shader_type canvas_item; void fragment() { vec4 c = texture(TEXTURE, UV); c.a *= 1.0 - smoothstep(0.46, 0.50, distance(UV, vec2(0.5))); COLOR = c; }"
-	var round_material := ShaderMaterial.new()
-	round_material.shader = round_shader
-	portrait.material = round_material
+	portrait.material = CHROME.portrait_material(0 if left_side else 1)
 	avatar_frame.add_child(portrait)
 
 	var name_label := _make_label(card, "等待玩家", 23, Color("#fff1d9"))
@@ -949,7 +951,7 @@ func _layout_hud() -> void:
 	_match_duration_label.size = Vector2(info_w, 32.0 * ui_scale)
 	_role_label.position = Vector2(16.0, 166.0) * ui_scale
 	_role_label.size = Vector2(info_w, 30.0 * ui_scale)
-	_turn_status_label.add_theme_font_size_override("font_size", roundi(maxf(18.0, 25.0 * ui_scale)))
+	_turn_status_label.add_theme_font_size_override("font_size", roundi(maxf(18.0, minf(25.0 * ui_scale, info_w / 10.0))))
 	_turn_label.add_theme_font_size_override("font_size", roundi(maxf(16.0, 18.0 * ui_scale)))
 	_round_status_label.add_theme_font_size_override("font_size", roundi(maxf(15.0, 18.0 * ui_scale)))
 	_match_duration_label.add_theme_font_size_override("font_size", roundi(maxf(16.0, 20.0 * ui_scale)))
@@ -968,14 +970,14 @@ func _layout_hud() -> void:
 	var action_h := 78.0 * ui_scale
 	for i in range(_action_buttons.size()):
 		var button := _action_buttons[i]
-		button.position = Vector2(18.0 * ui_scale + float(i % 2) * (action_w + action_gap), 114.0 * ui_scale + float(i / 2) * (action_h + action_gap))
+		button.position = Vector2(18.0 * ui_scale + float(i % 2) * (action_w + action_gap), 114.0 * ui_scale + floorf(float(i) / 2.0) * (action_h + action_gap))
 		button.size = Vector2(action_w, action_h)
 		var icon: TextureRect = button.get_node("ActionIcon")
-		icon.position = Vector2(12.0 * ui_scale, (action_h - 32.0 * ui_scale) * 0.5)
-		icon.size = Vector2.ONE * 32.0 * ui_scale
+		icon.position = Vector2(10.0 * ui_scale, (action_h - 28.0 * ui_scale) * 0.5)
+		icon.size = Vector2.ONE * 28.0 * ui_scale
 		var caption: Label = button.get_node("ActionCaption")
-		caption.position = Vector2(50.0 * ui_scale, 0.0)
-		caption.size = Vector2(action_w - 58.0 * ui_scale, action_h)
+		caption.position = Vector2(44.0 * ui_scale, 0.0)
+		caption.size = Vector2(action_w - 50.0 * ui_scale, action_h)
 		caption.add_theme_font_size_override("font_size", roundi(maxf(16.0, 22.0 * ui_scale)))
 
 	_status_panel.position = Vector2(18.0, 398.0) * ui_scale
@@ -1091,6 +1093,8 @@ func _layout_player_card(card: Panel, avatar: TextureRect, name_label: Label, ra
 func _on_action_pressed(action: String) -> void:
 	if action == "菜单":
 		_menu_label.text = "小板凳象棋\n房间：%s\n规则：标准象棋 · %s" % [_room_id, str(product.get("rule_version", "1.0.0"))]
+		_menu_overlay.visible = true
+		_menu_overlay.move_to_front()
 		_menu_panel.visible = true
 		_menu_panel.move_to_front()
 		return
@@ -1399,9 +1403,9 @@ func _update_player_card_visual(card: Panel, active: bool) -> void:
 	if card == null:
 		return
 	if active:
-		card.add_theme_stylebox_override("panel", _flat_style(Color("#271d13f2"), Color("#c39a5d"), 18, 2))
+		card.add_theme_stylebox_override("panel", CHROME.style(Color("#14352fed"), CHROME.GOLD, 18))
 	else:
-		card.add_theme_stylebox_override("panel", _flat_style(Color("#111313ed"), Color("#8b6a3d"), 18, 1))
+		card.add_theme_stylebox_override("panel", CHROME.style(Color("#101e21ed"), Color("#415852"), 18))
 
 
 func _update_time_ui() -> void:
@@ -1456,6 +1460,13 @@ func _update_time_ui() -> void:
 			if _turn == _your_color:
 				_play_warning_tone()
 			_last_countdown_second = 0
+	# The countdown brings itself forward; active dialogs must retain the top layer.
+	if _settlement_panel.visible:
+		_settlement_overlay.move_to_front()
+		_settlement_panel.move_to_front()
+	elif _menu_panel.visible:
+		_menu_overlay.move_to_front()
+		_menu_panel.move_to_front()
 
 
 func _update_side_step_timer(label: Label, side_color: String, elapsed_seconds: int) -> void:
@@ -1627,6 +1638,9 @@ func _toggle_sfx() -> void:
 
 
 func _update_audio_toggle_labels() -> void:
+	if _music_quick_button != null:
+		_music_quick_button.text = "音乐" if _bgm_enabled else "静音"
+		_music_quick_button.tooltip_text = "暂停背景音乐" if _bgm_enabled else "开启背景音乐"
 	if _bgm_toggle_button != null:
 		var bgm_state := "关"
 		if _bgm_enabled:
