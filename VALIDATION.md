@@ -8,7 +8,7 @@
 - Go1.23.12全套 `go test -race -count=1 ./...` 与可执行文件构建通过。未配置标准服务参数的集成用例如实skip。
 - 实际Go/Redis7.2.7/PGlite0.5.8的完整API→WebSocket→记录→管理查询链路通过；PGlite兼容联调不是标准PostgreSQL多进程/并发验证。
 - 生产dist实际Chromium完成15组烟测，包含登录/注销、真实走子/持久化详情/快照回放、三种桌面尺寸刷新及11px/12px和品牌色；HTTP500/离线通过显式网络夹具注入。
-- 新增GitHubActions使用标准PostgreSQL17、Redis7及Docker/Nginx生产镜像执行回归；提交时尚未获得运行结果。本地无Docker，未声称本地容器验证通过。
+- GitHubActions使用标准PostgreSQL17、Redis7及Docker/Nginx生产镜像完成回归，真实服务/迁移/事务/并发、三个镜像构建、Nginx校验及生产镜像15组浏览器烟测全部成功：[实际运行结果](https://github.com/freebooz/XiaoBanDengGameWorkspace/actions/runs/37876375300)。本地无Docker，标准容器验证在CI执行。
 - 当前边界：生产秘密/TLS/可信代理须部署配置；活动目录与棋盘仍是当前进程，崩溃残留playing未自动处理；客户端标识不是认证账号，未扩展麻将/资金结算/完整竞赛规则。
 
 详细命令与结果见 [剩余问题修改记录](docs/validation/2026-10-09-admin-remaining-fixes.md)。下方只读页面记录描述上一轮状态，部分待接入项已在本轮补齐。

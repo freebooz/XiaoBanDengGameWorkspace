@@ -32,7 +32,16 @@ PGlite 是嵌入式 PostgreSQL 引擎，其连接复用不等同标准多进程 
 
 工作流 `.github/workflows/admin-readonly.yml` 使用 PostgreSQL17、Redis7服务，执行 Go race、真实仓储迁移/事务回滚/并发序号、API→WebSocket→管理查询，再执行前端回归及 Docker 两种前端/后端镜像构建、Nginx配置校验和生产镜像真实浏览器烟测。
 
-提交时尚未获得该工作流实际结果；不能把配置文件视为已运行成功。当前本地没有 Docker，未本地执行标准 PostgreSQL17、Docker或Nginx。
+实际运行已完成并全部成功：
+
+- 验证提交：`9a0e82d703b1cb91ff18d23fc20179f51020c8cc`。
+- [GitHub Actions 实际运行结果](https://github.com/freebooz/XiaoBanDengGameWorkspace/actions/runs/37876375300)，另一次push触发运行也成功。
+- 标准 PostgreSQL17/Redis7 的 Go race 与真实仓储/HTTP集成通过，包含迁移幂等及旧记录保留、创建/走子事务回滚、同序号并发只能成功一次、分页及跨实例历史/会话读取。
+- 前端98项回归、TypeScript与生产构建通过。
+- 后端、开发前端、生产前端三个Docker镜像构建通过；生产镜像 `nginx -t` 与 `docker compose config --quiet` 通过。
+- 实际生产Nginx镜像代理实际Go服务与标准数据库，15组真实Chromium烟测全部通过；浏览器结果由工作流上传为 `admin-browser-results`。
+
+当前本地仍没有 Docker。标准容器验证来自上述实际CI运行，不能描述为本地执行；本地PGlite结果另列，未混同。
 
 ## 复跑
 
@@ -57,5 +66,6 @@ TEST_ADMIN_PASSWORD="$TEST_PASSWORD" node scripts/readonly-smoke.mjs
 - 生产部署须配置管理员秘密、HTTPS安全Cookie及精确可信代理；不交付共享默认口令。
 - 活动房间目录与棋盘仍在当前进程内存，不跨节点聚合，不在崩溃后重建；崩溃遗留playing记录没有自动恢复/中止策略。不能无差别中止其他节点拥有的对局。
 - client_id 为客户端标识，不是平台认证账号；未扩展游戏指令权限或玩家账号系统。
+- 当前Godot象棋演示仍使用固定 `manual-chess-001` 房间。开发演示必须显式开启 `DEVELOPMENT_ROOMS=true`；正式模式须由大厅/房间创建流程提供已有目录中的 room_id。此次未修改或运行Godot客户端。
 - 只读回放读取已有快照，不提供视频；未接入麻将真实牌局、资金结算或完整竞赛规则。
-- 标准容器验证的实际状态以工作流结果为准。
+- 此记录的后续提交只更新文档；实际程序代码与上述全绿验证提交一致。
