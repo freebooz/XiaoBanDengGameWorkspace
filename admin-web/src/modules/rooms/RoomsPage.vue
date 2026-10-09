@@ -16,7 +16,8 @@ const { data, loading, errorMessage, run } = useReadOnlyQuery<CollectionResult<R
 const filters = reactive({ product: "", game: "", rule: "", state: "" });
 const selectedId = ref("");
 const drawerVisible = ref(false);
-const development = computed(() => data.value?.data_source === "development" || data.value?.items.some((item) => item.data_source === "development"));
+// 聚合来源不能覆盖单行来源；混合列表只提示包含开发数据。
+const development = computed(() => data.value?.data_source === "development" || data.value?.items.some((item) => item.data_source === "development" || item.source === "development"));
 
 /** loadRooms（房间查询）只提交后端已支持的四个条件，不补造分页或未知字段。 */
 function loadRooms(): Promise<void> {
@@ -32,7 +33,7 @@ onMounted(loadRooms);
   <section class="readonly-center">
     <div class="readonly-heading">
       <div><h2>房间中心</h2><p>当前服务节点的房间目录与查询时点状态；时长按服务端返回值展示。</p></div>
-      <DevelopmentBadge v-if="development" label="开发数据" />
+      <DevelopmentBadge v-if="development" :label="data?.data_source === 'development' ? '开发数据' : '含开发数据'" />
     </div>
     <FilterBar>
       <el-input v-model="filters.product" data-testid="room-product" clearable placeholder="产品标识" aria-label="产品标识" @keyup.enter="loadRooms" />
@@ -56,9 +57,10 @@ onMounted(loadRooms);
         <el-table-column prop="rule_set_id" label="规则集标识" min-width="105" />
         <el-table-column prop="rule_version" label="规则版本" min-width="95" />
         <el-table-column label="房间状态" width="95"><template #default="{ row }"><StatusTag :value="row.state" /></template></el-table-column>
+        <el-table-column label="在线连接" min-width="100"><template #default="{ row }">{{ row.connected_count === undefined ? '待接入' : row.connected_count + ' 人在线' }}</template></el-table-column>
         <el-table-column label="创建时间" min-width="170"><template #default="{ row }">{{ formatDate(row.created_at) }}</template></el-table-column>
         <el-table-column label="已创建时长" min-width="110"><template #default="{ row }">{{ formatDuration(row.duration_seconds) }}</template></el-table-column>
-        <el-table-column label="数据来源" width="105"><template #default="{ row }"><DevelopmentBadge v-if="data?.data_source === 'development' || row.data_source === 'development'" label="开发数据" /><span v-else>服务节点</span></template></el-table-column>
+        <el-table-column label="数据来源" width="105"><template #default="{ row }"><DevelopmentBadge v-if="data?.data_source === 'development' || row.data_source === 'development' || row.source === 'development'" label="开发数据" /><span v-else>服务节点</span></template></el-table-column>
       </el-table>
       <div v-if="data" class="readonly-footer"><span>当前查询 {{ data.total }} 个房间</span><span>仅提供只读查询</span></div>
     </el-card>

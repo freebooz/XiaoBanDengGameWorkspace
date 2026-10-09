@@ -11,13 +11,24 @@ import (
 
 // Room（通用房间）只管理玩家容器与游戏标识，不实现象棋或麻将规则。
 type Room struct {
-	RoomID      string    `json:"room_id"`
-	ProductID   string    `json:"product_id"`
-	GameID      string    `json:"game_id"`
-	RuleSetID   string    `json:"rule_set_id"`
-	RuleVersion string    `json:"rule_version"`
-	State       string    `json:"state"`
-	CreatedAt   time.Time `json:"created_at"`
+	RoomID         string    `json:"room_id"`
+	ProductID      string    `json:"product_id"`
+	GameID         string    `json:"game_id"`
+	RuleSetID      string    `json:"rule_set_id"`
+	RuleVersion    string    `json:"rule_version"`
+	State          string    `json:"state"`
+	CreatedAt      time.Time `json:"created_at"`
+	Source         string    `json:"source,omitempty"`
+	Players        []Player  `json:"players"`
+	ConnectedCount int       `json:"connected_count"`
+	MatchID        string    `json:"match_id,omitempty"`
+}
+
+// Player 仅描述当前进程观察到的客户端与连接，不冒充认证账号。
+type Player struct {
+	ClientID  string `json:"client_id"`
+	Seat      string `json:"seat"`
+	Connected bool   `json:"connected"`
 }
 
 // CreateRequest（创建房间请求）由大厅/匹配服务提交。
@@ -42,7 +53,7 @@ func (m *Manager) Create(req CreateRequest) (Room, error) {
 	if req.ProductID == "" || req.GameID == "" || req.RuleSetID == "" || req.RuleVersion == "" {
 		return Room{}, errors.New("product_id/game_id/rule_set_id/rule_version均不能为空")
 	}
-	item := Room{RoomID: uuid.NewString(), ProductID: req.ProductID, GameID: req.GameID, RuleSetID: req.RuleSetID, RuleVersion: req.RuleVersion, State: "waiting", CreatedAt: time.Now().UTC()}
+	item := Room{RoomID: uuid.NewString(), ProductID: req.ProductID, GameID: req.GameID, RuleSetID: req.RuleSetID, RuleVersion: req.RuleVersion, State: "waiting", CreatedAt: time.Now().UTC(), Players: []Player{}}
 	m.mu.Lock()
 	m.rooms[item.RoomID] = item
 	m.mu.Unlock()
@@ -55,7 +66,7 @@ func (m *Manager) List() []Room {
 	defer m.mu.RUnlock()
 	result := make([]Room, 0, len(m.rooms))
 	for _, item := range m.rooms {
-		result = append(result, item)
+		result = append(result, cloneRoom(item))
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].CreatedAt.After(result[j].CreatedAt) })
 	return result
@@ -66,5 +77,42 @@ func (m *Manager) Get(roomID string) (Room, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	item, ok := m.rooms[roomID]
-	return item, ok
+	return cloneRoom(item), ok
+}
+
+// EnsureDevelopment 必须由显式开发配置调用，目录仍使用同一个 room_id。
+func (m *Manager) EnsureDevelopment(roomID string) Room {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if item, ok := m.rooms[roomID]; ok {
+		return cloneRoom(item)
+	}
+	item := Room{RoomID: roomID, ProductID: "xbd_chinese_chess", GameID: "chinese_chess", RuleSetID: "standard", RuleVersion: "1.0.0", State: "waiting", Source: "development", CreatedAt: time.Now().UTC(), Players: []Player{}}
+	m.rooms[roomID] = item
+	return cloneRoom(item)
+}
+
+// UpdateRuntime 原子发布房间状态与连接快照；所有字段仅是本进程事实。
+func (m *Manager) UpdateRuntime(roomID, state, matchID string, players []Player) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	item, ok := m.rooms[roomID]
+	if !ok {
+		return false
+	}
+	item.State, item.MatchID = state, matchID
+	item.Players = append([]Player{}, players...)
+	item.ConnectedCount = 0
+	for _, player := range item.Players {
+		if player.Connected {
+			item.ConnectedCount++
+		}
+	}
+	m.rooms[roomID] = item
+	return true
+}
+
+func cloneRoom(item Room) Room {
+	item.Players = append([]Player{}, item.Players...)
+	return item
 }

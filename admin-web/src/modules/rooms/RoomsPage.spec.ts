@@ -40,6 +40,26 @@ describe("房间中心", () => {
     await flushPromises();
     expect(wrapper.text()).toContain("开发数据");
   });
+  it("混合列表按source标识开发行且详情兼容开发source", async () => {
+    const rooms = [
+      { ...testRoom, room_id: 'test-live-room', data_source: 'partial' as const, source: 'production' },
+      { ...testRoom, room_id: 'test-source-dev-room', data_source: 'partial' as const, source: 'development' },
+    ];
+    mockHTTP((url) => jsonResponse(url.pathname.endsWith('/test-source-dev-room') ? rooms[1] : url.pathname.endsWith('/test-live-room') ? rooms[0] : roomList(rooms)));
+    const wrapper = mountPage(RoomsPage);
+    await flushPromises();
+    expect(wrapper.get('.readonly-heading').text()).toContain('含开发数据');
+    const rows = wrapper.findAll('.el-table__body tr');
+    expect(rows.find((row) => row.text().includes('test-live-room'))!.text()).toContain('服务节点');
+    expect(rows.find((row) => row.text().includes('test-live-room'))!.find('.development-badge').exists()).toBe(false);
+    expect(rows.find((row) => row.text().includes('test-source-dev-room'))!.find('.development-badge').exists()).toBe(true);
+    await wrapper.get('[data-testid="open-room-test-live-room"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('.room-detail-data .development-badge').exists()).toBe(false);
+    await wrapper.get('[data-testid="open-room-test-source-dev-room"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('.room-detail-data .development-badge').text()).toBe('开发数据');
+  });
   it("详情重新查询已有接口，未接入信息不伪造", async () => {
     const wrapper = mountPage(RoomsPage);
     await flushPromises();
@@ -48,6 +68,33 @@ describe("房间中心", () => {
     expect(wrapper.text()).toContain("房间详情");
     expect(wrapper.text()).toContain("玩家座位与连接状态待接入");
     expect(wrapper.text()).toContain("1分5秒");
+    expect(wrapper.get('.room-detail-data').text()).toContain("关联对局待接入");
+  });
+  it("显示服务端玩家座位和连接人数，客户端标识不冒充认证账号", async () => {
+    const room = { ...testRoom, connected_count: 1, match_id: "test-room-match", players: [
+      { client_id: "test-client-red", seat: "red", connected: true },
+      { client_id: "test-client-black", seat: "black", connected: false },
+    ] };
+    mockHTTP((url) => jsonResponse(url.pathname.endsWith("/test-room") ? room : roomList([room])));
+    const wrapper = mountPage(RoomsPage);
+    await flushPromises();
+    expect(wrapper.text()).toContain("1 人在线");
+    await wrapper.get('[data-testid="open-room-test-room"]').trigger("click");
+    await flushPromises();
+    const detail = wrapper.get('.room-detail-data');
+    for (const text of ["test-client-red", "test-client-black", "红方", "黑方", "已连接", "已断开", "test-room-match", "客户端标识"]) expect(detail.text()).toContain(text);
+    expect(detail.text()).not.toContain("玩家座位与连接状态待接入");
+    expect(detail.text()).not.toContain("认证账号");
+  });
+  it("空玩家数组与尚未接入玩家字段分别展示", async () => {
+    mockHTTP((url) => jsonResponse(url.pathname.endsWith("/test-room") ? { ...testRoom, players: [], connected_count: 0 } : roomList()));
+    const wrapper = mountPage(RoomsPage);
+    await flushPromises();
+    await wrapper.get('[data-testid="open-room-test-room"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("暂无玩家");
+    expect(wrapper.get('.room-detail-data').text()).toContain("0 人在线");
+    expect(wrapper.text()).not.toContain("玩家座位与连接状态待接入");
   });
   it.each([404, 500, 0])("详情失败 %s 不展示旧详情并可重试", async (status) => {
     mockHTTP((url) => { if (url.pathname.endsWith("/test-room")) { if (!status) throw new TypeError("offline"); return jsonResponse({ error: status === 404 ? "房间不存在" : "详情查询失败" }, status); } return jsonResponse(roomList()); });

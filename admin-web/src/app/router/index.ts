@@ -6,6 +6,7 @@ import {
   type Router,
 } from "vue-router";
 import { useAuthStore } from "../store/auth";
+import { setUnauthorizedHandler } from "../../services/api/client";
 
 /** routeRecords（路由表）固定一期核心 URL（页面地址），按领域延迟加载真实只读页面。 */
 export const routeRecords: RouteRecordRaw[] = [
@@ -56,6 +57,20 @@ export const routeRecords: RouteRecordRaw[] = [
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
 
+/** 只允许已定义的站内业务地址，拒绝外部 URL、反斜线及登录循环。 */
+export function getSafeRedirect(value: unknown): string {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") ||
+    /[\\\s\u0000-\u001f]/.test(value)) return "/dashboard";
+  try {
+    const url = new URL(value, window.location.origin);
+    const allowedPaths = ["/", "/dashboard", "/users", "/games/products", "/rooms", "/matches"];
+    if (url.origin === window.location.origin && allowedPaths.includes(url.pathname)) {
+      return url.pathname + url.search + url.hash;
+    }
+  } catch { /* 无法解析的地址统一回到工作台。 */ }
+  return "/dashboard";
+}
+
 /** createAppRouter（创建路由器）测试环境可选择内存历史。 */
 export function createAppRouter(memoryHistory = false): Router {
   const router = createRouter({
@@ -63,13 +78,24 @@ export function createAppRouter(memoryHistory = false): Router {
     routes: routeRecords,
   });
 
-  router.beforeEach((to) => {
+  // 业务接口收到 401 时清理状态，并保留当前页面供重新登录恢复。
+  setUnauthorizedHandler(() => {
     const auth = useAuthStore();
+    auth.clearSession();
+    const current = router.currentRoute.value;
+    if (current.path !== "/login") {
+      void router.replace({ path: "/login", query: { redirect: current.fullPath } });
+    }
+  }, () => useAuthStore().getSessionRevision());
+
+  router.beforeEach(async (to) => {
+    const auth = useAuthStore();
+    if (to.meta.requiresAuth || to.path === "/login") await auth.restoreSession();
     if (to.meta.requiresAuth && !auth.isAuthenticated) {
       return { path: "/login", query: { redirect: to.fullPath } };
     }
     if (to.path === "/login" && auth.isAuthenticated) {
-      return "/dashboard";
+      return getSafeRedirect(to.query.redirect);
     }
     return true;
   });

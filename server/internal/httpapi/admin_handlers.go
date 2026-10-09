@@ -17,7 +17,7 @@ type adminReader interface {
 	ListRooms(adminplatform.RoomQuery) []adminplatform.RoomSummary
 	RoomDetail(string) (adminplatform.RoomSummary, error)
 	ListMatches(context.Context, adminplatform.MatchQuery) (adminplatform.Page[adminplatform.MatchSummary], error)
-	MatchDetail(context.Context, string) (adminplatform.MatchDetail, error)
+	MatchDetail(context.Context, string, adminplatform.MatchRecordQuery) (adminplatform.MatchDetail, error)
 }
 
 func (s *Server) adminOverview(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +133,29 @@ func (s *Server) adminMatchDetail(w http.ResponseWriter, r *http.Request, matchI
 	if !requireGET(w, r) {
 		return
 	}
-	result, err := s.admin.MatchDetail(r.Context(), matchID)
+	eventPage, err := queryInt(r, "event_page", 1)
+	if err != nil || eventPage < 1 {
+		writeError(w, http.StatusBadRequest, "event_page必须为正整数")
+		return
+	}
+	snapshotPage, err := queryInt(r, "snapshot_page", 1)
+	if err != nil || snapshotPage < 1 {
+		writeError(w, http.StatusBadRequest, "snapshot_page必须为正整数")
+		return
+	}
+	pageSize, err := queryInt(r, "record_page_size", 20)
+	if err != nil || pageSize < 1 {
+		writeError(w, http.StatusBadRequest, "record_page_size必须为正整数")
+		return
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	result, err := s.admin.MatchDetail(r.Context(), matchID, adminplatform.MatchRecordQuery{EventPage: eventPage, SnapshotPage: snapshotPage, RecordPageSize: pageSize})
+	if errors.Is(err, adminplatform.ErrInvalidQuery) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if errors.Is(err, adminplatform.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "对局不存在")
 		return

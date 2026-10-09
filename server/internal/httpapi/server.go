@@ -10,7 +10,9 @@ import (
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/game"
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/account"
 	adminplatform "github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/admin"
+	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/adminauth"
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/ai"
+	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/matchrecord"
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/room"
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/wallet"
 	"github.com/gorilla/websocket"
@@ -29,6 +31,8 @@ type Server struct {
 	ai       *ai.Service
 	chess    *chessHub
 	admin    adminReader
+	// 认证独立于查询服务，管理 Cookie 只授予只读能力。
+	auth     *adminauth.Service
 	upgrader websocket.Upgrader
 }
 
@@ -40,8 +44,12 @@ func New(cfg config.Config, db *pgxpool.Pool, redisClient *redis.Client) http.Ha
 		accounts: account.NewService(db), wallets: wallet.NewService(db),
 		rooms: roomManager, ai: ai.NewService(), chess: newChessHub(),
 		admin:    adminplatform.NewService(db, roomManager),
+		auth:     adminauth.New(cfg.AdminUsername, cfg.AdminPasswordHash, adminauth.NewRedisStore(redisClient)),
 		upgrader: websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }},
 	}
+	// 实时象棋记录使用现有 PostgreSQL；目录与后台读取共享同一房间管理器。
+	s.chess.ConfigureRecords(matchrecord.NewPostgresStore(db), roomManager)
+	s.chess.ConfigureDevelopmentRooms(cfg.DevelopmentRooms)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.health)
 	mux.HandleFunc("/api/v1/catalog", s.catalog)
@@ -49,14 +57,18 @@ func New(cfg config.Config, db *pgxpool.Pool, redisClient *redis.Client) http.Ha
 	mux.HandleFunc("/api/v1/wallet", s.wallet)
 	mux.HandleFunc("/api/v1/rooms", s.roomsHandler)
 	mux.HandleFunc("/api/v1/ai/capabilities", s.aiCapabilities)
-	mux.HandleFunc("/api/v1/admin/overview", s.adminOverview)
-	mux.HandleFunc("/api/v1/admin/users", s.adminUsers)
-	mux.HandleFunc("/api/v1/admin/rooms", s.adminRooms)
-	mux.HandleFunc("/api/v1/admin/rooms/", s.adminRoomRoute)
-	mux.HandleFunc("/api/v1/admin/matches", s.adminMatches)
-	mux.HandleFunc("/api/v1/admin/matches/", s.adminMatchRoute)
+	// 正式管理入口由服务端统一认证，平台公开接口保留原有职责。
+	mux.HandleFunc("/api/v1/admin/auth/login", s.adminLogin)
+	mux.HandleFunc("/api/v1/admin/auth/session", s.adminSession)
+	mux.HandleFunc("/api/v1/admin/auth/logout", s.adminLogout)
+	mux.Handle("/api/v1/admin/overview", s.requireAdmin(http.HandlerFunc(s.adminOverview)))
+	mux.Handle("/api/v1/admin/users", s.requireAdmin(http.HandlerFunc(s.adminUsers)))
+	mux.Handle("/api/v1/admin/rooms", s.requireAdmin(http.HandlerFunc(s.adminRooms)))
+	mux.Handle("/api/v1/admin/rooms/", s.requireAdmin(http.HandlerFunc(s.adminRoomRoute)))
+	mux.Handle("/api/v1/admin/matches", s.requireAdmin(http.HandlerFunc(s.adminMatches)))
+	mux.Handle("/api/v1/admin/matches/", s.requireAdmin(http.HandlerFunc(s.adminMatchRoute)))
 	mux.HandleFunc("/ws", s.websocket)
-	return cors(mux)
+	return s.adminCORS(mux)
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

@@ -52,6 +52,20 @@ export interface UserQuery {
   keyword?: string;
 }
 
+/** 客户端标识是房间连接标识，不能作为认证账号使用。 */
+export interface RoomPlayer {
+  client_id: string;
+  seat: string;
+  connected: boolean;
+}
+
+/** 历史对局座位保留入座时间，不把当前在线状态套用到历史玩家。 */
+export interface MatchPlayer {
+  client_id: string;
+  seat: string;
+  joined_at: string;
+}
+
 export interface RoomSummary {
   room_id: string;
   product_id: string;
@@ -62,6 +76,10 @@ export interface RoomSummary {
   created_at: string;
   duration_seconds: number;
   data_source: "partial" | "development";
+  players?: RoomPlayer[];
+  connected_count?: number;
+  match_id?: string;
+  source?: string;
 }
 
 export interface RoomQuery {
@@ -81,6 +99,10 @@ export interface MatchSummary {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
+  room_id?: string;
+  winner?: string;
+  result_reason?: string;
+  source?: string;
 }
 
 export interface MatchQuery {
@@ -88,6 +110,13 @@ export interface MatchQuery {
   page_size?: number;
   game_id?: string;
   status?: string;
+}
+
+/** 事件与快照分别分页；服务端返回数组只包含各自当前页。 */
+export interface MatchRecordQuery {
+  event_page?: number;
+  snapshot_page?: number;
+  record_page_size?: number;
 }
 
 export interface GameEvent {
@@ -108,6 +137,12 @@ export interface MatchDetail {
   events: GameEvent[];
   snapshots: GameSnapshot[];
   data_source: "partial" | "development";
+  players?: MatchPlayer[];
+  event_total?: number;
+  snapshot_total?: number;
+  event_page?: number;
+  snapshot_page?: number;
+  record_page_size?: number;
 }
 
 export interface AICapability {

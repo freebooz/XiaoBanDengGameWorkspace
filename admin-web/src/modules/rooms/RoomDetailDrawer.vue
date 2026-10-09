@@ -4,6 +4,7 @@ import DetailDrawer from "../../components/DetailDrawer.vue";
 import StatusTag from "../../components/StatusTag.vue";
 import DevelopmentBadge from "../../components/DevelopmentBadge.vue";
 import QueryError from "../../components/QueryError.vue";
+import RoomPlayers from "./RoomPlayers.vue";
 import { adminApi } from "../../services/api/admin";
 import type { RoomSummary } from "../../services/api/types";
 import { useReadOnlyQuery } from "../common/useReadOnlyQuery";
@@ -25,7 +26,7 @@ watch(() => [props.modelValue, props.roomId], () => {
       <QueryError :message="errorMessage" @retry="loadDetail" />
       <p v-if="loading" class="readonly-loading" role="status">详情加载中…</p>
       <div v-if="data" class="room-detail-data">
-        <DevelopmentBadge v-if="data.data_source === 'development'" label="开发数据" />
+        <DevelopmentBadge v-if="data.data_source === 'development' || data.source === 'development'" label="开发数据" />
         <el-descriptions :column="1" border size="small">
           <el-descriptions-item label="房间标识">{{ data.room_id }}</el-descriptions-item>
           <el-descriptions-item label="产品标识">{{ data.product_id }}</el-descriptions-item>
@@ -35,8 +36,11 @@ watch(() => [props.modelValue, props.roomId], () => {
           <el-descriptions-item label="房间状态"><StatusTag :value="data.state" /></el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ formatDate(data.created_at) }}</el-descriptions-item>
           <el-descriptions-item label="已创建时长">{{ formatDuration(data.duration_seconds) }}</el-descriptions-item>
+          <el-descriptions-item label="在线连接">{{ data.connected_count === undefined ? '连接人数待接入' : data.connected_count + ' 人在线' }}</el-descriptions-item>
+          <el-descriptions-item label="关联对局">{{ data.match_id === undefined ? '关联对局待接入' : data.match_id || '暂无关联对局' }}</el-descriptions-item>
         </el-descriptions>
-        <el-empty :image-size="54" description="玩家座位与连接状态待接入" />
+        <RoomPlayers v-if="data.players !== undefined" :players="data.players" />
+        <el-empty v-else :image-size="54" description="玩家座位与连接状态待接入" />
       </div>
     </div>
   </DetailDrawer>

@@ -54,8 +54,9 @@ onMounted(loadDashboard);
       <MetricCard label="注册用户" :value="overview?.registered_users ?? '--'" caption="accounts 真实数据" tone="brand" />
       <MetricCard label="今日活跃" value="待接入" caption="等待登录行为统计口径" tone="neutral" />
       <MetricCard label="当前在线" value="待接入" caption="等待统一在线状态聚合" tone="neutral" />
-      <MetricCard label="实时房间" :value="overview?.active_rooms ?? '--'" caption="当前 Game Node 活动房间" tone="success" />
-      <MetricCard label="累计对局" :value="overview?.total_matches ?? '--'" caption="game_matches 真实记录" tone="brand" />
+      <!-- 工作台只统计普通服务记录；显式 development 房间与对局留在业务列表查询。 -->
+      <MetricCard label="实时房间" :value="overview?.active_rooms ?? '--'" caption="当前节点房间，不含显式开发数据" tone="success" />
+      <MetricCard label="累计对局" :value="overview?.total_matches ?? '--'" caption="持久化记录，不含显式开发数据" tone="brand" />
     </div>
 
     <div class="dashboard-grid">

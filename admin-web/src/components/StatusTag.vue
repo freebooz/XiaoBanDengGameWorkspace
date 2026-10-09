@@ -10,7 +10,7 @@ const label = computed(() => {
   if (props.value === "active") return "活跃";
   if (props.value === "waiting") return "等待中";
   if (props.value === "finished") return "已结束";
-  const labels: Record<string, string> = { enabled: "已启用", disabled: "已停用", playing: "进行中", created: "待开始", closed: "已关闭", cancelled: "已取消", development: "开发数据" };
+  const labels: Record<string, string> = { enabled: "已启用", disabled: "已停用", playing: "进行中", created: "待开始", closed: "已关闭", cancelled: "已取消", aborted: "已中止", development: "开发数据" };
   return labels[props.value] ?? `未知状态（${props.value}）`;
 });
 </script>

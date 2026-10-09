@@ -12,10 +12,12 @@ import (
 )
 
 type fakeAdminReader struct {
-	overview adminplatform.Overview
-	userPage adminplatform.Page[adminplatform.UserSummary]
-	roomItem adminplatform.RoomSummary
-	roomErr  error
+	overview    adminplatform.Overview
+	userPage    adminplatform.Page[adminplatform.UserSummary]
+	roomItem    adminplatform.RoomSummary
+	roomErr     error
+	recordQ     adminplatform.MatchRecordQuery
+	matchDetail *adminplatform.MatchDetail
 }
 
 func (f *fakeAdminReader) Overview(context.Context) (adminplatform.Overview, error) {
@@ -33,8 +35,30 @@ func (f *fakeAdminReader) RoomDetail(string) (adminplatform.RoomSummary, error) 
 func (f *fakeAdminReader) ListMatches(context.Context, adminplatform.MatchQuery) (adminplatform.Page[adminplatform.MatchSummary], error) {
 	return adminplatform.Page[adminplatform.MatchSummary]{Items: []adminplatform.MatchSummary{}}, nil
 }
-func (f *fakeAdminReader) MatchDetail(context.Context, string) (adminplatform.MatchDetail, error) {
+func (f *fakeAdminReader) MatchDetail(_ context.Context, _ string, q adminplatform.MatchRecordQuery) (adminplatform.MatchDetail, error) {
+	f.recordQ = q
+	if f.matchDetail != nil {
+		return *f.matchDetail, nil
+	}
 	return adminplatform.MatchDetail{}, adminplatform.ErrNotFound
+}
+
+func TestAdminMatchDetailPassesIndependentRecordPages(t *testing.T) {
+	for _, test := range []struct {
+		query string
+		want  adminplatform.MatchRecordQuery
+	}{
+		{"", adminplatform.MatchRecordQuery{EventPage: 1, SnapshotPage: 1, RecordPageSize: 20}},
+		{"?event_page=2&snapshot_page=4&record_page_size=500", adminplatform.MatchRecordQuery{EventPage: 2, SnapshotPage: 4, RecordPageSize: 100}},
+	} {
+		reader := &fakeAdminReader{matchDetail: &adminplatform.MatchDetail{EventTotal: 50, SnapshotTotal: 51}}
+		s := &Server{admin: reader}
+		res := httptest.NewRecorder()
+		s.adminMatchDetail(res, httptest.NewRequest(http.MethodGet, "/api/v1/admin/matches/id"+test.query, nil), "id")
+		if res.Code != http.StatusOK || reader.recordQ != test.want {
+			t.Fatalf("分页参数传递错误: code=%d q=%+v want=%+v", res.Code, reader.recordQ, test.want)
+		}
+	}
 }
 
 func TestAdminOverviewHandlerReturnsJSON(t *testing.T) {
@@ -77,5 +101,17 @@ func TestAdminRoomDetailReturns404(t *testing.T) {
 	s.adminRoomDetail(res, req, "missing")
 	if res.Code != http.StatusNotFound {
 		t.Fatalf("不存在房间应返回404，实际=%d", res.Code)
+	}
+}
+
+// 对局记录页必须拒绝非法页，避免负偏移或无限查询。
+func TestAdminMatchDetailRejectsInvalidRecordPage(t *testing.T) {
+	for _, query := range []string{"event_page=0", "snapshot_page=-1", "record_page_size=0", "event_page=abc"} {
+		s := &Server{admin: &fakeAdminReader{}}
+		res := httptest.NewRecorder()
+		s.adminMatchDetail(res, httptest.NewRequest(http.MethodGet, "/api/v1/admin/matches/m?"+query, nil), "m")
+		if res.Code != http.StatusBadRequest {
+			t.Errorf("%s应返回400，实际=%d", query, res.Code)
+		}
 	}
 }

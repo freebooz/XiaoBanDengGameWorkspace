@@ -38,6 +38,13 @@ services:
       WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-replace_me}
       WECHAT_MCH_ID: ${WECHAT_MCH_ID:-replace_me}
       WECHAT_API_V3_KEY: ${WECHAT_API_V3_KEY:-replace_me}
+      # 本地 HTTP 才关闭安全 Cookie；正式 HTTPS 部署应设为 true。
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
+      ADMIN_COOKIE_SECURE: ${ADMIN_COOKIE_SECURE:-false}
+      ADMIN_ALLOWED_ORIGINS: ${ADMIN_ALLOWED_ORIGINS:-}
+      ADMIN_TRUSTED_PROXY_CIDRS: ${ADMIN_TRUSTED_PROXY_CIDRS:-}
+      DEVELOPMENT_ROOMS: ${DEVELOPMENT_ROOMS:-false}
     ports:
       - "8080:8080"
     depends_on:
@@ -51,7 +58,8 @@ services:
       context: ./admin-web
       target: development
     environment:
-      VITE_API_BASE_URL: http://localhost:8080
+      # 浏览器访问同源 /api；代理在容器内访问后端。
+      VITE_API_PROXY_TARGET: http://server:8080
     ports:
       - "5173:5173"
     depends_on:

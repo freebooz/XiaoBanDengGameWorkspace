@@ -1,0 +1,27 @@
+{
+  "source": "隔离开发服务；故障项为显式网络注入",
+  "results": [
+    "登录失败、真实Cookie登录、只读拒绝及站内恢复",
+    "真实双客户端、合法/非法走子、目录连接与开发来源",
+    "1366×768 /games/products 刷新、11px/12px字体、品牌色与视口",
+    "1366×768 /rooms 刷新、11px/12px字体、品牌色与视口",
+    "1366×768 /matches 刷新、11px/12px字体、品牌色与视口",
+    "1440×900 /games/products 刷新、11px/12px字体、品牌色与视口",
+    "1440×900 /rooms 刷新、11px/12px字体、品牌色与视口",
+    "1440×900 /matches 刷新、11px/12px字体、品牌色与视口",
+    "1920×1080 /games/products 刷新、11px/12px字体、品牌色与视口",
+    "1920×1080 /rooms 刷新、11px/12px字体、品牌色与视口",
+    "1920×1080 /matches 刷新、11px/12px字体、品牌色与视口",
+    "真实持久化玩家、事件、快照棋盘与逐帧回放",
+    "断线中止、查询空数据与筛选重置",
+    "注入HTTP500、离线与重试（网络测试夹具）",
+    "真实注销、会话失效及浏览器无异常"
+  ],
+  "execution_environment": {
+    "application": "生产dist + Vite preview同源代理",
+    "api": "实际Go1.23.12服务",
+    "redis": "实际Redis7.2.7",
+    "database": "PGlite0.5.8及pgwire socket（兼容联调，不是标准PostgreSQL17）",
+    "fault_cases": "HTTP500与离线由浏览器网络层显式注入"
+  }
+}

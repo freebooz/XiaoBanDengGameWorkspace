@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ type fakeRepository struct {
 	detailErr   error
 	lastUserQ   UserQuery
 	lastMatchQ  MatchQuery
+	lastRecordQ MatchRecordQuery
 }
 
 func (f *fakeRepository) CountUsers(context.Context) (int64, error)   { return f.userCount, nil }
@@ -30,11 +32,78 @@ func (f *fakeRepository) ListMatches(_ context.Context, q MatchQuery) (Page[Matc
 	f.lastMatchQ = q
 	return f.matchPage, nil
 }
-func (f *fakeRepository) MatchDetail(context.Context, string) (MatchDetail, error) {
+func (f *fakeRepository) MatchDetail(_ context.Context, _ string, q MatchRecordQuery) (MatchDetail, error) {
+	f.lastRecordQ = q
 	if f.detailErr != nil {
 		return MatchDetail{}, f.detailErr
 	}
 	return f.matchDetail, nil
+}
+
+func TestAdminMatchDetailNormalizesIndependentPagesAndEmptyArrays(t *testing.T) {
+	repo := &fakeRepository{matchDetail: MatchDetail{EventTotal: 42, SnapshotTotal: 43}}
+	service := newServiceWithRepository(repo, room.NewManager())
+	detail, err := service.MatchDetail(context.Background(), "id", MatchRecordQuery{EventPage: 3, SnapshotPage: 2, RecordPageSize: 500})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.lastRecordQ.EventPage != 3 || repo.lastRecordQ.SnapshotPage != 2 || repo.lastRecordQ.RecordPageSize != 100 {
+		t.Fatalf("记录页未传给仓储: %+v", repo.lastRecordQ)
+	}
+	if detail.Events == nil || detail.Snapshots == nil || detail.Players == nil || detail.RecordPageSize != 100 || detail.EventTotal != 42 {
+		t.Fatalf("记录分页响应错误: %+v", detail)
+	}
+	if _, err := service.MatchDetail(context.Background(), "id", MatchRecordQuery{EventPage: -1}); !errors.Is(err, ErrInvalidQuery) {
+		t.Fatalf("负页应拒绝: %v", err)
+	}
+	if _, err := service.MatchDetail(context.Background(), "id", MatchRecordQuery{EventPage: int(^uint(0) >> 1), RecordPageSize: 100}); !errors.Is(err, ErrInvalidQuery) {
+		t.Fatalf("偏移溢出应拒绝: %v", err)
+	}
+}
+
+func TestAdminRoomReadModelShowsClientConnections(t *testing.T) {
+	directory := room.NewManager()
+	item, err := directory.Create(room.CreateRequest{ProductID: "p", GameID: "chinese_chess", RuleSetID: "standard", RuleVersion: "1.0.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory.UpdateRuntime(item.RoomID, "playing", "match", []room.Player{{ClientID: "browser", Seat: "red", Connected: true}, {ClientID: "departed", Seat: "black", Connected: false}})
+	result, err := newServiceWithRepository(&fakeRepository{}, directory).RoomDetail(item.RoomID)
+	if err != nil || result.MatchID != "match" || result.ConnectedCount != 1 || len(result.Players) != 2 || !result.Players[0].Connected {
+		t.Fatalf("目录读模型连接事实错误: %+v err=%v", result, err)
+	}
+}
+
+func TestDevelopmentSourcesRemainExplicitInAdminDetails(t *testing.T) {
+	directory := room.NewManager()
+	item := directory.EnsureDevelopment("development-room")
+	repo := &fakeRepository{matchDetail: MatchDetail{Summary: MatchSummary{Source: "development"}, DataSource: DataSourcePartial}}
+	service := newServiceWithRepository(repo, directory)
+	roomDetail, err := service.RoomDetail(item.RoomID)
+	if err != nil || roomDetail.DataSource != "development" {
+		t.Fatalf("开发房间来源必须可见: %+v err=%v", roomDetail, err)
+	}
+	matchDetail, err := service.MatchDetail(context.Background(), "match", MatchRecordQuery{})
+	if err != nil || matchDetail.DataSource != "development" {
+		t.Fatalf("开发对局来源必须可见: %+v err=%v", matchDetail, err)
+	}
+}
+
+// 空winner表示当前尚无胜方，JSON仍必须包含已接入的字段。
+func TestMatchSummaryJSONIncludesEmptyResultFields(t *testing.T) {
+	payload, err := json.Marshal(MatchSummary{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"room_id", "winner", "result_reason"} {
+		if value, ok := fields[key]; !ok || value != "" {
+			t.Errorf("%s应明确返回空字符串，实际=%v 存在=%v", key, value, ok)
+		}
+	}
 }
 
 func TestAdminOverviewUsesRealCountsAndMarksPartialSource(t *testing.T) {
@@ -54,6 +123,22 @@ func TestAdminOverviewUsesRealCountsAndMarksPartialSource(t *testing.T) {
 	}
 	if result.ServiceTime.IsZero() {
 		t.Fatal("概览必须返回服务端时间")
+	}
+}
+
+func TestAdminOverviewExcludesExplicitDevelopmentRooms(t *testing.T) {
+	directory := room.NewManager()
+	if _, err := directory.Create(room.CreateRequest{ProductID: "xbd_chinese_chess", GameID: "chinese_chess", RuleSetID: "standard", RuleVersion: "1.0.0"}); err != nil {
+		t.Fatal(err)
+	}
+	directory.EnsureDevelopment("development-only")
+	repo := &fakeRepository{userCount: 7, matchCount: 4}
+	result, err := newServiceWithRepository(repo, directory).Overview(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ActiveRooms != 1 || result.RegisteredUsers != 7 || result.TotalMatches != 4 || result.DataSource != DataSourcePartial {
+		t.Fatalf("运营统计应排除显式开发房间并保留真实用户/对局数量: %+v", result)
 	}
 }
 
@@ -96,7 +181,7 @@ func TestAdminMatchDetailPropagatesNotFound(t *testing.T) {
 	repo := &fakeRepository{detailErr: ErrNotFound}
 	service := newServiceWithRepository(repo, room.NewManager())
 
-	_, err := service.MatchDetail(context.Background(), "missing")
+	_, err := service.MatchDetail(context.Background(), "missing", MatchRecordQuery{})
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("不存在对局应返回ErrNotFound，实际=%v", err)
 	}
