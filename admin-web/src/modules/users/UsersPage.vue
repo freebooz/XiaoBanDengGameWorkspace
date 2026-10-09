@@ -67,7 +67,7 @@ onMounted(loadUsers);
         <h2>用户中心</h2>
         <p>统一查看 AccountId（统一账号标识）、账号类型与基础状态；未持久化信息明确标记待接入。</p>
       </div>
-      <DevelopmentBadge v-if="result.data_source === 'development'" />
+      <DevelopmentBadge v-if="result.data_source === 'development'" label="开发数据" />
     </div>
 
     <FilterBar>

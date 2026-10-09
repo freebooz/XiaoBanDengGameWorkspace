@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import ElementPlus from "element-plus";
 import UsersPage from "./UsersPage.vue";
 import { adminApi } from "../../services/api/admin";
@@ -7,6 +7,8 @@ import { adminApi } from "../../services/api/admin";
 vi.mock("../../services/api/admin", () => ({
   adminApi: { users: vi.fn() },
 }));
+
+enableAutoUnmount(afterEach);
 
 describe("用户中心", () => {
   beforeEach(() => {
@@ -22,7 +24,8 @@ describe("用户中心", () => {
       data_source: "partial",
     });
     const wrapper = mount(UsersPage, {
-      global: { plugins: [ElementPlus], stubs: { teleport: true } },
+      attachTo: document.body,
+      global: { plugins: [ElementPlus] },
     });
     await flushPromises();
     expect(wrapper.text()).toContain("暂无用户数据");
@@ -37,7 +40,8 @@ describe("用户中心", () => {
       data_source: "partial",
     });
     const wrapper = mount(UsersPage, {
-      global: { plugins: [ElementPlus], stubs: { teleport: true } },
+      attachTo: document.body,
+      global: { plugins: [ElementPlus] },
     });
     await flushPromises();
 
@@ -67,7 +71,8 @@ describe("用户中心", () => {
       data_source: "partial",
     });
     const wrapper = mount(UsersPage, {
-      global: { plugins: [ElementPlus], stubs: { teleport: true } },
+      attachTo: document.body,
+      global: { plugins: [ElementPlus] },
     });
     await flushPromises();
 
@@ -90,7 +95,8 @@ describe("用户中心", () => {
       data_source: "development",
     });
     const wrapper = mount(UsersPage, {
-      global: { plugins: [ElementPlus], stubs: { teleport: true } },
+      attachTo: document.body,
+      global: { plugins: [ElementPlus] },
     });
     await flushPromises();
     expect(wrapper.text()).toContain("开发数据");

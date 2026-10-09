@@ -719,12 +719,16 @@ func _handle_message(text: String) -> void:
 		"connected":
 			_status_label.text = "状态：服务端已连接。"
 		"chess_joined":
+			if str(message.get("room_id", "")) != _room_id:
+				return
 			_joined = true
 			_your_color = str(message.get("your_color", ""))
 			_apply_player_view()
 			_status_label.text = "状态：%s" % str(message.get("message", "已加入房间"))
 			_update_hud()
 		"chess_state":
+			if str(message.get("room_id", "")) != _room_id:
+				return
 			_apply_state(message)
 		"chess_error":
 			_selected = INVALID_POS
@@ -1018,6 +1022,9 @@ func _on_board_pressed(pos: Vector2i) -> void:
 		return
 	if _winner != "":
 		_status_label.text = "状态：本局已经结束。"
+		return
+	if _room_status != "playing":
+		_status_label.text = "状态：等待双方就绪后才能走棋。"
 		return
 	if _turn != _your_color:
 		_status_label.text = "状态：当前不是你的回合。"

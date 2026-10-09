@@ -31,7 +31,7 @@ function accountTypeLabel(value?: string): string {
           <span>AccountId（统一账号标识）</span>
           <strong>{{ user.account_id }}</strong>
         </div>
-        <DevelopmentBadge v-if="dataSource === 'development'" />
+        <DevelopmentBadge v-if="dataSource === 'development'" label="开发数据" />
       </div>
 
       <el-tabs>

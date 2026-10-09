@@ -36,6 +36,12 @@ docker compose up --build
 - PostgreSQL：localhost:5432
 - Redis：localhost:6379
 
+Compose 默认使用管理后台的 Vite 开发镜像，可通过“开发管理员登录”进入后台，
+用于本地联调；修改前端代码后运行 `docker compose up --build -d admin-web` 更新镜像。
+需要单独检查生产构建时，可运行
+`docker build --target production -t xbd-admin-production ./admin-web`。
+生产构建不启用开发登录，正式管理员认证服务仍待接入。
+
 > 微信 AppId、商户号、APIv3 Key 等绝不写入仓库。示例值仅用于说明环境变量名称。
 
 ## Godot 产品组合
@@ -53,6 +59,13 @@ client/.generated/mahjong/
 ```
 
 安装 Godot 4.x 后可直接打开对应生成目录的 `project.godot`。
+
+象棋客户端生命周期回归检查（先生成并导入象棋工程）：
+
+```powershell
+godot --headless --path client/.generated/chinese_chess --editor --quit
+godot --headless --path client/.generated/chinese_chess --script ../../tests/chess_lifecycle_test.gd
+```
 
 ## 设计原则
 

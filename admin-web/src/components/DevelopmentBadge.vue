@@ -1,5 +1,9 @@
+<script setup lang="ts">
+withDefaults(defineProps<{ label?: string }>(), { label: "开发环境" });
+</script>
+
 <template>
-  <span class="development-badge">开发环境</span>
+  <span class="development-badge">{{ label }}</span>
 </template>
 
 <style scoped>
