@@ -7,6 +7,7 @@ import type {
   HealthStatus,
   MatchDetail,
   MatchQuery,
+  MatchRecordQuery,
   MatchSummary,
   PageResult,
   RoomQuery,
@@ -21,7 +22,7 @@ export interface AdminProvider {
   rooms(query?: RoomQuery): Promise<CollectionResult<RoomSummary>>;
   roomDetail(roomId: string): Promise<RoomSummary>;
   matches(query?: MatchQuery): Promise<PageResult<MatchSummary>>;
-  matchDetail(matchId: string): Promise<MatchDetail>;
+  matchDetail(matchId: string, query?: MatchRecordQuery): Promise<MatchDetail>;
 }
 
 /** adminApi（管理API）默认只调用真实Go服务，不自动回退到假数据。 */
@@ -44,8 +45,8 @@ export const adminApi: AdminProvider = {
       "/api/v1/admin/matches",
       query as Record<string, string | number | undefined>,
     ),
-  matchDetail: (matchId) =>
-    apiGet<MatchDetail>("/api/v1/admin/matches/" + encodeURIComponent(matchId)),
+  matchDetail: (matchId, query = {}) =>
+    apiGet<MatchDetail>("/api/v1/admin/matches/" + encodeURIComponent(matchId), query as Record<string, number | undefined>),
 };
 
 /** platformApi（平台公共API）供工作台与游戏中心复用。 */

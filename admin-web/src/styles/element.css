@@ -1,33 +1,33 @@
 @import "./tokens.css";
 
-/* Element Plus（Element Plus 组件库）统一品牌化覆盖。 */
-.el-button--primary {
+/* 使用 body 提高品牌规则优先级，避免懒加载组件 CSS 覆盖；同时覆盖传送到 body 的详情抽屉。 */
+body .el-button--primary {
   --el-button-bg-color: var(--xbd-brand-primary);
   --el-button-border-color: var(--xbd-brand-primary);
   --el-button-hover-bg-color: var(--xbd-brand-highlight);
   --el-button-hover-border-color: var(--xbd-brand-highlight);
 }
-.el-card {
+body .el-card {
   --el-card-border-color: var(--xbd-border);
   border-radius: var(--xbd-radius-md);
   background: var(--xbd-card-bg);
   box-shadow: var(--xbd-shadow-card);
 }
-.el-card__header { padding: 14px 16px; color: var(--xbd-text-primary); font-size: 13px; font-weight: 650; }
-.el-card__body { padding: 16px; }
-.el-table {
+body .el-card__header { padding: 14px 16px; color: var(--xbd-text-primary); font-size: 13px; font-weight: 650; }
+body .el-card__body { padding: 16px; }
+body .el-table {
   --el-table-border-color: #eee7df;
   --el-table-header-bg-color: #faf7f2;
   --el-table-row-hover-bg-color: #fff8ef;
   color: var(--xbd-text-primary);
   font-size: 11px;
 }
-.el-table__header { color: #5f554c; font-size: 12px; font-weight: 650; }
-.el-table .cell { line-height: 18px; white-space: nowrap; }
-.el-table th.el-table__cell, .el-table td.el-table__cell { padding: 7px 0; }
-.el-input__wrapper, .el-select__wrapper { border-radius: var(--xbd-radius-sm); }
-.el-drawer { background: var(--xbd-card-bg); }
-.el-drawer__header {
+body .el-table__header { color: #5f554c; font-size: 12px; font-weight: 650; }
+body .el-table .cell { line-height: 18px; white-space: nowrap; }
+body .el-table th.el-table__cell, body .el-table td.el-table__cell { padding: 7px 0; }
+body .el-input__wrapper, body .el-select__wrapper { border-radius: var(--xbd-radius-sm); }
+body .el-drawer { background: var(--xbd-card-bg); }
+body .el-drawer__header {
   margin-bottom: 0;
   padding: 16px 18px;
   border-bottom: 1px solid var(--xbd-border);
@@ -35,5 +35,5 @@
   font-size: 15px;
   font-weight: 650;
 }
-.el-drawer__body { padding: 16px 18px 22px; }
-.el-pagination { --el-pagination-button-bg-color: transparent; --el-pagination-hover-color: var(--xbd-brand-primary); }
+body .el-drawer__body { padding: 16px 18px 22px; }
+body .el-pagination { --el-pagination-button-bg-color: transparent; --el-pagination-hover-color: var(--xbd-brand-primary); }

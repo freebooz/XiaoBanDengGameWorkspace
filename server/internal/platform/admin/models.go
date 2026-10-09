@@ -9,9 +9,13 @@ import (
 // ErrNotFound（管理查询未找到）用于HTTP层统一映射404。
 var ErrNotFound = errors.New("管理查询目标不存在")
 
+var ErrInvalidQuery = errors.New("记录分页参数非法")
+
 const (
 	// DataSourcePartial（部分真实数据）表示字段来自真实服务/数据库，但一期尚未覆盖全部运营指标。
 	DataSourcePartial = "partial"
+	// DataSourceDevelopment 只用于明确来自开发房间的记录详情。
+	DataSourceDevelopment = "development"
 )
 
 // Page（分页结果）是管理后台列表接口的统一返回结构。
@@ -59,15 +63,26 @@ type RoomQuery struct {
 
 // RoomSummary（房间摘要）保持与通用房间模型解耦，方便后续扩展在线人数等运营字段。
 type RoomSummary struct {
-	RoomID          string    `json:"room_id"`
-	ProductID       string    `json:"product_id"`
-	GameID          string    `json:"game_id"`
-	RuleSetID       string    `json:"rule_set_id"`
-	RuleVersion     string    `json:"rule_version"`
-	State           string    `json:"state"`
-	CreatedAt       time.Time `json:"created_at"`
-	DurationSeconds int64     `json:"duration_seconds"`
-	DataSource      string    `json:"data_source"`
+	RoomID          string       `json:"room_id"`
+	ProductID       string       `json:"product_id"`
+	GameID          string       `json:"game_id"`
+	RuleSetID       string       `json:"rule_set_id"`
+	RuleVersion     string       `json:"rule_version"`
+	State           string       `json:"state"`
+	CreatedAt       time.Time    `json:"created_at"`
+	DurationSeconds int64        `json:"duration_seconds"`
+	DataSource      string       `json:"data_source"`
+	Players         []RoomPlayer `json:"players"`
+	ConnectedCount  int          `json:"connected_count"`
+	MatchID         string       `json:"match_id,omitempty"`
+	Source          string       `json:"source,omitempty"`
+}
+
+// RoomPlayer 是本进程观察的客户端事实，不是认证账号资料。
+type RoomPlayer struct {
+	ClientID  string `json:"client_id"`
+	Seat      string `json:"seat"`
+	Connected bool   `json:"connected"`
 }
 
 // MatchQuery（对局查询）支持游戏、状态和分页筛选。
@@ -80,15 +95,32 @@ type MatchQuery struct {
 
 // MatchSummary（对局摘要）映射 game_matches 表。
 type MatchSummary struct {
-	MatchID     string     `json:"match_id"`
-	ProductID   string     `json:"product_id"`
-	GameID      string     `json:"game_id"`
-	RuleSetID   string     `json:"rule_set_id"`
-	RuleVersion string     `json:"rule_version"`
-	Status      string     `json:"status"`
-	StartedAt   *time.Time `json:"started_at"`
-	FinishedAt  *time.Time `json:"finished_at"`
-	CreatedAt   time.Time  `json:"created_at"`
+	MatchID      string     `json:"match_id"`
+	ProductID    string     `json:"product_id"`
+	GameID       string     `json:"game_id"`
+	RuleSetID    string     `json:"rule_set_id"`
+	RuleVersion  string     `json:"rule_version"`
+	Status       string     `json:"status"`
+	StartedAt    *time.Time `json:"started_at"`
+	FinishedAt   *time.Time `json:"finished_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	RoomID       string     `json:"room_id"`
+	Winner       string     `json:"winner"`
+	ResultReason string     `json:"result_reason"`
+	Source       string     `json:"source,omitempty"`
+}
+
+// MatchRecordQuery 分别分页事件与持久化快照，避免对局记录无限增长。
+type MatchRecordQuery struct {
+	EventPage      int
+	SnapshotPage   int
+	RecordPageSize int
+}
+
+type MatchPlayer struct {
+	ClientID string    `json:"client_id"`
+	Seat     string    `json:"seat"`
+	JoinedAt time.Time `json:"joined_at"`
 }
 
 // DurationSeconds（对局时长）仅在开始和结束时间都存在时返回确定时长。
@@ -114,10 +146,16 @@ type GameSnapshot struct {
 	CreatedAt time.Time       `json:"created_at"`
 }
 
-// MatchDetail（对局详情）第一期包含摘要、事件和快照；玩家明细/回放文件后续按真实存储扩展。
+// MatchDetail（对局详情）包含历史座位与分页事件/快照，回放只读取持久化快照。
 type MatchDetail struct {
-	Summary    MatchSummary   `json:"summary"`
-	Events     []GameEvent    `json:"events"`
-	Snapshots  []GameSnapshot `json:"snapshots"`
-	DataSource string         `json:"data_source"`
+	Summary        MatchSummary   `json:"summary"`
+	Events         []GameEvent    `json:"events"`
+	Snapshots      []GameSnapshot `json:"snapshots"`
+	DataSource     string         `json:"data_source"`
+	Players        []MatchPlayer  `json:"players"`
+	EventTotal     int64          `json:"event_total"`
+	SnapshotTotal  int64          `json:"snapshot_total"`
+	EventPage      int            `json:"event_page"`
+	SnapshotPage   int            `json:"snapshot_page"`
+	RecordPageSize int            `json:"record_page_size"`
 }

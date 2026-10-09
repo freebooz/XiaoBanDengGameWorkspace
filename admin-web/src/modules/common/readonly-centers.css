@@ -1,0 +1,23 @@
+/* 三个只读领域页面共用品牌和紧凑布局，表格字体继承现有 11px/12px 规范。 */
+.readonly-center { width: 100%; max-width: 1680px; margin: 0 auto; font-size: 11px; }
+.readonly-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.readonly-heading h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.readonly-heading p { margin: 5px 0 0; color: var(--xbd-text-secondary); line-height: 1.6; }
+.readonly-center .filter-bar { flex-wrap: wrap; }
+.readonly-center .filter-bar__actions { margin-left: auto; flex-wrap: wrap; }
+.readonly-center .el-input { width: 170px; }
+.readonly-center .el-select { width: 150px; }
+.readonly-table .el-card__body { padding: 0; }
+.readonly-footer { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 9px 14px; border-top: 1px solid var(--xbd-border); color: var(--xbd-text-secondary); }
+.readonly-link { padding: 0; font-size: 11px; }
+.readonly-center .el-table { width: 100%; }
+.readonly-detail { font-size: 11px; }
+.readonly-detail .el-descriptions__body { overflow-wrap: anywhere; }
+.readonly-detail .el-descriptions__label { width: 118px; }
+.readonly-detail .el-descriptions__content { word-break: break-all; }
+.readonly-detail .development-badge { margin-bottom: 12px; }
+.readonly-json { margin: 0; padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; background: var(--xbd-page-bg); border-radius: var(--xbd-radius-sm); font-size: 11px; line-height: 1.5; max-height: 280px; overflow: auto; }
+.readonly-records { display: grid; gap: 10px; }
+.readonly-record { border: 1px solid var(--xbd-border); border-radius: var(--xbd-radius-sm); padding: 10px; min-width: 0; }
+.readonly-record header { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; color: var(--xbd-text-secondary); }
+.readonly-loading { padding: 24px; color: var(--xbd-text-secondary); }

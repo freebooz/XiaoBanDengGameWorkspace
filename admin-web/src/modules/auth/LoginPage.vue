@@ -1,18 +1,47 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import BrandLogo from "../../components/BrandLogo.vue";
-import DevelopmentBadge from "../../components/DevelopmentBadge.vue";
 import { useAuthStore } from "../../app/store/auth";
+import { getSafeRedirect } from "../../app/router";
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
-const isDevelopment = import.meta.env.DEV;
+const username = ref("");
+const password = ref("");
+const submitting = ref(false);
+const retrying = ref(false);
+const errorMessage = ref("");
 
-function loginDevelopment(): void {
-  auth.loginDevelopment();
-  const redirect = typeof route.query.redirect === "string" ? route.query.redirect : "/dashboard";
-  void router.push(redirect);
+/** 表单凭据只用于本次登录，密码在请求结束时立即清空。 */
+async function login(): Promise<void> {
+  if (submitting.value || retrying.value) return;
+  errorMessage.value = "";
+  if (!username.value.trim() || !password.value) {
+    errorMessage.value = "请输入管理员账号和密码";
+    return;
+  }
+  submitting.value = true;
+  try {
+    await auth.login(username.value.trim(), password.value);
+    await router.replace(getSafeRedirect(route.query.redirect));
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "登录失败，请重试";
+  } finally {
+    password.value = "";
+    submitting.value = false;
+  }
+}
+
+/** 服务暂时离线时可重新检查 cookie 会话，并恢复原业务地址。 */
+async function retrySession(): Promise<void> {
+  if (retrying.value || submitting.value) return;
+  retrying.value = true;
+  try {
+    await auth.restoreSession(true);
+    if (auth.isAuthenticated) await router.replace(getSafeRedirect(route.query.redirect));
+  } finally { retrying.value = false; }
 }
 </script>
 
@@ -39,7 +68,6 @@ function loginDevelopment(): void {
       <div class="login-card">
         <div class="login-card__top">
           <BrandLogo />
-          <DevelopmentBadge v-if="isDevelopment" />
         </div>
         <div class="login-card__heading">
           <h2>管理员登录</h2>
@@ -47,29 +75,25 @@ function loginDevelopment(): void {
         </div>
 
         <el-alert
-          v-if="isDevelopment"
-          title="当前为开发环境，仅用于本地联调与人工验收。"
-          type="warning"
+          v-if="auth.sessionError || errorMessage"
+          :title="errorMessage || auth.sessionError"
+          type="error"
           :closable="false"
           show-icon
         />
-
-        <el-button
-          v-if="isDevelopment"
-          data-testid="development-login"
-          class="development-login"
-          type="primary"
-          size="large"
-          @click="loginDevelopment"
-        >
-          开发管理员登录
+        <el-button v-if="auth.sessionError" data-testid="retry-session" :loading="retrying" :disabled="submitting" @click="retrySession">
+          重试恢复会话
         </el-button>
 
-        <el-empty
-          v-else
-          :image-size="64"
-          description="正式管理员认证服务待接入"
-        />
+        <form class="login-form" @submit.prevent="login">
+          <label for="admin-username">管理员账号</label>
+          <el-input id="admin-username" v-model="username" name="username" autocomplete="username" :disabled="submitting || retrying" />
+          <label for="admin-password">密码</label>
+          <el-input id="admin-password" v-model="password" name="password" type="password" autocomplete="current-password" show-password :disabled="submitting || retrying" />
+          <el-button class="login-submit" native-type="submit" type="primary" size="large" :loading="submitting" :disabled="retrying">
+            登录
+          </el-button>
+        </form>
 
         <div class="login-card__footer">
           <span>小板凳统一运营后台</span>
@@ -126,7 +150,9 @@ function loginDevelopment(): void {
 .login-card__heading { margin: 46px 0 24px; }
 .login-card__heading h2 { margin: 0; font-size: 25px; font-weight: 700; }
 .login-card__heading p { margin: 8px 0 0; color: var(--xbd-text-secondary); font-size: 12px; }
-.development-login { width: 100%; height: 44px; margin-top: 18px; font-weight: 650; letter-spacing: .04em; }
+.login-submit { width: 100%; height: 44px; margin-top: 18px; font-weight: 650; letter-spacing: .04em; }
+.login-form { display: grid; gap: 10px; margin-top: 18px; }
+.login-form label { margin-top: 8px; color: var(--xbd-text-secondary); font-size: 12px; }
 .login-card__footer { display: flex; justify-content: space-between; margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--xbd-border); color: #9a9087; font-size: 10px; }
 @media (max-width: 1180px) {
   .login-page { grid-template-columns: 1fr 480px; }

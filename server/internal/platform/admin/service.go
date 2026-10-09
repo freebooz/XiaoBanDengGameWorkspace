@@ -19,7 +19,7 @@ type repository interface {
 	CountMatches(context.Context) (int64, error)
 	ListUsers(context.Context, UserQuery) (Page[UserSummary], error)
 	ListMatches(context.Context, MatchQuery) (Page[MatchSummary], error)
-	MatchDetail(context.Context, string) (MatchDetail, error)
+	MatchDetail(context.Context, string, MatchRecordQuery) (MatchDetail, error)
 }
 
 // Service（运营管理只读服务）只聚合查询，不提供高风险管理写操作。
@@ -48,9 +48,15 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 	if err != nil {
 		return Overview{}, fmt.Errorf("统计对局失败: %w", err)
 	}
+	activeRooms := 0
+	for _, item := range s.rooms.List() {
+		if item.Source != "development" {
+			activeRooms++
+		}
+	}
 	return Overview{
 		RegisteredUsers: users,
-		ActiveRooms:     len(s.rooms.List()),
+		ActiveRooms:     activeRooms,
 		TotalMatches:    matches,
 		ServiceTime:     time.Now().UTC(),
 		DataSource:      DataSourcePartial,
@@ -123,9 +129,13 @@ func (s *Service) ListMatches(ctx context.Context, q MatchQuery) (Page[MatchSumm
 	return result, nil
 }
 
-// MatchDetail（对局详情）返回摘要、事件与快照。
-func (s *Service) MatchDetail(ctx context.Context, matchID string) (MatchDetail, error) {
-	result, err := s.repo.MatchDetail(ctx, matchID)
+// MatchDetail（对局详情）返回摘要、历史座位及当前记录页。
+func (s *Service) MatchDetail(ctx context.Context, matchID string, q MatchRecordQuery) (MatchDetail, error) {
+	q, err := normalizeRecordPaging(q)
+	if err != nil {
+		return MatchDetail{}, err
+	}
+	result, err := s.repo.MatchDetail(ctx, matchID, q)
 	if err != nil {
 		return MatchDetail{}, err
 	}
@@ -135,10 +145,41 @@ func (s *Service) MatchDetail(ctx context.Context, matchID string) (MatchDetail,
 	if result.Snapshots == nil {
 		result.Snapshots = []GameSnapshot{}
 	}
+	if result.Players == nil {
+		result.Players = []MatchPlayer{}
+	}
+	result.EventPage, result.SnapshotPage, result.RecordPageSize = q.EventPage, q.SnapshotPage, q.RecordPageSize
+	if result.Summary.Source == "development" {
+		result.DataSource = DataSourceDevelopment
+	}
 	if result.DataSource == "" {
 		result.DataSource = DataSourcePartial
 	}
 	return result, nil
+}
+
+func normalizeRecordPaging(q MatchRecordQuery) (MatchRecordQuery, error) {
+	if q.EventPage == 0 {
+		q.EventPage = 1
+	}
+	if q.SnapshotPage == 0 {
+		q.SnapshotPage = 1
+	}
+	if q.RecordPageSize == 0 {
+		q.RecordPageSize = 20
+	}
+	if q.EventPage < 1 || q.SnapshotPage < 1 || q.RecordPageSize < 1 {
+		return q, ErrInvalidQuery
+	}
+	if q.RecordPageSize > 100 {
+		q.RecordPageSize = 100
+	}
+	// LIMIT/OFFSET 使用 int 参数，先排除乘法溢出。
+	maxPage := int(^uint(0)>>1) / q.RecordPageSize
+	if q.EventPage-1 > maxPage || q.SnapshotPage-1 > maxPage {
+		return q, ErrInvalidQuery
+	}
+	return q, nil
 }
 
 func normalizePaging(page, pageSize int) (int, int) {
@@ -159,11 +200,20 @@ func roomSummary(item room.Room, now time.Time) RoomSummary {
 	if duration < 0 {
 		duration = 0
 	}
+	players := make([]RoomPlayer, 0, len(item.Players))
+	for _, player := range item.Players {
+		players = append(players, RoomPlayer{ClientID: player.ClientID, Seat: player.Seat, Connected: player.Connected})
+	}
+	source := DataSourcePartial
+	if item.Source == "development" {
+		source = DataSourceDevelopment
+	}
 	return RoomSummary{
 		RoomID: item.RoomID, ProductID: item.ProductID, GameID: item.GameID,
 		RuleSetID: item.RuleSetID, RuleVersion: item.RuleVersion, State: item.State,
 		CreatedAt: item.CreatedAt, DurationSeconds: int64(duration.Seconds()),
-		DataSource: DataSourcePartial,
+		DataSource: source,
+		Players:    players, ConnectedCount: item.ConnectedCount, MatchID: item.MatchID, Source: item.Source,
 	}
 }
 
@@ -180,7 +230,7 @@ func (r *pgRepository) CountUsers(ctx context.Context) (int64, error) {
 
 func (r *pgRepository) CountMatches(ctx context.Context) (int64, error) {
 	var count int64
-	err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM game_matches").Scan(&count)
+	err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM game_matches WHERE COALESCE(source,'')<>'development'").Scan(&count)
 	return count, err
 }
 
@@ -239,7 +289,7 @@ func (r *pgRepository) ListMatches(ctx context.Context, q MatchQuery) (Page[Matc
 	}
 	args = append(args, q.PageSize, (q.Page-1)*q.PageSize)
 	rows, err := r.db.Query(ctx,
-		fmt.Sprintf("SELECT match_id::text,product_id,game_id,rule_set_id,rule_version,status,started_at,finished_at,created_at FROM game_matches WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d", clause, len(args)-1, len(args)),
+		fmt.Sprintf("SELECT match_id::text,product_id,game_id,rule_set_id,rule_version,status,started_at,finished_at,created_at,COALESCE(room_id,''),COALESCE(winner,''),COALESCE(result_reason,''),COALESCE(source,'') FROM game_matches WHERE %s ORDER BY created_at DESC,match_id DESC LIMIT $%d OFFSET $%d", clause, len(args)-1, len(args)),
 		args...,
 	)
 	if err != nil {
@@ -249,7 +299,7 @@ func (r *pgRepository) ListMatches(ctx context.Context, q MatchQuery) (Page[Matc
 	items := make([]MatchSummary, 0)
 	for rows.Next() {
 		var item MatchSummary
-		if err := rows.Scan(&item.MatchID, &item.ProductID, &item.GameID, &item.RuleSetID, &item.RuleVersion, &item.Status, &item.StartedAt, &item.FinishedAt, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.MatchID, &item.ProductID, &item.GameID, &item.RuleSetID, &item.RuleVersion, &item.Status, &item.StartedAt, &item.FinishedAt, &item.CreatedAt, &item.RoomID, &item.Winner, &item.ResultReason, &item.Source); err != nil {
 			return Page[MatchSummary]{}, err
 		}
 		items = append(items, item)
@@ -260,12 +310,12 @@ func (r *pgRepository) ListMatches(ctx context.Context, q MatchQuery) (Page[Matc
 	return Page[MatchSummary]{Items: items, Total: total}, nil
 }
 
-func (r *pgRepository) MatchDetail(ctx context.Context, matchID string) (MatchDetail, error) {
+func (r *pgRepository) MatchDetail(ctx context.Context, matchID string, q MatchRecordQuery) (MatchDetail, error) {
 	var summary MatchSummary
 	err := r.db.QueryRow(ctx,
-		"SELECT match_id::text,product_id,game_id,rule_set_id,rule_version,status,started_at,finished_at,created_at FROM game_matches WHERE match_id::text=$1",
+		"SELECT match_id::text,product_id,game_id,rule_set_id,rule_version,status,started_at,finished_at,created_at,COALESCE(room_id,''),COALESCE(winner,''),COALESCE(result_reason,''),COALESCE(source,'') FROM game_matches WHERE match_id::text=$1",
 		matchID,
-	).Scan(&summary.MatchID, &summary.ProductID, &summary.GameID, &summary.RuleSetID, &summary.RuleVersion, &summary.Status, &summary.StartedAt, &summary.FinishedAt, &summary.CreatedAt)
+	).Scan(&summary.MatchID, &summary.ProductID, &summary.GameID, &summary.RuleSetID, &summary.RuleVersion, &summary.Status, &summary.StartedAt, &summary.FinishedAt, &summary.CreatedAt, &summary.RoomID, &summary.Winner, &summary.ResultReason, &summary.Source)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return MatchDetail{}, ErrNotFound
 	}
@@ -273,8 +323,33 @@ func (r *pgRepository) MatchDetail(ctx context.Context, matchID string) (MatchDe
 		return MatchDetail{}, err
 	}
 
+	var eventTotal, snapshotTotal int64
+	if err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM game_events WHERE match_id::text=$1", matchID).Scan(&eventTotal); err != nil {
+		return MatchDetail{}, err
+	}
+	if err := r.db.QueryRow(ctx, "SELECT COUNT(*) FROM game_snapshots WHERE match_id::text=$1", matchID).Scan(&snapshotTotal); err != nil {
+		return MatchDetail{}, err
+	}
+	players := make([]MatchPlayer, 0)
+	playerRows, err := r.db.Query(ctx, "SELECT client_id,seat,joined_at FROM game_match_players WHERE match_id::text=$1 ORDER BY seat", matchID)
+	if err != nil {
+		return MatchDetail{}, err
+	}
+	for playerRows.Next() {
+		var player MatchPlayer
+		if err := playerRows.Scan(&player.ClientID, &player.Seat, &player.JoinedAt); err != nil {
+			playerRows.Close()
+			return MatchDetail{}, err
+		}
+		players = append(players, player)
+	}
+	if err := playerRows.Err(); err != nil {
+		playerRows.Close()
+		return MatchDetail{}, err
+	}
+	playerRows.Close()
 	events := make([]GameEvent, 0)
-	eventRows, err := r.db.Query(ctx, "SELECT sequence,event_type,payload,created_at FROM game_events WHERE match_id::text=$1 ORDER BY sequence", matchID)
+	eventRows, err := r.db.Query(ctx, "SELECT sequence,event_type,payload,created_at FROM game_events WHERE match_id::text=$1 ORDER BY sequence LIMIT $2 OFFSET $3", matchID, q.RecordPageSize, (q.EventPage-1)*q.RecordPageSize)
 	if err != nil {
 		return MatchDetail{}, err
 	}
@@ -295,7 +370,7 @@ func (r *pgRepository) MatchDetail(ctx context.Context, matchID string) (MatchDe
 	eventRows.Close()
 
 	snapshots := make([]GameSnapshot, 0)
-	snapshotRows, err := r.db.Query(ctx, "SELECT sequence,snapshot,created_at FROM game_snapshots WHERE match_id::text=$1 ORDER BY sequence", matchID)
+	snapshotRows, err := r.db.Query(ctx, "SELECT sequence,snapshot,created_at FROM game_snapshots WHERE match_id::text=$1 ORDER BY sequence LIMIT $2 OFFSET $3", matchID, q.RecordPageSize, (q.SnapshotPage-1)*q.RecordPageSize)
 	if err != nil {
 		return MatchDetail{}, err
 	}
@@ -315,5 +390,5 @@ func (r *pgRepository) MatchDetail(ctx context.Context, matchID string) (MatchDe
 	}
 	snapshotRows.Close()
 
-	return MatchDetail{Summary: summary, Events: events, Snapshots: snapshots, DataSource: DataSourcePartial}, nil
+	return MatchDetail{Summary: summary, Events: events, Snapshots: snapshots, Players: players, EventTotal: eventTotal, SnapshotTotal: snapshotTotal, EventPage: q.EventPage, SnapshotPage: q.SnapshotPage, RecordPageSize: q.RecordPageSize, DataSource: DataSourcePartial}, nil
 }

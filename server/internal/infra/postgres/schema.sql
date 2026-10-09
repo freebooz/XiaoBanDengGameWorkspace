@@ -116,6 +116,26 @@ CREATE TABLE IF NOT EXISTS game_snapshots (
     PRIMARY KEY(match_id, sequence)
 );
 
+-- 增量迁移兼容已建库：旧对局允许新增元数据为空，保留全部历史行。
+ALTER TABLE game_matches ADD COLUMN IF NOT EXISTS room_id TEXT;
+ALTER TABLE game_matches ADD COLUMN IF NOT EXISTS winner VARCHAR(24);
+ALTER TABLE game_matches ADD COLUMN IF NOT EXISTS result_reason VARCHAR(64);
+ALTER TABLE game_matches ADD COLUMN IF NOT EXISTS source VARCHAR(24);
+ALTER TABLE game_matches ADD COLUMN IF NOT EXISTS last_sequence BIGINT NOT NULL DEFAULT 0;
+
+-- client_id 是客户端提供的连接标识；没有认证证据时不写 account_id。
+CREATE TABLE IF NOT EXISTS game_match_players (
+    match_id UUID NOT NULL REFERENCES game_matches(match_id),
+    client_id TEXT NOT NULL,
+    seat VARCHAR(24) NOT NULL,
+    joined_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY(match_id, seat),
+    UNIQUE(match_id, client_id)
+);
+
+CREATE INDEX IF NOT EXISTS game_matches_created_at_idx ON game_matches(created_at DESC, match_id DESC);
+CREATE INDEX IF NOT EXISTS game_matches_room_id_idx ON game_matches(room_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS feature_flags (
     flag_key VARCHAR(128) PRIMARY KEY,
     enabled BOOLEAN NOT NULL DEFAULT FALSE,

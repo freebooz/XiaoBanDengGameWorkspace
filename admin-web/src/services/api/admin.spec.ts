@@ -61,4 +61,17 @@ describe("运营后台API服务层", () => {
     expect(result.items).toEqual([]);
     expect(result.data_source).toBe("development");
   });
+
+  it("对局记录查询保留原详情路径并发送独立分页参数", async () => {
+    let requested: URL | undefined;
+    vi.stubGlobal("fetch", vi.fn((input: string) => {
+      requested = new URL(input);
+      return Promise.resolve(new Response(JSON.stringify({ events: [], snapshots: [] }), { status: 200 }));
+    }));
+    await adminApi.matchDetail("test/match", { event_page: 2, snapshot_page: 3, record_page_size: 20 });
+    expect(requested?.pathname).toBe("/api/v1/admin/matches/test%2Fmatch");
+    expect(requested?.searchParams.get("event_page")).toBe("2");
+    expect(requested?.searchParams.get("snapshot_page")).toBe("3");
+    expect(requested?.searchParams.get("record_page_size")).toBe("20");
+  });
 });

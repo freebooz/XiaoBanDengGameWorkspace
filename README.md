@@ -36,11 +36,46 @@ docker compose up --build
 - PostgreSQL：localhost:5432
 - Redis：localhost:6379
 
-Compose 默认使用管理后台的 Vite 开发镜像，可通过“开发管理员登录”进入后台，
-用于本地联调；修改前端代码后运行 `docker compose up --build -d admin-web` 更新镜像。
-需要单独检查生产构建时，可运行
-`docker build --target production -t xbd-admin-production ./admin-web`。
-生产构建不启用开发登录，正式管理员认证服务仍待接入。
+Compose 默认使用管理后台的 Vite 开发镜像，浏览器通过同源 `/api` 代理访问后端。
+开发和生产模式都使用服务端管理员认证；未配置管理员时不能进入后台。
+在 `server/` 运行 `go run ./cmd/admin-password`，交互输入至少12字节口令，
+将输出的 bcrypt 哈希填写到 `.env` 的 `ADMIN_PASSWORD_HASH`，并配置 `ADMIN_USERNAME`。
+在 `.env` 中用单引号包裹哈希值，避免美元符号被 Compose 解释为变量。禁止提交真实口令、哈希或 `.env`。
+
+会话存于 Redis，Cookie 为 HttpOnly、SameSite=Lax，12小时到期。只有只读管理角色。
+本地 HTTP 使用 `ADMIN_COOKIE_SECURE=false`；正式 HTTPS 必须开启安全 Cookie。
+跨域部署须明确配置 `ADMIN_ALLOWED_ORIGINS`，优先保持同源。
+通过代理部署时，`ADMIN_TRUSTED_PROXY_CIDRS` 必须填写直接代理的精确地址范围；
+Nginx/Vite 会覆写来源头，后端只信任配置中的代理。空配置下忽略转发头，代理后用户共享其来源限流额度。
+本地直接运行 Vite 时可填 `127.0.0.1/32`；Compose 应按实际容器代理地址配置。
+
+修改前端后运行 `docker compose up --build -d admin-web` 更新开发镜像。
+生产镜像使用 Nginx 同源代理，可运行 `docker build --target production -t xbd-admin-production ./admin-web`。
+Nginx 配置要求后端在同一部署网络中使用服务名 `server`；HTTPS 由入口网关终止。
+
+## 一期运营后台只读页面
+
+- `/games/products`（游戏中心）：读取平台产品目录，展示产品、类别、游戏、规则集和规则版本；支持本地筛选。
+- `/rooms`（房间中心）：查询当前节点房间，按产品、游戏、规则集和状态筛选；详情显示客户端座位、连接人数与关联对局。
+- `/matches`（对局中心）：按游戏和状态进行服务端分页查询；查看历史席位、胜方、结果原因及独立分页的事件/快照，通过真实快照逐帧回放。
+- 三个页面支持空态、接口错误、服务离线提示、刷新和重试；开发数据依照接口返回来源明确标识，不自动回退到假数据。
+- 表格正文 11px、表头 12px，沿用小板凳橙金、暖黑、米白主题；组件库按需加载并保证品牌覆盖优先级。
+- 象棋双方就绪及合法走子写入现有 PostgreSQL 记录表；事务失败停止房间，正式玩家断线记录中止，替补开启新的对局。客户端标识不是认证账号。
+- 默认 `DEVELOPMENT_ROOMS=false`，WebSocket 须加入已创建且规则匹配的房间；显式开启开发房间时列表/详情逐行标识，工作台统计排除该来源。
+- 当前 Godot 象棋演示的固定 `manual-chess-001` 房间需要显式开启 `DEVELOPMENT_ROOMS=true`；正式客户端须使用大厅创建的目录房间标识。本次未运行 Godot 客户端验证。
+- 活动目录/棋盘仍在当前进程内存；历史记录可跨服务实例查询，崩溃后活动对局尚无自动恢复或残留状态处理。
+
+前端回归和生产构建：
+
+```bash
+cd admin-web
+npm ci
+npm run test -- --run
+npm run build
+```
+
+本次实施及实际验证范围见 [2026-10-09-admin-readonly-centers.md（只读管理页面实施记录）](docs/validation/2026-10-09-admin-readonly-centers.md)。
+后续修复及验证见 [2026-10-09-admin-remaining-fixes.md（剩余问题修改记录）](docs/validation/2026-10-09-admin-remaining-fixes.md)。
 
 > 微信 AppId、商户号、APIv3 Key 等绝不写入仓库。示例值仅用于说明环境变量名称。
 
