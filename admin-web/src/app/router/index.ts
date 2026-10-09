@@ -1,4 +1,3 @@
-import { defineComponent, h } from "vue";
 import {
   createMemoryHistory,
   createRouter,
@@ -8,12 +7,7 @@ import {
 } from "vue-router";
 import { useAuthStore } from "../store/auth";
 
-const TemporaryPage = defineComponent({
-  name: "TemporaryPage",
-  setup: () => () => h("div", { class: "route-placeholder" }, "模块初始化中"),
-});
-
-/** routeRecords（路由表）固定一期核心 URL，页面模块将在后续任务逐项替换。 */
+/** routeRecords（路由表）固定一期核心 URL（页面地址），按领域延迟加载真实只读页面。 */
 export const routeRecords: RouteRecordRaw[] = [
   {
     path: "/login",
@@ -42,19 +36,19 @@ export const routeRecords: RouteRecordRaw[] = [
       {
         path: "games/products",
         name: "games-products",
-        component: TemporaryPage,
+        component: () => import("../../modules/games/GamesPage.vue"),
         meta: { title: "游戏中心", description: "产品、游戏、规则集与规则版本", requiresAuth: true },
       },
       {
         path: "rooms",
         name: "rooms",
-        component: TemporaryPage,
+        component: () => import("../../modules/rooms/RoomsPage.vue"),
         meta: { title: "房间中心", description: "实时房间与生命周期状态", requiresAuth: true },
       },
       {
         path: "matches",
         name: "matches",
-        component: TemporaryPage,
+        component: () => import("../../modules/matches/MatchesPage.vue"),
         meta: { title: "对局中心", description: "战绩、事件、快照与回放", requiresAuth: true },
       },
     ],

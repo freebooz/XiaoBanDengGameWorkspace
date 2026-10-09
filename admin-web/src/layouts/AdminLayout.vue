@@ -10,7 +10,8 @@ const platform = usePlatformStore();
 <template>
   <el-container class="admin-layout">
     <Sidebar />
-    <el-container class="admin-main-shell">
+    <!-- 页眉经过自定义组件封装，需显式指定纵向容器，保证内容位于页眉下方。 -->
+    <el-container class="admin-main-shell" direction="vertical">
       <HeaderBar />
       <el-main class="admin-content">
         <RouterView />

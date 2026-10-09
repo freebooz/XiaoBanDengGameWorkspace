@@ -42,6 +42,25 @@ Compose 默认使用管理后台的 Vite 开发镜像，可通过“开发管理
 `docker build --target production -t xbd-admin-production ./admin-web`。
 生产构建不启用开发登录，正式管理员认证服务仍待接入。
 
+## 一期运营后台只读页面
+
+- `/games/products`（游戏中心）：读取平台产品目录，展示产品、类别、游戏、规则集和规则版本；支持本地筛选。
+- `/rooms`（房间中心）：查询当前服务节点房间，按产品、游戏、规则集和状态筛选，重新查询详情抽屉。
+- `/matches`（对局中心）：按游戏和状态进行服务端分页查询，查看已有对局摘要、游戏事件与状态快照。
+- 三个页面支持空态、接口错误、服务离线提示、刷新和重试；开发数据依照接口返回来源明确标识，不自动回退到假数据。
+- 表格正文 11px、表头 12px，沿用小板凳橙金、暖黑、米白主题。未接入的玩家、连接、结算和回放信息明确标记待接入。
+
+前端回归和生产构建：
+
+```bash
+cd admin-web
+npm ci
+npm run test -- --run
+npm run build
+```
+
+本次实施及实际验证范围见 [2026-10-09-admin-readonly-centers.md（只读管理页面实施记录）](docs/validation/2026-10-09-admin-readonly-centers.md)。
+
 > 微信 AppId、商户号、APIv3 Key 等绝不写入仓库。示例值仅用于说明环境变量名称。
 
 ## Godot 产品组合
