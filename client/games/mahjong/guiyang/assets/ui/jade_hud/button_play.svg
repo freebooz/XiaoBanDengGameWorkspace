@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="176" height="70" viewBox="0 0 176 70">
+  <defs>
+    <linearGradient id="metal" x2="0" y2="1">
+      <stop stop-color="#fff0b8"/>
+      <stop offset=".16" stop-color="#ffd48b"/>
+      <stop offset=".33" stop-color="#be813c"/>
+      <stop offset=".53" stop-color="#784f28"/>
+      <stop offset=".78" stop-color="#cb8e43"/>
+      <stop offset="1" stop-color="#ffde8d"/>
+    </linearGradient>
+    <linearGradient id="lip" x2="0" y2="1">
+      <stop stop-color="#fff7c9" stop-opacity=".93"/>
+      <stop offset=".33" stop-color="#f8d394" stop-opacity=".41"/>
+      <stop offset=".71" stop-color="#d69857" stop-opacity=".37"/>
+      <stop offset="1" stop-color="#ffbe65" stop-opacity=".88"/>
+    </linearGradient>
+    <linearGradient id="jade" x2="0" y2="1">
+      <stop stop-color="#60a581"/>
+      <stop offset=".3" stop-color="#296d53"/>
+      <stop offset=".51" stop-color="#194d3f"/>
+      <stop offset=".73" stop-color="#103d2d"/>
+      <stop offset="1" stop-color="#38855d"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx=".30" cy=".05" r=".76">
+      <stop stop-color="#b7e2bb" stop-opacity=".45"/>
+      <stop offset=".62" stop-color="#b7e2bb" stop-opacity=".11"/>
+      <stop offset="1" stop-color="#b7e2bb" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="woodland" x2=".7" y2="1">
+      <stop stop-color="#c5e7ae" stop-opacity=".50"/>
+      <stop offset="1" stop-color="#5ba970" stop-opacity=".10"/>
+    </linearGradient>
+  </defs>
+  <rect x="1.8" y="6.3" width="172.4" height="62" rx="29" fill="#110b06" opacity=".59"/>
+  <rect x="2.1" y="3" width="171.8" height="62" rx="29" fill="#664522" stroke="#3c2514" stroke-width="1.1"/>
+  <rect x="2.65" y="2" width="170.7" height="61.8" rx="29.8" fill="url(#metal)" stroke="#a46b32" stroke-width=".95"/>
+  <rect x="4.4" y="4" width="167.2" height="57.8" rx="27.2" fill="none" stroke="url(#lip)" stroke-width="1.1"/>
+  <rect x="6.05" y="5.8" width="163.9" height="54.2" rx="24.6" fill="url(#jade)" stroke="#5c381b" stroke-width="1"/>
+  <rect x="7" y="6.7" width="162" height="52.4" rx="24" fill="url(#sheen)" stroke="url(#lip)" stroke-width=".85"/>
+  <path d="M24 8.7Q31 6.5 39 6.5h98q8 0 15 2.2M32 57.1q4 .6 8 .6h96q4 0 8-.6" fill="none" stroke="#ffe9a8" stroke-opacity=".48" stroke-width=".8" stroke-linecap="round"/>
+  <g fill="url(#woodland)">
+    <path d="M25 32c-8-2-11-9-6-13 4-3 8 .4 9 3 1-6 7-7 10-2 3 6-4 10-9 12 5-2 10 0 10 4-1 5-7 5-11 0 1 6-2 7-5 7-4 0-6-6 2-11z"/>
+    <path d="M28 31q.6 6-5 14" fill="none" stroke="#a9d697" stroke-width="1.2" stroke-opacity=".30" stroke-linecap="round"/>
+    <path d="M148 22c6-2 14 2 17 7-6 1-9 4-11 9-5-1-12-7-12-9 0-3 3-6 6-7z" opacity=".57"/>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 48c5 5 9 5 17 6 7 1 9-.7 10-3 1-2-1-4-3-4m-22-1c-1-4 2-7 5-6 4 1 3 5 1 5m10 8c-7-1-7-8-2-9 3-.5 5 2 4 4" stroke="#693e1d" stroke-width="4.4"/>
+    <path d="M10 47c5 5 9 5 17 6 7 1 9-.7 10-3 1-2-1-4-3-4m-22-1c-1-4 2-7 5-6 4 1 3 5 1 5m10 8c-7-1-7-8-2-9 3-.5 5 2 4 4" stroke="url(#metal)" stroke-width="2.6"/>
+    <path d="M14 41c.6-1 2-1.6 3-.9m6 6q1-2 3-2m4 7 4-1" stroke="#fff0b0" stroke-width=".71" opacity=".83"/>
+    <path d="M166 18c-5-5-9-5-17-6-7-1-9 .7-10 3-1 2 1 4 3 4m22 1c1 4-2 7-5 6-4-1-3-5-1-5m-10-8c7 1 7 8 2 9-3 .5-5-2-4-4" stroke="#6d4926" stroke-width="3.2" opacity=".83"/>
+    <path d="M166 17c-5-5-9-5-17-6-7-1-9 .7-10 3-1 2 1 4 3 4m22 1c1 4-2 7-5 6-4-1-3-5-1-5m-10-8c7 1 7 8 2 9-3 .5-5-2-4-4" stroke="url(#metal)" stroke-width="1.82" opacity=".92"/>
+  </g>
+</svg>

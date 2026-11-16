@@ -1,0 +1,353 @@
+extends SceneTree
+
+class Fixture:
+	extends "res://modules/games/mahjong/guiyang/guiyang_3d_screen.gd"
+	var sent_actions: Array[String] = []
+	func _connect_socket() -> void: pass
+	func _actions_ready() -> bool: return true
+	func _legal_options(kind: String) -> Array:
+		# Synthetic maximum-density presentation fixture: four exposed kongs
+		# cannot legally offer another kong. Keep deliberate button pressure
+		# separate from the real packet/hand contract in action_legality_smoke.
+		var result: Array=[]
+		for option: Dictionary in _options():
+			if str(option.get("type",""))==kind or (kind=="gang" and str(option.get("type","")) in ["ming_gang","an_gang","bu_gang"]): result.append(option)
+		return result
+	func _send(packet: Dictionary) -> void:
+		_last_send_error = OK
+		if str(packet.get("type","")) == "mahjong_action": sent_actions.append(str(packet.get("action","")))
+	func _build_audio() -> void:
+		super._build_audio()
+		_music_enabled = false
+
+var _failed := false
+var _output := ""
+var _evidence: Array[Dictionary] = []
+
+func _initialize() -> void: call_deferred("_run")
+
+func _check(ok: bool, message: String) -> void:
+	if not ok:
+		_failed = true
+		push_error(message)
+
+func _tiles(first: int, count: int, rank: int) -> Array:
+	var result: Array = []
+	for i in count: result.append({"id":first+i,"suit":"tong","rank":rank})
+	return result
+
+func _state(scenario: String, viewer: int) -> Dictionary:
+	var melds: Array = [[], [], [], []]
+	var counts := [13,13,13,13]
+	var discards: Array = []
+	var per_seat := [12,12,12,12]
+	if scenario == "four-seat-melds":
+		counts = [7,7,7,7]
+		per_seat = [18,12,12,6]
+		for seat in 4:
+			melds[seat] = [{"kind":"peng","tiles":_tiles(300+seat*10,3,seat+1)}, {"kind":"an_gang" if seat == (viewer+2)%4 else "ming_gang", "tiles":[{},{},{},{}] if seat == (viewer+2)%4 else _tiles(304+seat*10,4,seat+5)}]
+	elif scenario.contains("four-kongs"):
+		var relative := 2 if scenario.begins_with("far-") else 3 if scenario.begins_with("left-") else 1 if scenario.begins_with("right-") else 0
+		var kong_seat := (viewer + relative) % 4
+		counts[kong_seat] = 1
+		per_seat = [8,8,8,8]
+		per_seat[kong_seat] = 24
+		for i in 4: melds[kong_seat].append({"kind":"ming_gang","tiles":_tiles(300+i*4,4,i+1)})
+		if scenario.ends_with("overflow"):
+			per_seat = [4,4,4,4]
+			per_seat[kong_seat] = 36
+	counts[viewer] += 1
+	var hand: Array = []
+	for i in counts[viewer]: hand.append({"id":i+1,"suit":["wan","tong","tiao"][i%3],"rank":i%9+1})
+	for seat in 4:
+		for i in per_seat[seat]: discards.append({"seat":seat,"tile":{"id":100+seat*40+i,"suit":["wan","tong","tiao"][i%3],"rank":i%9+1},"claimed":false})
+	return {"room_id":"8614","match_id":"layout-only","your_seat":viewer,"status":"playing","phase":"reaction","turn":(viewer+1)%4,"dealer":2,"players":["a","b","c","d"],"player_names":["田埂阿牛","河湾阿梅","稻香大叔","村口小张"],"egg_counts":[100,100,100,100],"hand":hand,"hand_counts":counts,"discards":discards,"melds":melds,"remaining":3,"options":[{"type":"peng"},{"type":"ming_gang"},{"type":"hu"},{"type":"pass"}]}
+
+func _body_bounds(model: Node3D) -> AABB:
+	var mesh := model.find_child("TileBody", true, false) as MeshInstance3D
+	return mesh.global_transform * mesh.get_aabb()
+
+func _face(screen, model: Node3D) -> Rect2:
+	var rect: Rect2 = screen._projected_tile_rect(model)
+	rect.position += screen._board_view.position
+	return rect
+
+func _projected_hull(screen, model: Node3D, mesh_name := "TileFace") -> PackedVector2Array:
+	var mesh := model.find_child(mesh_name,true,false) as MeshInstance3D
+	var points := PackedVector2Array()
+	for k in 8:
+		points.append(screen._camera.unproject_position(mesh.global_transform*mesh.get_aabb().get_endpoint(k))*screen._board_view.size/Vector2(screen._board_viewport.size)+screen._board_view.position)
+	var hull := Geometry2D.convex_hull(points)
+	var center := Vector2.ZERO
+	for point in hull: center += point
+	center /= hull.size()
+	for i in hull.size(): hull[i] = hull[i].move_toward(center,2.0)
+	return hull
+
+
+func _polygons_overlap(a: PackedVector2Array, b: PackedVector2Array) -> bool:
+	for polygon in Geometry2D.intersect_polygons(a,b):
+		var twice_area := 0.0
+		for i in polygon.size(): twice_area += polygon[i].cross(polygon[(i+1)%polygon.size()])
+		if absf(twice_area) > 2.0: return true
+	return false
+
+
+func _verify(screen, scenario: String, viewer: int) -> void:
+	_verify_spot_coverage(screen, scenario)
+	var inner_rail: Vector2 = screen._camera.unproject_position(Vector3(0.0,0.0015,0.683)*screen.TABLE_SCALE)*screen._board_view.size/Vector2(screen._board_viewport.size)+screen._board_view.position
+	_check(absf(inner_rail.y-(screen.size.y-screen._safe.w))<=1.0,"Near wooden rail inner edge must align with the safe bottom")
+	_check(is_equal_approx(screen._camera.position.distance_to(screen.CAMERA_TARGET),2.4),"Camera must retain the requested closer distance")
+	for hand in screen._hand_models:
+		_check(is_equal_approx(hand.position.z,0.765-0.039*2.39),"Own hand must move inward exactly its physical width with no scale reduction")
+		_check(hand.scale.is_equal_approx(Vector3.ONE*2.39),"Own hand presentation scale must remain unchanged")
+	var expected := 0
+	var exposed: Array[Node3D] = []
+	var concealed_kongs := 0
+	var hands: Array[Node3D] = []
+	var smallest_discard := Vector2(INF,INF)
+	var smallest_meld := Vector2(INF,INF)
+	var felt := screen._board_viewport.find_child("Mahjong_Felt_Surface",true,false) as MeshInstance3D
+	var felt_bounds: AABB = felt.global_transform * felt.get_aabb()
+	var physical_bounds: Dictionary = {}
+	for node: Node3D in screen._pieces_root.get_children():
+		if not node.is_queued_for_deletion():
+			physical_bounds[node] = _body_bounds(node)
+			var bounds: AABB = physical_bounds[node]
+			_check(bounds.position.x >= felt_bounds.position.x and bounds.end.x <= felt_bounds.end.x and bounds.position.z >= felt_bounds.position.z and bounds.end.z <= felt_bounds.end.z,"Every complete tile body must remain inside the felt: %s"%node.name)
+	for node in screen._pieces_root.get_children():
+		if node.is_queued_for_deletion(): continue
+		var tile := node as Node3D
+		var is_meld := str(tile.name).begins_with("MahjongMeld")
+		var is_discard := str(tile.name).begins_with("MahjongDiscard")
+		if not is_meld and not is_discard:
+			hands.append(tile)
+			continue
+		var bounds := _body_bounds(tile)
+		for other: Node3D in physical_bounds:
+			if other != tile:
+				_check(not bounds.grow(-0.0002).intersects(physical_bounds[other].grow(-0.0002)),"Public body intersects another tile: %s / %s"%[tile.name,other.name])
+		_check(bounds.position.x >= felt_bounds.position.x and bounds.end.x <= felt_bounds.end.x and bounds.position.z >= felt_bounds.position.z and bounds.end.z <= felt_bounds.end.z, "Public tile outside felt: %s %s" % [tile.name, bounds])
+		if is_meld:
+			expected += 1
+			var relative := int(str(tile.name).trim_prefix("MahjongMeld").split("_")[0])
+			var local: Vector3 = tile.position.rotated(Vector3.UP,-float(relative)*PI*.5)
+			_check(absf(local.z-(0.67975 if relative==0 else 0.77215))<0.001,"Meld must stay ahead of its owner's hand and preserve discard clearance")
+			var hand_start: float = screen._concealed_row_start(relative, screen._seat_concealed_count(relative), screen.OWN_HAND_SCALE if relative==0 else screen.OPPONENT_HAND_SCALE)
+			_check(local.x < hand_start,"Meld is not left of its remaining hand")
+			if is_equal_approx(tile.rotation.x, PI):
+				concealed_kongs += 1
+				_check((tile.find_child("TileFace",true,false) as MeshInstance3D).material_override == screen._tile_materials.blank_face(),"Opponent concealed kong leaks face")
+				continue
+		if is_discard:
+			var identity := str(tile.name).trim_prefix("MahjongDiscard").split("_")
+			var relative: int = screen._relative_seat(int(identity[0]))
+			var discard_index := int(identity[1])
+			var row := (0 if discard_index < 8 else 1 if discard_index < 20 else 2) if scenario.ends_with("overflow") else int(discard_index / 8)
+			var local: Vector3 = tile.position.rotated(Vector3.UP,-float(relative)*PI*.5)
+			var physical_length := bounds.size.z if relative%2==0 else bounds.size.x
+			var actual_local_length: float = physical_length / screen.TILE_WORLD_SCALE
+			var physical_width := bounds.size.x if relative%2==0 else bounds.size.z
+			var actual_base_size: Vector3 = Vector3(physical_width,bounds.size.y,physical_length)/(screen.TILE_WORLD_SCALE*screen.DISCARD_SCALE)
+			_check(actual_base_size.is_equal_approx(Vector3(0.039,0.028,0.056)),"Measured imported body must be exactly 39 x 28 x 56 mm before presentation scales")
+			_check(absf(local.z-(0.30+row*0.056*1.65)-actual_local_length)<0.0001,"Every discard must move exactly its real GLB length toward its owner")
+			_check(absf(actual_local_length-0.056*1.65)<0.0001,"Actual imported tile geometry must use a 56 mm long body, not just enlarged spacing")
+		var rect := _face(screen,tile)
+		if is_meld: smallest_meld = smallest_meld.min(rect.size)
+		else: smallest_discard = smallest_discard.min(rect.size)
+		for panel in screen._seat_panels:
+			_check(not rect.grow(-1).intersects(panel.get_global_rect()), "Seat HUD hides %s"%tile.name)
+		for action in screen._response_buttons.values()+[screen._play_button]:
+			if action.is_visible_in_tree(): _check(not rect.grow(-1).intersects(action.get_global_rect()),"Action hides %s"%tile.name)
+		_check(not rect.grow(-1).intersects(screen._remaining_panel.get_global_rect()),"Clock hides %s"%tile.name)
+		exposed.append(tile)
+	for i in exposed.size():
+		var a := exposed[i]
+		for j in range(i+1, exposed.size()):
+			var b := exposed[j]
+			# Adjacent perspective quads can overlap in AABB without occlusion.
+			_check(not _polygons_overlap(_projected_hull(screen,a),_projected_hull(screen,b)),"Public faces overlap: %s / %s"%[a.name,b.name])
+		for hand in hands:
+			_check(not _polygons_overlap(_projected_hull(screen,a),_projected_hull(screen,hand,"TileBody")),"Concealed hand hides public face: %s / %s"%[a.name,hand.name])
+	for hand in screen._hand_models:
+		for panel in screen._seat_panels:
+			_check(not _face(screen,hand).grow(-1).intersects(panel.get_global_rect()),"Seat HUD hides enlarged own hand")
+	_check(expected == (28 if scenario=="four-seat-melds" else 16 if scenario.contains("four-kongs") else 0),"Meld count mismatch")
+	if scenario.ends_with("overflow"):
+		_check(exposed.size()==64,"All 48 discards and 16 meld tiles must remain rendered without truncation")
+	if scenario=="four-seat-melds": _check(concealed_kongs==4,"Concealed kong count mismatch")
+	print("DENSE_LAYOUT scenario=%s viewer=%d viewport=%s exposed=%d hidden_kongs=%d smallest_discard=%s smallest_meld=%s"%[scenario,viewer,screen.size,exposed.size(),concealed_kongs,smallest_discard,smallest_meld])
+	var buttons: Dictionary = {}
+	for kind in screen._response_buttons:
+		var button: Button = screen._response_buttons[kind]
+		if button.is_visible_in_tree():
+			var bounds := button.get_global_rect()
+			buttons[kind] = [bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y]
+	var pixel_scale: Vector2 = screen.get_viewport_transform().get_scale()
+	_evidence.append({"scenario":scenario,"camera_distance":screen._camera.position.distance_to(screen.CAMERA_TARGET),"inner_rail_bottom_logical":inner_rail.y,"safe_bottom_logical":screen.size.y-screen._safe.w,"own_hand_inward_world_metres":0.039*2.39*screen.TILE_WORLD_SCALE,"own_hand_scale":2.39})
+	_evidence.append({"scenario":scenario,"viewer":viewer,"logical_viewport":[screen.size.x,screen.size.y],"physical_window":[root.size.x,root.size.y],"public_tiles":exposed.size(),"hidden_kongs":concealed_kongs,"base_tile_metres":[0.039,0.028,0.056],"discard_outward_metres":0.056*1.65*screen.TILE_WORLD_SCALE,"four_row_meld_clearance_metres":0.00875*screen.TILE_WORLD_SCALE,"smallest_discard_px":[smallest_discard.x*pixel_scale.x,smallest_discard.y*pixel_scale.y],"smallest_meld_px":[smallest_meld.x*pixel_scale.x,smallest_meld.y*pixel_scale.y] if is_finite(smallest_meld.x) else [],"response_targets_logical":buttons})
+
+func _verify_spot_coverage(screen, scenario: String) -> void:
+	var spot := screen._stage.get_node("OverheadTableLight") as SpotLight3D
+	var forward := -spot.global_basis.z
+	for tile: Node3D in screen._pieces_root.get_children():
+		if tile.is_queued_for_deletion(): continue
+		var body := tile.find_child("TileBody",true,false) as MeshInstance3D
+		for corner in 8:
+			var delta := body.global_transform * body.get_aabb().get_endpoint(corner) - spot.global_position
+			_check(delta.length() < spot.spot_range and delta.normalized().dot(forward) > cos(deg_to_rad(spot.spot_angle)),"Angled spotlight misses body corner: %s / %s"%[scenario,tile.name])
+
+func _verify_lighting(screen) -> Dictionary:
+	var records: Array[Dictionary] = []
+	var energy_scale := 0.78 if RenderingServer.get_current_rendering_method()=="gl_compatibility" else 1.0
+	var node_ids: Dictionary = {}
+	var sky_ids: Dictionary = {}
+	var panorama_id := 0
+	for quality in [0,1,2,1,0,2,1]:
+		screen._set_quality(quality)
+		for frame in 3: await process_frame
+		var active := 0
+		var shadowed := 0
+		for light: Light3D in screen._stage.find_children("*","Light3D",true,false):
+			if node_ids.has(light.name): _check(node_ids[light.name]==light.get_instance_id(),"Quality switch replaces or duplicates a light")
+			else: node_ids[light.name]=light.get_instance_id()
+			if light.is_visible_in_tree() and light.light_energy>0.0:
+				active+=1
+				if light.shadow_enabled: shadowed+=1
+		_check(active==(2 if quality==0 else 3) and shadowed==1,"Lighting must use exactly one shadow caster and one/two fills")
+		var spot := screen._stage.get_node("OverheadTableLight") as SpotLight3D
+		_check(spot.position.is_equal_approx(Vector3(-0.55,1.15,0.30)) and (-spot.global_basis.z).dot((-spot.global_position).normalized())>0.9999,"Main spotlight must point from northwest toward table center")
+		_check(is_equal_approx(spot.light_energy,1.10*energy_scale) and spot.light_color.is_equal_approx(Color("#fff0dc")),"Main light must use the approved soft warm-white energy")
+		_check(spot.shadow_enabled and is_zero_approx(spot.light_size) and is_equal_approx(spot.spot_angle,55.0),"Main light must use PCF with the approved cone")
+		for light_name in ["FillLight","NortheastSeatLight"]:
+			var fill := screen._stage.get_node(light_name) as OmniLight3D
+			var expected := 0.16 if light_name=="FillLight" else (0.13 if quality>0 else 0.0)
+			_check(not fill.shadow_enabled and is_equal_approx(fill.light_energy,expected*energy_scale),"Fill must follow quality and never cast shadows")
+		var key := screen._stage.get_node("KeyLight") as DirectionalLight3D
+		_check(not key.visible and not key.shadow_enabled and is_zero_approx(key.light_energy),"Old directional light must stay retired")
+		var environment := (screen._stage.get_node("WorldEnvironment") as WorldEnvironment).environment
+		_check(environment.ambient_light_source==Environment.AMBIENT_SOURCE_COLOR and is_equal_approx(environment.ambient_light_energy,0.08 if energy_scale<1.0 else 0.10),"Ambient must remain restrained")
+		var sky := environment.sky
+		var radiance := 256 if quality==2 else 128
+		_check(environment.reflected_light_source==Environment.REFLECTION_SOURCE_SKY and sky.process_mode==Sky.PROCESS_MODE_QUALITY and sky.sky_material is PanoramaSkyMaterial,"Reflection must use a static panorama sky")
+		_check(sky.radiance_size==(Sky.RADIANCE_SIZE_256 if quality==2 else Sky.RADIANCE_SIZE_128),"Sky radiance budget mismatch")
+		if sky_ids.has(radiance): _check(sky_ids[radiance]==sky.get_instance_id(),"Quality changes must reuse the static sky")
+		else: sky_ids[radiance]=sky.get_instance_id()
+		var panorama := (sky.sky_material as PanoramaSkyMaterial).panorama
+		if panorama_id!=0: _check(panorama_id==panorama.get_instance_id(),"Static HDR panorama must not regenerate each quality switch")
+		panorama_id=panorama.get_instance_id()
+		_check(panorama.get_width()==256 and panorama.get_height()==128 and panorama.get_image().get_format()==Image.FORMAT_RGBF,"Reflection panorama must retain HDR input")
+		var viewport: SubViewport=screen._board_viewport
+		_check(viewport.msaa_3d==[Viewport.MSAA_2X,Viewport.MSAA_2X,Viewport.MSAA_4X][quality],"MSAA quality budget mismatch")
+		_check(viewport.positional_shadow_atlas_size==[1024,2048,4096][quality] and viewport.positional_shadow_atlas_quad_0==Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_1,"Shadow atlas must reserve one map")
+		_check(viewport.positional_shadow_atlas_quad_1==0 and viewport.positional_shadow_atlas_quad_2==0 and viewport.positional_shadow_atlas_quad_3==0,"Unused atlas quadrants must be disabled")
+		# Independently derive physical pixels from the native window / root
+		# logical viewport ratio: get_screen_transform omits canvas stretch here.
+		var output_width: float=screen._board_view.get_global_rect().size.x*float(root.size.x)/root.get_visible_rect().size.x
+		var budget: Vector2i=screen.QUALITY_SIZES[quality]
+		_check(viewport.size.x<=roundi(output_width) and viewport.size.x<=budget.x and viewport.size.x*viewport.size.y<=budget.x*budget.y+budget.x,"3D rendering must respect real output pixels and quality budget")
+		var expected_width:=mini(mini(budget.x,roundi(sqrt(float(budget.x*budget.y)*screen._board_view.size.aspect()))),maxi(1,roundi(output_width)))
+		_check(viewport.size.x==expected_width,"Large native outputs must use the available quality budget instead of being capped by design units")
+		_verify_spot_coverage(screen,"quality-%d"%quality)
+		records.append({"quality":quality,"active_lights":active,"shadow_casters":shadowed,"main_position":[spot.position.x,spot.position.y,spot.position.z],"main_energy":spot.light_energy,"main_color":spot.light_color.to_html(),"cone_half_angle":spot.spot_angle,"shadow_atlas":viewport.positional_shadow_atlas_size,"msaa":viewport.msaa_3d,"reflection_radiance":radiance,"render_size":[viewport.size.x,viewport.size.y],"physical_output_width":output_width})
+	return {"quality_transitions":records,"node_count":node_ids.size(),"all_tile_body_corners_covered":true}
+
+func _tap(point: Vector2) -> void:
+	var event := InputEventScreenTouch.new()
+	event.pressed = true
+	event.position = point
+	Input.parse_input_event(event)
+	Input.flush_buffered_events()
+	for frame in 2: await process_frame
+	event.pressed = false
+	Input.parse_input_event(event)
+	Input.flush_buffered_events()
+	for frame in 2: await process_frame
+
+func _verify_touch(screen) -> void:
+	for i in screen._hand_models.size():
+		screen._select_tile(0)
+		screen.sent_actions.clear()
+		var id: int = screen._hand_ids[i]
+		var origin_y: float = screen._hand_models[i].position.y
+		await _tap(screen._board_view.get_viewport_transform()*screen._board_view.get_global_transform()*screen._projected_tile_rect(screen._hand_models[i]).get_center())
+		_check(screen._selected_id == id,"Projected touch missed hand %d"%id)
+		_check(screen.sent_actions.is_empty(),"First touch must only select the tile")
+		for action in screen._response_buttons.values()+[screen._play_button]:
+			if not action.is_visible_in_tree(): continue
+			for tile in screen._pieces_root.get_children():
+				if tile.is_queued_for_deletion(): continue
+				var face := _face(screen,tile)
+				_check(not face.grow(-1).intersects(action.get_global_rect()),"Selection lift makes action cover a tile: %s / %s"%[tile.name,action.name])
+		await _tap(screen._board_view.get_viewport_transform()*screen._board_view.get_global_transform()*screen._projected_tile_rect(screen._hand_models[i]).get_center())
+		_check(screen._selected_id == id and screen._hand_models[i].position.y > origin_y and screen.sent_actions.is_empty(),"Second touch during a reaction must retain selection without submitting illegal play %d"%id)
+	screen._select_tile(0)
+	for kind in ["peng","gang","hu","pass"]:
+		screen._clear_pending_command()
+		screen._refresh_connection_actions(false)
+		screen.sent_actions.clear()
+		for frame in 2: await process_frame
+		var button := screen._response_buttons[kind] as Button
+		await _tap(button.get_viewport_transform()*button.get_global_transform()*(button.size*.5))
+		_check(screen.sent_actions == ["ming_gang" if kind=="gang" else kind], "Response target did not dispatch %s"%kind)
+	screen._clear_pending_command()
+	screen._refresh_connection_actions(false)
+
+func _verify_settlement(screen) -> void:
+	screen.match_context["seat_index"] = 0
+	screen.match_context["kind"] = "friend"
+	screen._state = _state("fourteen-hand",0)
+	screen._state.merge({"status":"finished","phase":"finished","options":[],"scores":[-70,30,20,20],"egg_deltas":[-30,13,9,8],"egg_counts":[0,113,109,108],"winners":[1],"win_from":0,"win_kind":"dian_pao","score_breakdown":{"hu":[-60,20,20,20],"gang":[-10,10,0,0],"ji":[0,0,0,0]}},true)
+	screen._render()
+	for frame in 4: await process_frame
+	var panel: Control = screen._settlement_panel
+	_check(is_instance_valid(panel),"Settlement panel was not created")
+	if not is_instance_valid(panel): return
+	var labels: Array[String] = []
+	for label: Label in panel.find_children("*","Label",true,false): labels.append(label.text)
+	_check(labels.has("-30 鸡蛋") and labels.has("+13 鸡蛋") and labels.has("+9 鸡蛋") and labels.has("+8 鸡蛋"),"Settlement must display authoritative egg transfer, not scores")
+	for button: Button in panel.find_children("*","Button",true,false):
+		if button.is_visible_in_tree(): _check(screen.get_global_rect().encloses(button.get_global_rect()),"Settlement button outside viewport")
+	if not _output.is_empty() and DisplayServer.get_name()!="headless":
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png(_output.path_join("settlement.png"))
+	_evidence.append({"scenario":"settlement","logical_viewport":[screen.size.x,screen.size.y],"physical_window":[root.size.x,root.size.y],"scores":[-70,30,20,20],"egg_deltas":[-30,13,9,8],"labels":labels})
+
+func _run() -> void:
+	Engine.max_fps = 0
+	if DisplayServer.get_name() != "headless": DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--output="): _output=arg.trim_prefix("--output=")
+		if arg.begins_with("--coach-extension="):
+			GDExtensionManager.unload_extension("res://modules/games/mahjong/guiyang/native/mahjong_coach.gdextension")
+			_check(GDExtensionManager.load_extension(arg.trim_prefix("--coach-extension="))==GDExtensionManager.LOAD_STATUS_OK,"Current Rust bridge must load before constructing the board")
+	var screen := Fixture.new()
+	screen.match_context={"room_id":"8614","seat_index":0}
+	root.add_child(screen)
+	await process_frame
+	screen.set_process(false)
+	for scenario in ["four-seat-melds","four-kongs","far-four-kongs","left-four-kongs","right-four-kongs","fourteen-hand","four-kongs-overflow","far-four-kongs-overflow","left-four-kongs-overflow","right-four-kongs-overflow"]:
+		for viewer in 4:
+			screen.match_context["seat_index"] = viewer
+			screen._state=_state(scenario,viewer)
+			screen._deadline_tick = Time.get_ticks_msec()+12000
+			screen._render()
+			for frame in 3: await process_frame
+			_verify(screen,scenario,viewer)
+			if viewer==0 and not _output.is_empty() and DisplayServer.get_name()!="headless":
+				await RenderingServer.frame_post_draw
+				root.get_texture().get_image().save_png(_output.path_join(scenario+".png"))
+			await _verify_touch(screen)
+	await _verify_settlement(screen)
+	var lights: Dictionary = await _verify_lighting(screen)
+	var felt := screen._board_viewport.find_child("Mahjong_Felt_Surface",true,false) as MeshInstance3D
+	var felt_color: Color = felt.material_override.get_shader_parameter("felt_color")
+	_check(felt_color.is_equal_approx(Color("#203d25")),"Felt must retain the approved deeper green material tint")
+	lights["felt_color"] = felt_color.to_html()
+	if not _output.is_empty():
+		var file := FileAccess.open(_output.path_join("geometry.json"),FileAccess.WRITE)
+		file.store_string(JSON.stringify({"passed":not _failed,"engine":Engine.get_version_info(),"renderer":RenderingServer.get_current_rendering_method(),"gpu":RenderingServer.get_video_adapter_name(),"max_fps":Engine.max_fps,"vsync":DisplayServer.window_get_vsync_mode() if DisplayServer.get_name()!="headless" else -1,"lights":lights,"cases":_evidence,"input":"Godot Input.parse_input_event selects each tile, rejects second-touch play in reaction, and dispatches peng/gang/hu/pass; no OS automation"},"\t"))
+	print("DENSE_LAYOUT_RESULT="+str(not _failed))
+	screen.queue_free()
+	await process_frame
+	quit(1 if _failed else 0)

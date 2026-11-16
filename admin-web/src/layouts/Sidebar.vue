@@ -2,19 +2,24 @@
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { usePlatformStore } from "../app/store/platform";
+import { MAHJONG_REVIEW, PLATFORM_READ, WALLET_GRANT_EGGS, useAuthStore } from "../app/store/auth";
 import BrandLogo from "../components/BrandLogo.vue";
 
 const route = useRoute();
 const router = useRouter();
 const platform = usePlatformStore();
+const auth = useAuthStore();
 
-const items = [
+const items = computed(() => [
   { path: "/dashboard", label: "综合工作台" },
+  { path: "/monitor", label: "实时监视" },
   { path: "/users", label: "用户中心" },
   { path: "/games/products", label: "游戏中心" },
   { path: "/rooms", label: "房间中心" },
   { path: "/matches", label: "对局中心" },
-];
+  { path: "/mahjong/reports", label: "麻将举报", capability: MAHJONG_REVIEW },
+  { path: "/wallet/eggs", label: "鸡蛋发放", capability: WALLET_GRANT_EGGS },
+].filter((item) => auth.can(item.capability ?? PLATFORM_READ)));
 
 const activePath = computed(() => route.path);
 </script>
@@ -34,7 +39,7 @@ const activePath = computed(() => route.path);
       class="sidebar-menu"
       @select="(path: string) => router.push(path)"
     >
-      <el-menu-item v-for="item in items" :key="item.path" :index="item.path">
+      <el-menu-item v-for="item in items" :key="item.path" :index="item.path" :aria-current="activePath === item.path ? 'page' : undefined">
         <span>{{ item.label }}</span>
       </el-menu-item>
     </el-menu>
@@ -46,16 +51,23 @@ const activePath = computed(() => route.path);
 
 <style scoped>
 .admin-sidebar {
-  position: fixed; inset: 0 auto 0 0; z-index: 20;
-  width: var(--xbd-sidebar-width); background: var(--xbd-sidebar-bg); color: #f7ecdf;
-  transition: width 0.22s ease; box-shadow: 8px 0 30px rgba(36, 25, 17, 0.08);
+  position: relative; flex: 0 0 auto; width: var(--nav-width); min-width: 0; z-index: 20;
+  background: var(--xbd-sidebar-bg); color: var(--xbd-text-primary);
+  transition: width 0.22s ease; border-right: 1px solid var(--xbd-border);
 }
-.admin-sidebar.collapsed { width: var(--xbd-sidebar-collapsed-width); }
-.sidebar-brand { height: var(--xbd-header-height); display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid rgba(255,255,255,.08); overflow: hidden; }
+.sidebar-brand { height: var(--xbd-header-height); display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--xbd-border); overflow: hidden; }
 .sidebar-menu { border-right: 0; background: transparent; }
-.sidebar-menu :deep(.el-menu-item) { height: 46px; margin: 3px 8px; border-radius: 9px; color: #c7baae; }
-.sidebar-menu :deep(.el-menu-item:hover) { background: rgba(212,138,58,.12); color: #fff; }
-.sidebar-menu :deep(.el-menu-item.is-active) { background: linear-gradient(90deg, rgba(212,138,58,.24), rgba(212,138,58,.08)); color: var(--xbd-brand-highlight); }
-.collapse-button { position: absolute; bottom: 16px; left: 10px; right: 10px; height: 34px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.035); color: #a99a8d; cursor: pointer; }
+.sidebar-menu :deep(.el-menu-item) { height: 46px; margin: 3px 8px; border-radius: 9px; color: var(--xbd-text-secondary); }
+.sidebar-menu :deep(.el-menu-item:hover) { background: var(--xbd-surface-raised); color: var(--xbd-text-primary); }
+.sidebar-menu :deep(.el-menu-item.is-active) { background: linear-gradient(90deg, var(--xbd-brand-tint), var(--xbd-surface-inset)); color: var(--xbd-brand-highlight); }
+.collapse-button { position: absolute; bottom: 16px; left: 10px; right: 10px; height: 34px; border: 1px solid var(--xbd-border-control); border-radius: 8px; background: var(--xbd-surface-inset); color: var(--xbd-text-secondary); cursor: pointer; }
+@media (max-width: 760px) {
+  .admin-sidebar { width: 100%; height: auto; transition: none; }
+  .sidebar-brand { height: 54px; }
+  .sidebar-menu { width: 100%; display: flex; overflow-x: auto; }
+  .sidebar-menu :deep(.el-menu-item) { flex: 0 0 auto; height: 44px; margin: 2px 4px; padding: 0 9px; }
+  .sidebar-menu :deep(.el-menu-item span) { width: auto; height: auto; visibility: visible; }
+  .collapse-button { display: none; }
+}
 </style>
 

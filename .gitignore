@@ -21,4 +21,21 @@ client/.generated/
 
 # 日志与运行数据
 logs/
+*.log
 data/
+
+# 本机验证、工具下载与可重建产物；正式编辑源仍保留在 SourceAssets 和 mahjong_models。
+/.tmp/
+/.superpowers/
+/artifacts/toolcache/
+/artifacts/screenshots/
+**/target/
+*.blend1
+*.blend@
+
+# 签名私钥和本机证书容器不得随代码提交。
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.key

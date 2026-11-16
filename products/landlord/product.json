@@ -1,0 +1,15 @@
+{
+  "display_name": "小板凳斗地主",
+  "product_id": "xbd_landlord",
+  "game_category": "card",
+  "game_id": "landlord",
+  "rule_set_id": "classic_three_player",
+  "rule_version": "2.0.0",
+  "android_package": "com.freebooz.xiaobandeng.landlord",
+  "modules": [
+    "foundation",
+    "game_framework/tabletop3d",
+    "game_framework/card3d",
+    "games/landlord"
+  ]
+}

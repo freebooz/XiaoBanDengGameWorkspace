@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="166" height="144" viewBox="0 0 166 144">
+  <defs>
+    <linearGradient id="gold" x2="0" y2="1">
+      <stop stop-color="#fff1b4"/><stop offset=".2" stop-color="#edbc68"/><stop offset=".46" stop-color="#a06b32"/><stop offset=".63" stop-color="#ce9449"/><stop offset=".85" stop-color="#ffd681"/><stop offset="1" stop-color="#854b25"/>
+    </linearGradient>
+    <linearGradient id="jade" x2="0" y2="1">
+      <stop stop-color="#54776b"/><stop offset=".43" stop-color="#294d42"/><stop offset=".67" stop-color="#132c26"/><stop offset="1" stop-color="#1f4136"/>
+    </linearGradient>
+    <linearGradient id="wood" x2="0" y2="1">
+      <stop stop-color="#8c623b"/><stop offset=".43" stop-color="#523320"/><stop offset=".68" stop-color="#2e2017"/><stop offset="1" stop-color="#614125"/>
+    </linearGradient>
+    <radialGradient id="counter">
+      <stop stop-color="#20362c"/><stop offset=".65" stop-color="#14251f"/><stop offset="1" stop-color="#0b1714"/>
+    </radialGradient>
+    <g id="wing">
+      <path d="M53 7C37 1 13 6 12 21c0 14 23 21 44 12l13-14Z" fill="url(#gold)" stroke="#6b4623" stroke-width="1.15"/>
+      <path d="M54 10C38 5 16 9 16 21c0 12 20 17 38 10l11-11Z" fill="url(#jade)" stroke="#79532b" stroke-width=".9"/>
+      <path d="M53 11C36 7 19 10 18 21c0 8 17 13 32 9" fill="none" stroke="#f1c57e" stroke-opacity=".47" stroke-width="1"/>
+      <path d="M24 16c-5 0-6 6 0 7 4 0 4-3 2-3m17 6 3 1 3-1" fill="none" stroke="#c89856" stroke-opacity=".55" stroke-width=".85" stroke-linecap="round"/>
+    </g>
+    <g id="lobe">
+      <path d="M53 35C54 19 64 7 83 7s29 12 30 28l-15 11H68Z" fill="url(#gold)" stroke="#704825" stroke-width="1.15"/>
+      <path d="M57 34C58 21 66 11 83 11s25 10 26 23l-13 10H70Z" fill="url(#wood)" stroke="#87552a" stroke-width=".95"/>
+      <path d="M63 27c3-9 11-14 20-14s17 5 20 14" fill="none" stroke="#f4bc6c" stroke-opacity=".62" stroke-width="1.1" stroke-linecap="round"/>
+      <path d="M63 37q0-6 5-6c3 0 4 3 2 5m33 1q0-6-5-6c-3 0-4 3-2 5" fill="none" stroke="#e0ae67" stroke-opacity=".53" stroke-width=".9"/>
+    </g>
+    <g id="sprig">
+      <path d="M24 99c9 2 18 1 28-5m-20 10c6-1 10-4 13-9m-10 7c-6-2-6-7-5-9m10 8c6 2 9 0 12-2" fill="none" stroke="#56321b" stroke-width="3.3" stroke-linecap="round"/>
+      <path d="M24 98c9 2 18 1 28-5m-20 10c6-1 10-4 13-9m-10 7c-6-2-6-7-5-9m10 8c6 2 9 0 12-2" fill="none" stroke="url(#gold)" stroke-width="1.6" stroke-linecap="round"/>
+    </g>
+  </defs>
+  <ellipse cx="83" cy="99" rx="71" ry="19" fill="#14100a" opacity=".36"/>
+  <use href="#lobe" transform="translate(166 144) rotate(180)"/>
+  <use href="#lobe"/>
+  <use href="#wing" transform="translate(0 51)"/>
+  <use href="#wing" transform="translate(166 51) scale(-1 1)"/>
+  <path d="M48 47q8-8 21-10m49 10q-8-8-21-10m-49 60q8 8 21 10m49-10q-8 8-21 10" fill="none" stroke="#b17839" stroke-width="4" stroke-linecap="round"/>
+  <path d="M48 47q8-8 21-10m49 10q-8-8-21-10m-49 60q8 8 21 10m49-10q-8 8-21 10" fill="none" stroke="#edbb73" stroke-width="1" stroke-linecap="round"/>
+  <use href="#sprig"/>
+  <use href="#sprig" transform="translate(166 0) scale(-1 1)"/>
+  <circle cx="83" cy="74" r="38" fill="#291a10" opacity=".71"/>
+  <circle cx="83" cy="72" r="37" fill="url(#gold)" stroke="#6b4020" stroke-width="1.25"/>
+  <circle cx="83" cy="72" r="33" fill="url(#counter)" stroke="#9f6c36" stroke-width="1.25"/>
+  <circle cx="83" cy="72" r="30.3" fill="none" stroke="#efd28a" stroke-opacity=".47" stroke-width=".7"/>
+  <path d="M55 62a30 30 0 0 1 56-1m-55 23a30 30 0 0 0 54 1" fill="none" stroke="#ffe7a0" stroke-opacity=".65" stroke-width="1.1" stroke-linecap="round"/>
+</svg>

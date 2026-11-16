@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="142" height="124" viewBox="0 0 142 124">
+  <defs>
+    <linearGradient id="roof" x2="0" y2="1"><stop stop-color="#bb8b57"/><stop offset=".59" stop-color="#86603c"/><stop offset="1" stop-color="#4b3227"/></linearGradient>
+    <linearGradient id="beam" x2="1" y2="1"><stop stop-color="#efbf7d"/><stop offset=".47" stop-color="#b7824f"/><stop offset="1" stop-color="#6d412a"/></linearGradient>
+    <linearGradient id="edging" x2="0" y2="1"><stop stop-color="#ffe0a1"/><stop offset="1" stop-color="#8d562e"/></linearGradient>
+  </defs>
+  <ellipse cx="72" cy="104" rx="60" ry="9" fill="#452d1e" opacity=".19"/>
+  <path d="m25 92 47-15 46 15v8l-46 13-47-13z" fill="#70513b" stroke="#654531" stroke-width="1.3"/>
+  <path d="m25 92 47-15 46 15-46 14z" fill="url(#beam)" stroke="#895d38" stroke-width="1.3"/>
+  <path d="m30 92 41 12 43-12M34 93l37 12 34-10" fill="none" stroke="#f9d59a" stroke-opacity=".44"/>
+  <path d="M44 49h8v43l-8 2-4-4V51zm54 0h8v41l-4 4-8-2V50z" fill="#815435" stroke="#6b422d" stroke-width="1.1"/>
+  <path d="M38 47h8v47l-7 2-5-4V50zm59 1h8v44l-5 4-7-2V50z" fill="url(#beam)" stroke="#6f442b" stroke-width="1.3"/>
+  <path d="M40 52v39m59-39v39" stroke="#f5d297" stroke-width="1.15" stroke-opacity=".63" stroke-linecap="round"/>
+  <path d="m43 80 28-9 28 9v5l-29-8-27 8z" fill="#ae7746" stroke="#7b4b2b" stroke-width="1.15"/>
+  <path d="M31 47c24-7 64-7 79 0v9H31z" fill="#a4774d" stroke="#653e2b" stroke-width="1.3"/>
+  <path d="M12 47c24 1 35-14 48-25l11-3 13 4c13 11 25 24 48 24-9 9-19 12-33 8-20-4-35-4-57 0-12 2-24-1-30-8Z" fill="#50362b" stroke="#593822" stroke-width="1.35"/>
+  <path d="M13 44c23 1 33-14 48-26l10-2 12 3c15 11 25 25 49 25-12 8-21 9-36 6-17-3-35-4-52 0-13 3-23 2-31-6Z" fill="url(#roof)" stroke="#60412a" stroke-width="1.3"/>
+  <path d="M21 47c16 1 25-4 38-8s23-1 38 4c8 3 17 5 24 4M64 22c-7 12-16 19-25 24m38-24c8 11 17 18 27 23M57 27c-10 10-20 15-29 18m56-17c10 9 20 14 29 17" fill="none" stroke="url(#edging)" stroke-width="1.15" stroke-linecap="round"/>
+  <path d="M61 22q11-9 21 0V18l-4-5-6 3-7-3-4 5z" fill="url(#beam)" stroke="#714929" stroke-width="1.15"/>
+  <path d="M71 59v8" stroke="#7c4829" stroke-width="2" stroke-linecap="round"/>
+  <path d="M67 67q4-2 8 0l1 10q-5 4-10 0z" fill="#d89a4d" stroke="#b97037" stroke-width="1.1"/>
+</svg>

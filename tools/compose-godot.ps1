@@ -1,7 +1,8 @@
 ﻿param(
     [Parameter(Mandatory=$true)]
-    [ValidateSet("chinese_chess","mahjong")]
-    [string]$Product
+    [ValidateSet("chinese_chess","mahjong","landlord","guandan")]
+    [string]$Product,
+    [string]$OutputDirectory
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,6 +10,12 @@ $workspace = Split-Path -Parent $PSScriptRoot
 $productPath = Join-Path $workspace ("products\" + $Product + "\product.json")
 $config = Get-Content $productPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $target = Join-Path $workspace ("client\.generated\" + $Product)
+if ($OutputDirectory) {
+    $target = [System.IO.Path]::GetFullPath($OutputDirectory, $workspace)
+    if (-not $target.StartsWith($workspace + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $target)) {
+        throw 'OutputDirectory must be a new directory under the workspace.'
+    }
+}
 
 # compose-godot.ps1（Godot产品组合工具）
 # 源模块只保留一份，本脚本按产品清单复制到临时工程，避免多个App长期复制公共源码。
@@ -35,22 +42,38 @@ foreach($module in $config.modules){
     Copy-Item $source $destination -Recurse -Force
 }
 
+# 麻将使用独立四人大厅，避免象棋的双座位流程和界面进入麻将产品。
+if($Product -eq "mahjong"){
+    Copy-Item (Join-Path $workspace "client\games\mahjong\guiyang\mahjong_app.gd") (Join-Path $target "scripts\main.gd") -Force
+    $coach = Join-Path $workspace '.tmp/mahjong-coach/native'
+    $coachConfig = Join-Path $coach 'mahjong_coach.gdextension'
+    if (Test-Path -LiteralPath $coachConfig -PathType Leaf) {
+        $coachTarget = Join-Path $moduleRoot 'games/mahjong/guiyang/native'
+        New-Item -Path $coachTarget -ItemType Directory -Force | Out-Null
+        Copy-Item -LiteralPath $coachConfig -Destination $coachTarget
+        $libraryEntries = [regex]::Matches([IO.File]::ReadAllText($coachConfig), '(?m)^(?:windows\.x86_64|android\.arm64)\s*=\s*"res://modules/games/mahjong/guiyang/native/([\w.]+)"\r?$')
+        foreach ($entry in $libraryEntries) {
+            $library = Join-Path $coach $entry.Groups[1].Value
+            Copy-Item -LiteralPath $library -Destination $coachTarget
+        }
+    }
+}
+if($Product -eq "landlord"){
+    Copy-Item (Join-Path $workspace "client\games\landlord\landlord_app.gd") (Join-Path $target "scripts\main.gd") -Force
+}
+if($Product -eq "guandan"){
+    Copy-Item (Join-Path $workspace "client\games\guandan\guandan_app.gd") (Join-Path $target "scripts\main.gd") -Force
+}
+
 # 产品名和Android包名在生成工程中进行最小差异替换。
 $projectFile = Join-Path $target "project.godot"
 $projectText = Get-Content $projectFile -Raw -Encoding UTF8
 $projectText = $projectText.Replace('config/name="XiaoBanDeng Product"', 'config/name="' + $config.display_name + '"')
-if($Product -eq "chinese_chess"){
-    # 象棋采用参考图的竖屏布局，麻将继续使用共享产品壳的横屏设置。
-    $projectText = $projectText.Replace('window/size/viewport_width=1280', 'window/size/viewport_width=720')
-    $projectText = $projectText.Replace('window/size/viewport_height=720', 'window/size/viewport_height=1280')
-    $projectText = $projectText.Replace('window/size/window_width_override=1280', 'window/size/window_width_override=720')
-    $projectText = $projectText.Replace('window/size/window_height_override=720', 'window/size/window_height_override=1280')
-    $portraitSettings = @'
-window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
-window/handheld/orientation=1
-'@
-    $projectText = $projectText.Replace('window/stretch/mode="canvas_items"', $portraitSettings)
+if ($config.application_icon) {
+    $projectText = $projectText.Replace('[application]', "[application]`nconfig/icon=`"$($config.application_icon)`"")
+}
+if ($config.application_version) {
+    $projectText = $projectText.Replace('[application]', "[application]`nconfig/version=`"$($config.application_version)`"")
 }
 [System.IO.File]::WriteAllText($projectFile, $projectText, [System.Text.UTF8Encoding]::new($false))
 
@@ -58,6 +81,21 @@ $exportFile = Join-Path $target "export_presets.cfg"
 $exportText = Get-Content $exportFile -Raw -Encoding UTF8
 $exportText = $exportText.Replace('package/unique_name="com.freebooz.xiaobandeng.product"', 'package/unique_name="' + $config.android_package + '"')
 $exportText = $exportText.Replace('package/name="小板凳"', 'package/name="' + $config.display_name + '"')
+if ($config.application_version) {
+    $exportText = $exportText -replace '(?m)^version/name="[^"]*"', ('version/name="' + $config.application_version + '"')
+}
+if ($config.windows_icon) {
+    $exportText = $exportText.Replace('[preset.0.options]', "[preset.0.options]`napplication/icon=`"$($config.windows_icon)`"")
+}
+if ($config.android_adaptive_icon) {
+    $exportText = $exportText.Replace('[preset.1.options]', "[preset.1.options]`nlauncher_icons/adaptive_foreground_432x432=`"$($config.android_adaptive_icon)`"")
+}
+if ($config.android_icon) {
+    $exportText = $exportText.Replace('[preset.1.options]', "[preset.1.options]`nlauncher_icons/main_192x192=`"$($config.android_icon)`"")
+}
+if ($config.android_adaptive_background) {
+    $exportText = $exportText.Replace('[preset.1.options]', "[preset.1.options]`nlauncher_icons/adaptive_background_432x432=`"$($config.android_adaptive_background)`"")
+}
 [System.IO.File]::WriteAllText($exportFile, $exportText, [System.Text.UTF8Encoding]::new($false))
 
 Write-Host ("Generated Godot project: " + $target)

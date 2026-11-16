@@ -1,11 +1,17 @@
 {
   "display_name": "小板凳麻将",
   "product_id": "xbd_mahjong",
+  "application_version": "0.1.0",
   "game_category": "tile",
   "game_id": "mahjong",
   "rule_set_id": "guiyang",
-  "rule_version": "1.0.0",
+  "rule_version": "2.0.0",
   "android_package": "com.freebooz.xiaobandeng.mahjong",
+  "application_icon": "res://modules/games/mahjong/guiyang/assets/ui/series/xbd_mahjong_app_icon.png",
+  "windows_icon": "res://modules/games/mahjong/guiyang/assets/ui/series/xbd_mahjong_app_icon.ico",
+  "android_adaptive_icon": "res://modules/games/mahjong/guiyang/assets/ui/series/xbd_mahjong_app_icon_adaptive.png",
+  "android_icon": "res://modules/games/mahjong/guiyang/assets/ui/series/xbd_mahjong_app_icon_192.png",
+  "android_adaptive_background": "res://modules/games/mahjong/guiyang/assets/ui/series/xbd_mahjong_app_icon_adaptive_background.png",
   "modules": [
     "foundation",
     "game_framework/tabletop3d",

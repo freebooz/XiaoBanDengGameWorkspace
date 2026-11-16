@@ -46,13 +46,18 @@ describe("用户中心", () => {
     await flushPromises();
 
     await wrapper.get('[data-testid="user-keyword"]').setValue("acc-001");
-    const select = wrapper.findComponent({ name: "ElSelect" });
-    select.vm.$emit("update:modelValue", "active");
+    await wrapper.get('select[data-testid="user-status"]').setValue("active");
     await wrapper.get('[data-testid="user-search"]').trigger("click");
     await flushPromises();
 
     expect(adminApi.users).toHaveBeenLastCalledWith(
       expect.objectContaining({ keyword: "acc-001", status: "active", page: 1 }),
+    );
+    await wrapper.get('select[data-testid="user-status"]').setValue("");
+    await wrapper.get('[data-testid="user-search"]').trigger("click");
+    await flushPromises();
+    expect(adminApi.users).toHaveBeenLastCalledWith(
+      expect.objectContaining({ keyword: "acc-001", status: undefined, page: 1 }),
     );
   });
 
@@ -79,11 +84,12 @@ describe("用户中心", () => {
     await wrapper.get('[data-testid="open-user-acc-001"]').trigger("click");
     await flushPromises();
 
-    expect(wrapper.text()).toContain("基础资料");
-    expect(wrapper.text()).toContain("身份绑定");
-    expect(wrapper.text()).toContain("游戏档案");
-    expect(wrapper.text()).toContain("登录记录");
-    expect(wrapper.text()).toContain("数据待接入");
+    const drawerText = document.body.textContent ?? "";
+    expect(drawerText).toContain("基础资料");
+    expect(drawerText).toContain("身份绑定");
+    expect(drawerText).toContain("游戏档案");
+    expect(drawerText).toContain("登录记录");
+    expect(drawerText).toContain("数据待接入");
   });
 
   it("开发数据源必须显示开发数据标识", async () => {

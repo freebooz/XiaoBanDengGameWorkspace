@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="34" viewBox="0 0 144 34"><defs>
+<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+<stop stop-color="#fff2b4"/><stop offset=".16" stop-color="#ffe0a0"/><stop offset=".38" stop-color="#bd8139"/><stop offset=".55" stop-color="#77471c"/><stop offset=".78" stop-color="#c98a44"/><stop offset=".9" stop-color="#ffdf97"/><stop offset="1" stop-color="#95602e"/>
+</linearGradient>
+<linearGradient id="inside" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+<stop stop-color="#fffadc" stop-opacity=".60"/><stop offset=".38" stop-color="#d6bc82" stop-opacity=".08"/><stop offset=".76" stop-color="#7e4b24" stop-opacity=".16"/><stop offset="1" stop-color="#ffce83" stop-opacity=".63"/>
+</linearGradient>
+<linearGradient id="goldIcon" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+<stop stop-color="#fff7cd"/><stop offset="1" stop-color="#ebbc6b"/>
+</linearGradient>
+</defs>
+<defs><linearGradient id="chip" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox"><stop offset="0" stop-color="#465b49"/><stop offset="0.42" stop-color="#182a24"/><stop offset="1" stop-color="#101e19"/></linearGradient></defs>
+<rect x="1" y="3" width="142" height="29" rx="14.5" fill="#15110c" opacity=".65"/>
+<rect x="1" y="1" width="142" height="28" rx="14" fill="url(#gold)" stroke="#624319"/>
+<rect x="3" y="3" width="138" height="24" rx="12" fill="url(#chip)" stroke="#5c5737" opacity=".99"/>
+</svg>

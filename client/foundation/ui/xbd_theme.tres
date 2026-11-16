@@ -1,0 +1,24 @@
+[gd_resource type="Theme" load_steps=3 format=3]
+
+[ext_resource type="FontFile" path="res://modules/foundation/ui/fonts/NotoSansCJKsc-Bold.otf" id="1_font"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+content_margin_left = 16.0
+content_margin_top = 14.0
+content_margin_right = 16.0
+content_margin_bottom = 14.0
+bg_color = Color(0.98, 0.945, 0.894, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.776, 0.643, 0.494, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_left = 12
+corner_radius_bottom_right = 12
+
+[resource]
+default_font = ExtResource("1_font")
+default_font_size = 16
+PanelContainer/styles/panel = SubResource("StyleBoxFlat_panel")

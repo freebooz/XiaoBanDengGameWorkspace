@@ -11,7 +11,7 @@ func demo_summary() -> String:
 	var wall: Array = core.build_standard_wall()
 	var tile := {"suit": "wan", "rank": 3}
 	var hand: Array = [tile.duplicate(), tile.duplicate(), {"suit": "tong", "rank": 2}]
-	return "贵阳麻将规则演示：基础牌墙=%d张；两张3万可碰=%s。完整贵阳番型按正式规则文档继续补齐。" % [
+	return "贵阳麻将规则：序数牌牌墙=%d张；两张3万可碰=%s。对局判定以服务端为准。" % [
 		wall.size(),
 		str(rules.can_peng(hand, tile))
 	]

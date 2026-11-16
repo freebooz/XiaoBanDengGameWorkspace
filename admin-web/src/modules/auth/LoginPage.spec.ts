@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mount } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import ElementPlus from "element-plus";
 import LoginPage from "./LoginPage.vue";
@@ -10,6 +10,7 @@ describe("小板凳品牌登录页", () => {
   beforeEach(() => {
     localStorage.clear();
   });
+  afterEach(() => vi.unstubAllGlobals());
 
   it("展示正式品牌名称、Logo 可访问文本和开发环境标识", async () => {
     const pinia = createPinia();
@@ -27,7 +28,11 @@ describe("小板凳品牌登录页", () => {
     expect(wrapper.find('[aria-label="小板凳品牌标识"]').exists()).toBe(true);
   });
 
-  it("开发管理员登录后进入综合工作台", async () => {
+  it("验证 Bearer 凭据后按权限进入举报队列", async () => {
+    const fetchSession = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      admin_name: "审核员", capabilities: ["mahjong:review"],
+    })));
+    vi.stubGlobal("fetch", fetchSession);
     const pinia = createPinia();
     setActivePinia(pinia);
     const router = createAppRouter(true);
@@ -38,10 +43,18 @@ describe("小板凳品牌登录页", () => {
       global: { plugins: [pinia, router, ElementPlus] },
     });
 
-    await wrapper.get('[data-testid="development-login"]').trigger("click");
+    const input = wrapper.get('input[type="password"]');
+    await input.setValue("a".repeat(43));
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
     expect(useAuthStore().isAuthenticated).toBe(true);
+    expect(fetchSession).toHaveBeenCalledWith(expect.stringMatching(/\/api\/v1\/admin\/session$/), expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer " + "a".repeat(43) }),
+    }));
+    expect(JSON.stringify(pinia.state.value)).not.toContain("a".repeat(43));
+    expect(localStorage.length).toBe(0);
     await vi.waitFor(() => {
-      expect(router.currentRoute.value.path).toBe("/dashboard");
+      expect(router.currentRoute.value.path).toBe("/mahjong/reports");
     });
   });
 });

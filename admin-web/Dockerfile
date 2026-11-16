@@ -4,7 +4,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 
-# 本地联调使用 Vite 开发模式，开发管理员登录仅在该模式下启用。
+# 开发和生产模式均使用服务端管理员凭据；开发镜像提供 Vite 联调入口。
 FROM dependencies AS development
 EXPOSE 5173
 CMD ["npm", "run", "dev", "--", "--port", "5173", "--strictPort"]

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><defs>
+<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+<stop stop-color="#fff2b4"/><stop offset=".16" stop-color="#ffe0a0"/><stop offset=".38" stop-color="#bd8139"/><stop offset=".55" stop-color="#77471c"/><stop offset=".78" stop-color="#c98a44"/><stop offset=".9" stop-color="#ffdf97"/><stop offset="1" stop-color="#95602e"/>
+</linearGradient>
+<linearGradient id="inside" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+<stop stop-color="#fffadc" stop-opacity=".60"/><stop offset=".38" stop-color="#d6bc82" stop-opacity=".08"/><stop offset=".76" stop-color="#7e4b24" stop-opacity=".16"/><stop offset="1" stop-color="#ffce83" stop-opacity=".63"/>
+</linearGradient>
+<linearGradient id="goldIcon" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+<stop stop-color="#fff7cd"/><stop offset="1" stop-color="#ebbc6b"/>
+</linearGradient>
+</defs><g fill="none" stroke="#17110a" stroke-opacity=".62" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round" transform="translate(0 1)"><path d="M16 9c-3.5-2.8-7-3.3-12-2v17c4.5-1.25 8.5-.75 12 1.7 3.5-2.45 7.5-2.95 12-1.7V7c-5-1.3-8.5-.8-12 2Zm0 0v16m-8-12c1.8-.2 3.2.15 4.5.9m7.5 0c1.3-.75 2.7-1.1 4.5-.9m-16.5 5c1.8-.2 3.2.15 4.5.9m7.5 0c1.3-.75 2.7-1.1 4.5-.9"/></g><g fill="none" stroke="url(#goldIcon)" stroke-width="2.35" stroke-linejoin="round" stroke-linecap="round"><path d="M16 9c-3.5-2.8-7-3.3-12-2v17c4.5-1.25 8.5-.75 12 1.7 3.5-2.45 7.5-2.95 12-1.7V7c-5-1.3-8.5-.8-12 2Zm0 0v16m-8-12c1.8-.2 3.2.15 4.5.9m7.5 0c1.3-.75 2.7-1.1 4.5-.9m-16.5 5c1.8-.2 3.2.15 4.5.9m7.5 0c1.3-.75 2.7-1.1 4.5-.9"/></g></svg>

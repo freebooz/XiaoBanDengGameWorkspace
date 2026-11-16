@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="65" height="166" viewBox="0 0 65 166">
+  <defs>
+    <linearGradient id="cord" x2="1" y2="1">
+      <stop stop-color="#fff0ab"/>
+      <stop offset=".42" stop-color="#de943e"/>
+      <stop offset=".72" stop-color="#8b461f"/>
+      <stop offset="1" stop-color="#f5bc64"/>
+    </linearGradient>
+    <linearGradient id="silk" x2="1" y2="1">
+      <stop stop-color="#f99b60"/>
+      <stop offset=".25" stop-color="#c8422a"/>
+      <stop offset=".65" stop-color="#951d19"/>
+      <stop offset="1" stop-color="#631514"/>
+    </linearGradient>
+    <linearGradient id="bead" x2="0" y2="1">
+      <stop stop-color="#fff1a2"/>
+      <stop offset=".42" stop-color="#e6ac44"/>
+      <stop offset="1" stop-color="#ad642c"/>
+    </linearGradient>
+  </defs>
+  <path d="M2 5c15-8 24-1 27 8 2 7 3 13 4 26m0 0c6-6 18-5 22 0 5 7-3 12-10 9l-11-6m0 0C23 30 17 30 13 36c-3 6 3 12 10 10l9-4m1 1v14" fill="none" stroke="#4e210d" stroke-width="4" stroke-linecap="round"/>
+  <path d="M2 4c15-8 24-1 27 8 2 7 3 13 4 26m0 0c6-6 18-5 22 0 5 7-3 12-10 9l-11-6m0 0C23 29 17 29 13 35c-3 6 3 12 10 10l9-4m1 1v14" fill="none" stroke="url(#cord)" stroke-width="2.1" stroke-linecap="round"/>
+  <path d="M33 54c10 0 17 8 17 16 0 9-7 16-17 16s-17-7-17-16c0-8 7-16 17-16Z" fill="#572115" transform="translate(0 2)"/>
+  <path d="M33 53c10 0 17 8 17 16 0 9-7 16-17 16s-17-7-17-16c0-8 7-16 17-16Z" fill="url(#silk)" stroke="url(#cord)" stroke-width="2"/>
+  <path d="M33 57c7 0 13 5 13 12s-6 12-13 12-13-5-13-12 6-12 13-12Z" fill="none" stroke="#f9bf6b" stroke-opacity=".64"/>
+  <path d="M33 61c-3 0-5 4-2 6l6 3c5 3 1 8-3 6l-8-5c-4-3 0-8 4-6l7 5c4 2 7-3 3-5l-5-3m-2 4v9" fill="none" stroke="url(#bead)" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M33 86v8" fill="none" stroke="url(#cord)" stroke-width="2.6"/>
+  <path d="M29 101c-1 17-5 44-6 59 0 2 4 3 5 0 1 4 3 4 5 1 1 4 5 3 6 0 2 2 5 0 5-2-1-16-6-43-7-58z" fill="url(#silk)"/>
+  <path d="M31 105l-4 53m6-53-2 54m4-54 3 53m-2-53 5 53" fill="none" stroke="#f6844c" stroke-opacity=".55" stroke-width="1" stroke-linecap="round"/>
+  <ellipse cx="33" cy="98" rx="7" ry="6" fill="url(#bead)" stroke="#78371d" stroke-width="1.1"/>
+  <path d="M27 103h12l1 4H26z" fill="url(#cord)" stroke="#7e3d1d" stroke-width=".8"/>
+  <path d="M24 150c6 2 11 2 19 0" fill="none" stroke="#f2a952" stroke-opacity=".65"/>
+</svg>

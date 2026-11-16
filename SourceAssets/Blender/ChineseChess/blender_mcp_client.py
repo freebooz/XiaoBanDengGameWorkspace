@@ -29,7 +29,10 @@ async def main():
                     print(response.model_dump_json())
             elif mode == "exec":
                 script = Path(sys.argv[2]).resolve()
-                code = "__file__ = " + repr(str(script)) + "\n" + script.read_text(encoding="utf-8-sig")
+                # Load the local source inside Blender. MCP transports only this
+                # short loader, so nested literals keep their exact source bytes.
+                source_path = repr(script.as_posix())
+                code = "__file__ = " + source_path + "\nBLENDER_MCP_EXECUTION = True\nexec(compile(open(__file__, encoding='utf-8-sig').read(), __file__, 'exec'))"
                 response = await session.call_tool("execute_blender_code", {"code": code, "user_prompt": USER_PROMPT})
                 print(response.model_dump_json())
             elif mode == "call":

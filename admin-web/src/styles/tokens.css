@@ -1,21 +1,32 @@
 :root {
-  /* 小板凳品牌视觉变量：页面禁止散落硬编码品牌色。 */
+  color-scheme: dark;
+  /* 小板凳牌桌的暖木、奶油与琥珀色。 */
   --xbd-brand-primary: #D48A3A;
   --xbd-brand-highlight: #F0B45A;
-  --xbd-sidebar-bg: #181411;
-  --xbd-sidebar-bg-secondary: #2A211B;
-  --xbd-page-bg: #F5F2ED;
-  --xbd-card-bg: #FFFDFC;
-  --xbd-text-primary: #292521;
-  --xbd-text-secondary: #7D756E;
-  --xbd-border: #E8E1D8;
-  --xbd-success: #3D9B68;
-  --xbd-warning: #D99B35;
-  --xbd-danger: #D75B4B;
+  --xbd-brand-tint: #41301F;
+  --xbd-sidebar-bg: #140F0C;
+  --xbd-sidebar-bg-secondary: #221A14;
+  --xbd-page-bg: #17120E;
+  --xbd-card-bg: #231B15;
+  --xbd-surface-inset: #1B1510;
+  --xbd-surface-raised: #2B2119;
+  --xbd-surface-hover: #33271D;
+  --xbd-text-primary: #F4E8D8;
+  --xbd-text-secondary: #C9B8A5;
+  --xbd-text-muted: #AE9B88;
+  --xbd-text-on-brand: #1D1209;
+  --xbd-border: #47382C;
+  --xbd-border-control: #79614C;
+  --xbd-success: #9CD9B4;
+  --xbd-success-bg: #1E362A;
+  --xbd-warning: #F1C681;
+  --xbd-warning-bg: #3D2D1A;
+  --xbd-danger: #FFB2A1;
+  --xbd-danger-bg: #492822;
   --xbd-radius-sm: 8px;
   --xbd-radius-md: 12px;
   --xbd-radius-lg: 16px;
-  --xbd-shadow-card: 0 8px 24px rgba(71, 48, 29, 0.06);
+  --xbd-shadow-card: 0 8px 24px #0004;
   --xbd-sidebar-width: 220px;
   --xbd-sidebar-collapsed-width: 64px;
   --xbd-header-height: 64px;

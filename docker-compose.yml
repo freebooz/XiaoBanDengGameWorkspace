@@ -51,7 +51,7 @@ services:
       context: ./admin-web
       target: development
     environment:
-      VITE_API_BASE_URL: http://localhost:8080
+      XBD_ADMIN_PROXY_TARGET: http://server:8080
     ports:
       - "5173:5173"
     depends_on:

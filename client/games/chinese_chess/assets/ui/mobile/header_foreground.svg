@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360">
+<defs>
+  <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f4c26b"/><stop offset=".55" stop-color="#c97731"/><stop offset="1" stop-color="#7a3a1f"/></linearGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffe58c"/><stop offset=".5" stop-color="#f2a928"/><stop offset="1" stop-color="#c66b18"/></linearGradient>
+  <filter id="shadow"><feDropShadow dx="0" dy="9" stdDeviation="9" flood-color="#3b160d" flood-opacity=".35"/></filter>
+</defs>
+<g filter="url(#shadow)">
+  <path d="M100 238c0-22 18-40 40-40h440c22 0 40 18 40 40v45c0 22-18 40-40 40H140c-22 0-40-18-40-40z" fill="#71351f"/>
+  <path d="M118 237c0-13 11-24 24-24h436c13 0 24 11 24 24v44c0 13-11 24-24 24H142c-13 0-24-11-24-24z" fill="url(#gold)" stroke="#fff0ba" stroke-width="5"/>
+  <rect x="231" y="80" width="258" height="118" rx="16" fill="url(#wood)" stroke="#7b351c" stroke-width="8"/>
+  <path d="M252 105h216M252 130h216M252 155h216M285 90v98M330 90v98M375 90v98M420 90v98" stroke="#4f2819" stroke-width="3" opacity=".7"/>
+  <rect x="307" y="148" width="106" height="26" rx="13" fill="#dca14d"/>
+  <path d="M318 174l-14 55h28l11-55zm84 0l11 55h28l-14-55z" fill="#8a4625"/>
+  <rect x="318" y="176" width="109" height="18" rx="9" fill="#b96931"/>
+  <circle cx="360" cy="101" r="82" fill="#f0cf91" stroke="#b85a29" stroke-width="10"/>
+  <circle cx="360" cy="101" r="66" fill="#f9e4b6" stroke="#d94a2d" stroke-width="5"/>
+  <path d="M326 98q15 20 30 0M364 98q15 20 30 0" fill="none" stroke="#402017" stroke-width="8" stroke-linecap="round"/>
+  <path d="M335 127q25 26 50 0" fill="#d94a2d" stroke="#402017" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="320" cy="118" r="10" fill="#f49a96" opacity=".7"/><circle cx="400" cy="118" r="10" fill="#f49a96" opacity=".7"/>
+  <path d="M442 101q45-24 69-4l-6 74q-29-23-62-4z" fill="#d7442f" stroke="#8a2a1e" stroke-width="5"/>
+  <path d="M443 96v92" stroke="#7b3a24" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="535" cy="88" r="11" fill="#ffb51f"/><path d="M535 62v-22M558 74l18-18" stroke="#ffb51f" stroke-width="10" stroke-linecap="round"/>
+</g>
+</svg>

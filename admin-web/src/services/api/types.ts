@@ -52,6 +52,18 @@ export interface UserQuery {
   keyword?: string;
 }
 
+export interface EggGrantRequest {
+  display_name: string;
+  amount: number;
+  request_id: string;
+}
+
+export interface EggGrantReceipt extends EggGrantRequest {
+  account_id: string;
+  asset_id: "xbd_egg";
+  balance: number;
+}
+
 export interface RoomSummary {
   room_id: string;
   product_id: string;
@@ -115,4 +127,19 @@ export interface AICapability {
   name: string;
   description: string;
   enabled: boolean;
+}
+export type MahjongReportStatus = "pending" | "upheld" | "dismissed";
+
+export interface MahjongReport {
+  report_id: string;
+  match_id: string;
+  room_id: string;
+  reporter_seat: number;
+  target_seat: number;
+  reason: string;
+  created_at: string;
+  status: MahjongReportStatus;
+  analyst?: string;
+  reviewed_at?: string;
+  note?: string;
 }
