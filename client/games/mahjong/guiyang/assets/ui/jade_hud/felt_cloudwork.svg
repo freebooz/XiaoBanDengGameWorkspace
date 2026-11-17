@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1536" viewBox="0 0 1024 1024">
+  <defs>
+    <g id="cloud" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-83 18C-65 18-61 6-45 6c9 0 15 4 20 8C-35 0-20-16-8-9c-6-17 20-31 32-12 11-9 32 0 32 14 11-5 37 0 33 14-3 11-29 12-50 12H3c-13 0-21-5-21-13 0-7 8-10 14-6 4 3 3 8 0 10" stroke-width="3.0"/>
+      <path d="M-69 22c15-3 20-10 27-10 11 0 14 9 29 13 6 2 18 1 28 1h29c16 0 31-2 39-9M1-12c-1-8 13-14 19-3m20 7c3-4 9-4 12 0m-78 24c3 9 16 15 32 15h26" stroke-width="1.65"/>
+      <path d="M39 10c15 0 32 0 37-5 3-4-7-6-13-3m-45 9c17 1 25-3 25-10 0-6-6-9-11-6-3 2-3 6 0 7" stroke-width="1.45"/>
+    </g>
+    <g id="corner" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M25 146V88c0-31 29-60 61-60h62" stroke-width="3"/>
+      <path d="M31 125c0-21 1-30 6-45 6-17 18-29 29-28 8 1 14 9 11 15-2 6-10 7-13 2-3-4 0-8 3-8M125 34c-21 0-30 1-45 6-17 6-29 18-28 29 1 8 9 14 15 11 6-2 7-10 2-13-4-3-8 0-8 3" stroke-width="3.0"/>
+      <path d="M42 114c-2-13 3-22 10-28 8-7 22-5 24 3 3 8-6 13-10 8M114 44c-13-2-22 3-28 10-7 8-5 22 3 24 8 3 13-6 8-10" stroke-width="2.2"/>
+      <path d="M53 104c-8 8-9 16-7 23m57-60c8-9 16-10 23-8M35 109c2 10 5 14 5 22m67-92c10 2 14 5 22 5" stroke-width="1.4"/>
+      <path d="M39 147q3-14 7-18l5 5-12 13m106-106q-14 3-18 7l5 5 13-12" fill="currentColor" stroke-width="1.1"/>
+    </g>
+    <g id="crest" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M260 545c12 35 43 61 74 63 32 4 51 16 77 38 18 15 37 21 66 19-9 13-25 14-41 10 13 10 35 14 61 12-33 14-65 10-97-10-28-16-42-30-65-34-14-2-28-2-42-9-24-12-41-37-47-60" stroke-width="3.5"/>
+      <path d="M269 553c9 31 37 46 61 49 42 7 53 21 81 44 18 15 37 21 61 20m-86-28c19 8 26 24 49 31m-179-104c7 34 29 59 67 65l17 3c24 4 39 12 49 19" stroke-width="1.7"/>
+      <path d="M278 576c2 26 27 34 44 35 16 1 25 7 30 19-2-16-10-22-26-27m-27 18c4 8 13 17 21 20m7-15c4 10 11 13 24 15m7-10c16 11 26 21 37 34m-21-14c12 14 21 23 41 30" stroke-width="1.6"/>
+      <path d="M255 476c14-42 33-68 67-94 32-23 63-25 92-44 27-17 38-41 31-54-4-7-10-4-11 3-1 4 1 5 4 5-1 15-20 26-35 32-20 7-48 9-76 20-39 15-72 44-86 91" stroke-width="3.3"/>
+      <path d="M249 473c10-38 30-68 66-96 42-31 86-29 112-59M253 431c9-24 31-46 56-60 20-10 43-17 64-22m-59 35c-15 11-25 24-27 35 13-16 28-24 51-28-12-1-22 1-32 6" stroke-width="1.65"/>
+      <path d="M318 394c-3-13 10-23 29-21 25 0 45-10 54-26-6 19-23 33-48 41m-38 28 11-8m-19 1c9-5 21-8 30-7m-100 63c3-22 11-39 22-52m-23 33c-4 5-8 12-8 20" stroke-width="1.7"/>
+      <path d="M219 466c-17 4-24 27-13 40 8 8 18 4 22-3-1 12 11 16 18 9 7 13 21 12 30 7-10 20-45 24-61 9-21 2-37-21-34-34 2-12 10-23 22-28" stroke-width="2.6"/>
+      <path d="M206 477c-13 6-14 25 1 34m19-34c10 2 10 13 3 19m34 18c-8 1-17-4-18-14-4 9-14 12-17 9" stroke-width="1.6"/>
+    </g>
+    <path id="cloud_fill" d="M-83 18C-65 18-61 6-45 6c9 0 15 4 20 8C-35 0-20-16-8-9c-6-17 20-31 32-12 11-9 32 0 32 14 11-5 37 0 33 14-3 11-29 12-50 12H3c-13 0-21-5-21-13-19 11-40 7-65 12Z"/>
+    <g id="medallion_stem">
+      <path d="M200 458C236 420 238 389 288 359c49-30 121-32 149-64-12 39-76 53-118 78-39 23-56 65-68 93-11-14-23-17-51-8Z"/>
+      <path d="M226 541c35 8 42 39 74 55 35 18 77 10 116 50 19 19 44 22 65 23-37 17-60 2-97-18-34-17-73-15-100-38-35-30-29-48-58-72Z"/>
+    </g>
+  </defs>
+  <g fill="none" stroke="#dfb16a" color="#dfb16a">
+    <rect x="16" y="16" width="992" height="992" rx="48" stroke-width="2.4" opacity=".85"/>
+    <rect x="22" y="22" width="980" height="980" rx="45" stroke-width="1.4" opacity=".43"/>
+    <g opacity=".83">
+      <use href="#corner"/>
+      <use href="#corner" transform="translate(1024 0) scale(-1 1)"/>
+      <use href="#corner" transform="translate(0 1024) scale(1 -1)"/>
+      <use href="#corner" transform="translate(1024 1024) scale(-1 -1)"/>
+    </g>
+  </g>
+  <g fill="#648074" opacity=".30">
+    <use href="#medallion_stem"/>
+    <use href="#medallion_stem" transform="translate(1024 1024) rotate(180)"/>
+    <use href="#cloud_fill" transform="translate(366 284) scale(.76)"/>
+    <use href="#cloud_fill" transform="translate(658 740) rotate(180) scale(.76)"/>
+    <use href="#cloud_fill" transform="translate(366 451) scale(.52)"/>
+    <use href="#cloud_fill" transform="translate(658 573) rotate(180) scale(.52)"/>
+    <use href="#cloud_fill" transform="translate(276 567) scale(.60)"/>
+    <use href="#cloud_fill" transform="translate(748 457) rotate(180) scale(.60)"/>
+  </g>
+  <g fill="none" stroke="#769484">
+    <circle cx="512" cy="512" r="335" opacity=".41" stroke-width="2.8"/>
+    <circle cx="512" cy="512" r="328" opacity=".29" stroke-width="1.9"/>
+    <circle cx="512" cy="512" r="312" opacity=".24" stroke-width="2.1"/>
+    <circle cx="512" cy="512" r="307" opacity=".17" stroke-width="1.0"/>
+    <path d="M323 246a326 326 0 0 1 378 0m18 13a326 326 0 0 1 49 47m12 16a326 326 0 0 1 0 380m-12 16a326 326 0 0 1-49 47m-18 13a326 326 0 0 1-378 0m-18-13a326 326 0 0 1-49-47m-12-16a326 326 0 0 1 0-380m12-16a326 326 0 0 1 49-47" stroke-width="5.2" opacity=".18"/>
+    <g opacity=".31">
+      <use href="#crest"/>
+      <use href="#crest" transform="translate(1024 1024) rotate(180)"/>
+      <use href="#cloud" transform="translate(366 284) scale(.76)"/>
+      <use href="#cloud" transform="translate(658 740) rotate(180) scale(.76)"/>
+      <use href="#cloud" transform="translate(497 328) scale(.50)"/>
+      <use href="#cloud" transform="translate(527 696) rotate(180) scale(.50)"/>
+      <use href="#cloud" transform="translate(366 451) scale(.52)"/>
+      <use href="#cloud" transform="translate(658 573) rotate(180) scale(.52)"/>
+      <use href="#cloud" transform="translate(557 250) scale(.56)"/>
+      <use href="#cloud" transform="translate(467 774) rotate(180) scale(.56)"/>
+      <use href="#cloud" transform="translate(276 567) scale(.60)"/>
+      <use href="#cloud" transform="translate(748 457) rotate(180) scale(.60)"/>
+    </g>
+    <g stroke-width="1.7" opacity=".28">
+      <path d="M308 746l4-10 12-2 9 7 6-6 8 6m330-469 7 6 7-7 9 7 12-2 4-10M248 347l6-5 10 7 4-2m488 330 4-2 10 7 6-5m-528 0 6 5 10-7 4 2m488-330 4 2 10-7 6 5m-468-71 4 10 12 2 9-7 6 6 8-6m330 469 7-6 7 7 9-7 12 2 4 10"/>
+    </g>
+  </g>
+</svg>

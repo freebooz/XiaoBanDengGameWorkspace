@@ -26,7 +26,7 @@ func (s *Server) adminOverview(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := s.admin.Overview(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, "运营概览暂不可用")
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -51,7 +51,7 @@ func (s *Server) adminUsers(w http.ResponseWriter, r *http.Request) {
 		Status: r.URL.Query().Get("status"), Keyword: r.URL.Query().Get("keyword"),
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, "用户列表暂不可用")
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -89,7 +89,7 @@ func (s *Server) adminRoomDetail(w http.ResponseWriter, r *http.Request, roomID 
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, "房间详情暂不可用")
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -114,7 +114,7 @@ func (s *Server) adminMatches(w http.ResponseWriter, r *http.Request) {
 		GameID: r.URL.Query().Get("game_id"), Status: r.URL.Query().Get("status"),
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, "对局列表暂不可用")
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -139,7 +139,7 @@ func (s *Server) adminMatchDetail(w http.ResponseWriter, r *http.Request, matchI
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, "对局详情暂不可用")
 		return
 	}
 	writeJSON(w, http.StatusOK, result)

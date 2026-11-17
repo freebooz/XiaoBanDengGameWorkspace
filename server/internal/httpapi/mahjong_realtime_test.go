@@ -52,7 +52,6 @@ func TestMahjongRealtimeJoinsFourSeatsAndKeepsHandsPrivate(t *testing.T) {
 	defer server.Close()
 	url := "ws" + strings.TrimPrefix(server.URL, "http")
 	connections := make([]*websocket.Conn, 4)
-	var originalSeatTwoHand []any
 	for seat := 0; seat < 4; seat++ {
 		conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 		if err != nil {
@@ -75,9 +74,9 @@ func TestMahjongRealtimeJoinsFourSeatsAndKeepsHandsPrivate(t *testing.T) {
 		if err := conn.ReadJSON(&state); err != nil {
 			t.Fatal(err)
 		}
-		want := 13
-		if seat == 0 {
-			want = 14
+		want := 0
+		if seat == 3 {
+			want = 13
 		}
 		if state["type"] != "mahjong_state" || len(state["hand"].([]any)) != want {
 			t.Fatalf("首个快照错误: %+v", state)
@@ -85,9 +84,11 @@ func TestMahjongRealtimeJoinsFourSeatsAndKeepsHandsPrivate(t *testing.T) {
 		if _, hasWall := state["wall"]; hasWall {
 			t.Fatal("不能公开牌墙")
 		}
-		if seat == 2 {
-			originalSeatTwoHand = state["hand"].([]any)
-		}
+	}
+	dealt := lobbyRead(t, connections[2], "mahjong_state", func(message map[string]any) bool { return message["status"] == "playing" })
+	originalSeatTwoHand := dealt["hand"].([]any)
+	if len(originalSeatTwoHand) != 13 {
+		t.Fatalf("deferred deal must contain 13 tiles for seat two: %v", dealt)
 	}
 	before := hub.rooms[roomID].game.NextWall
 	reconnected, _, err := websocket.DefaultDialer.Dial(url, nil)
@@ -108,5 +109,14 @@ func TestMahjongRealtimeJoinsFourSeatsAndKeepsHandsPrivate(t *testing.T) {
 	}
 	if int(joined["your_seat"].(float64)) != 2 || !reflect.DeepEqual(state["hand"], originalSeatTwoHand) || hub.rooms[roomID].game.NextWall != before {
 		t.Fatalf("重连必须保留原座位、手牌和牌墙位置: joined=%+v state=%+v", joined, state)
+	}
+	for {
+		if _, _, err = connections[2].ReadMessage(); err != nil {
+			break
+		}
+	}
+	closeErr, ok := err.(*websocket.CloseError)
+	if !ok || closeErr.Code != websocket.ClosePolicyViolation || closeErr.Text != "seat_replaced" {
+		t.Fatalf("old seat needs a terminal close reason instead of retrying: %v", err)
 	}
 }

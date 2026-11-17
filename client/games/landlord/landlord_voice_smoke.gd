@@ -27,5 +27,6 @@ func _run() -> void:
 		return
 	voice.queue_free()
 	await process_frame
+	await create_timer(0.1).timeout
 	print("LANDLORD_VOICE_SMOKE_OK PCM8000=true validation=true playback=true")
 	quit()

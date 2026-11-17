@@ -1,21 +1,37 @@
 :root {
-  /* 小板凳品牌视觉变量：页面禁止散落硬编码品牌色。 */
-  --xbd-brand-primary: #D48A3A;
-  --xbd-brand-highlight: #F0B45A;
-  --xbd-sidebar-bg: #181411;
-  --xbd-sidebar-bg-secondary: #2A211B;
-  --xbd-page-bg: #F5F2ED;
-  --xbd-card-bg: #FFFDFC;
-  --xbd-text-primary: #292521;
-  --xbd-text-secondary: #7D756E;
-  --xbd-border: #E8E1D8;
-  --xbd-success: #3D9B68;
-  --xbd-warning: #D99B35;
-  --xbd-danger: #D75B4B;
+  color-scheme: dark;
+  /* 取小板凳牌桌的胡桃木、青绿绒面、象牙牌面与稻金包边。 */
+  --xbd-brand-primary: #DDA950;
+  --xbd-brand-highlight: #FFD58A;
+  --xbd-brand-tint: #42331D;
+  --xbd-sidebar-bg: #201710;
+  --xbd-sidebar-bg-secondary: #352519;
+  --xbd-page-bg: #131B16;
+  --xbd-card-bg: #202D24;
+  --xbd-surface-inset: #19241E;
+  --xbd-surface-raised: #293829;
+  --xbd-surface-hover: #304437;
+  --xbd-text-primary: #FFF2DD;
+  --xbd-text-secondary: #E2D2B4;
+  --xbd-text-muted: #BDAF91;
+  --xbd-text-on-brand: #291B11;
+  --xbd-border: #50513A;
+  --xbd-border-control: #997E53;
+  --xbd-success: #A1E4BB;
+  --xbd-success-bg: #1A3928;
+  --xbd-warning: #FFD286;
+  --xbd-warning-bg: #45301A;
+  --xbd-danger: #FFBCA9;
+  --xbd-danger-bg: #482724;
+  --xbd-walnut-surface: linear-gradient(155deg, var(--xbd-sidebar-bg-secondary), var(--xbd-sidebar-bg) 64%);
+  --xbd-felt-surface: radial-gradient(ellipse at 84% 0%, #466B3C40, transparent 70%),
+    linear-gradient(126deg, #273727, #18271E 74%);
+  --xbd-panel-surface: linear-gradient(156deg, var(--xbd-surface-raised), var(--xbd-card-bg) 72%);
+  --xbd-action-surface: linear-gradient(180deg, var(--xbd-brand-highlight), var(--xbd-brand-primary));
   --xbd-radius-sm: 8px;
   --xbd-radius-md: 12px;
   --xbd-radius-lg: 16px;
-  --xbd-shadow-card: 0 8px 24px rgba(71, 48, 29, 0.06);
+  --xbd-shadow-card: 0 8px 24px #0C110D60;
   --xbd-sidebar-width: 220px;
   --xbd-sidebar-collapsed-width: 64px;
   --xbd-header-height: 64px;

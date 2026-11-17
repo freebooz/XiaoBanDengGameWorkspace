@@ -1,0 +1,34 @@
+{
+  "original_sha256": "BF6EEFFC61406DFDBA71D0BB081D5FFDA34D6711A8F7B9D7D3BC6EC812AEF0B4",
+  "original_width": 1254,
+  "original_height": 1254,
+  "png_sizes": [
+    16,
+    24,
+    32,
+    48,
+    64,
+    128,
+    192,
+    256,
+    512,
+    1024
+  ],
+  "ico_sizes": [
+    16,
+    24,
+    32,
+    48,
+    64,
+    128,
+    256
+  ],
+  "windows_icon_decoder_128px_verified": true,
+  "android_source_trim_offset_px": 2,
+  "android_transparent_source_px": 1258,
+  "android_launcher_bitmap_px": 432,
+  "android_launcher_background_alpha": 0,
+  "rgb_processing": "Preserve original RGB inside the golden rim. Remove the black matte from the two-pixel exterior fringe.",
+  "native_desktop_install_verified": false,
+  "android_install_verified": false
+}

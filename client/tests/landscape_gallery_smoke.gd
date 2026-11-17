@@ -21,7 +21,10 @@ func _run() -> void:
 	if script == null or not script.can_instantiate():
 		quit(1)
 		return
-	var screen = script.new()
+	var screen
+	if game_id=="landlord": screen = load("res://modules/games/landlord/landlord_buttons_smoke.gd").CaptureScreen.new()
+	elif game_id=="guandan": screen = load("res://modules/games/guandan/guandan_screen_smoke.gd").RenderFixture.new()
+	else: screen = script.new()
 	screen.training_mode = true
 	screen.match_context = {"room_id":"训练","account_id":"landscape-demo","display_name":"江湖棋客","opponent_display_name":"墨韵清风","seat_index":0}
 	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -51,7 +54,7 @@ func _run() -> void:
 			push_error("Battle button is clipped: "+str(button.name)+" "+str(button.get_global_rect()))
 			quit(3)
 			return
-	var board: TextureRect = screen._board_view
+	var board: Control = screen._board_view
 	var viewport: SubViewport = screen._viewport if game_id in ["landlord","guandan"] else screen._board_viewport
 	if absf(board.size.x/board.size.y-float(viewport.size.x)/viewport.size.y)>0.01:
 		push_error("3D viewport is stretched")
@@ -65,4 +68,8 @@ func _run() -> void:
 					quit(5)
 					return
 	print("LANDSCAPE_GALLERY_OK game=",game_id," logical=",screen.size," window=",root.size," buttons_visible=true aspect_correct=true")
+	screen.queue_free()
+	await process_frame
+	# Allow the native audio mix thread to release a stopped looping music stream.
+	await create_timer(0.5).timeout
 	quit()

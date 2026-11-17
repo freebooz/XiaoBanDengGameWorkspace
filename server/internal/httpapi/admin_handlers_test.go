@@ -3,8 +3,10 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,13 +18,14 @@ type fakeAdminReader struct {
 	userPage adminplatform.Page[adminplatform.UserSummary]
 	roomItem adminplatform.RoomSummary
 	roomErr  error
+	queryErr error
 }
 
 func (f *fakeAdminReader) Overview(context.Context) (adminplatform.Overview, error) {
-	return f.overview, nil
+	return f.overview, f.queryErr
 }
 func (f *fakeAdminReader) ListUsers(context.Context, adminplatform.UserQuery) (adminplatform.Page[adminplatform.UserSummary], error) {
-	return f.userPage, nil
+	return f.userPage, f.queryErr
 }
 func (f *fakeAdminReader) ListRooms(adminplatform.RoomQuery) []adminplatform.RoomSummary {
 	return []adminplatform.RoomSummary{}
@@ -31,10 +34,34 @@ func (f *fakeAdminReader) RoomDetail(string) (adminplatform.RoomSummary, error) 
 	return f.roomItem, f.roomErr
 }
 func (f *fakeAdminReader) ListMatches(context.Context, adminplatform.MatchQuery) (adminplatform.Page[adminplatform.MatchSummary], error) {
-	return adminplatform.Page[adminplatform.MatchSummary]{Items: []adminplatform.MatchSummary{}}, nil
+	return adminplatform.Page[adminplatform.MatchSummary]{Items: []adminplatform.MatchSummary{}}, f.queryErr
 }
 func (f *fakeAdminReader) MatchDetail(context.Context, string) (adminplatform.MatchDetail, error) {
+	if f.queryErr != nil {
+		return adminplatform.MatchDetail{}, f.queryErr
+	}
 	return adminplatform.MatchDetail{}, adminplatform.ErrNotFound
+}
+
+func TestAdminReadErrorsHideInternalDetails(t *testing.T) {
+	const internalDetail = "private-database-error-detail"
+	queryErr := errors.New(internalDetail)
+	s := &Server{admin: &fakeAdminReader{queryErr: queryErr, roomErr: queryErr}}
+	for path, handler := range map[string]http.HandlerFunc{
+		"/api/v1/admin/overview":      s.adminOverview,
+		"/api/v1/admin/users":         s.adminUsers,
+		"/api/v1/admin/rooms/1234":    s.adminRoomRoute,
+		"/api/v1/admin/matches":       s.adminMatches,
+		"/api/v1/admin/matches/match": s.adminMatchRoute,
+	} {
+		t.Run(path, func(t *testing.T) {
+			res := httptest.NewRecorder()
+			handler(res, httptest.NewRequest(http.MethodGet, path, nil))
+			if res.Code != http.StatusInternalServerError || strings.Contains(res.Body.String(), internalDetail) {
+				t.Fatal("admin query failure exposed internal details or returned the wrong status")
+			}
+		})
+	}
 }
 
 func TestAdminOverviewHandlerReturnsJSON(t *testing.T) {

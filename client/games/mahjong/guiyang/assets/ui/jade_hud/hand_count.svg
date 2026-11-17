@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="56" height="37" viewBox="0 0 56 37">
+  <defs>
+    <linearGradient id="metal" x2="0" y2="1">
+      <stop stop-color="#fff4c7"/><stop offset=".4" stop-color="#a97640"/><stop offset=".7" stop-color="#774c28"/><stop offset="1" stop-color="#ebb87c"/>
+    </linearGradient>
+    <linearGradient id="wood" x2="0" y2="1">
+      <stop stop-color="#654735"/><stop offset=".5" stop-color="#2c221b"/><stop offset="1" stop-color="#1d1b16"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="4.5" width="52" height="29" rx="14.5" fill="#1a110d" opacity=".68"/>
+  <rect x="2" y="2.5" width="52" height="29" rx="14.5" fill="url(#metal)" stroke="#855e34"/>
+  <rect x="4.5" y="5" width="47" height="24" rx="12" fill="url(#wood)"/>
+  <path d="M13 8h30" stroke="#f8c98c" stroke-opacity=".39" stroke-linecap="round"/>
+</svg>

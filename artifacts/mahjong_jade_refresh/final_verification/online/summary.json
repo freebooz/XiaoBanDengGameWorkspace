@@ -1,0 +1,15 @@
+{
+  "room": "5547",
+  "clients": 4,
+  "viewport": "Windows desktop emulation",
+  "renderer": "Vulkan Forward Mobile",
+  "fps_cap": 0,
+  "vsync": 0,
+  "first_match": "51a9981b-69f8-451b-bb97-5bd80a8c99e1",
+  "first_round_discards": 56,
+  "accepted_commands": 63.0,
+  "first_round_reason": "wall_exhausted",
+  "next_match": "3b62fc73-de34-4435-ad34-b961d78738ac",
+  "restored_tiles": 14,
+  "reconnected_ms": 2211
+}

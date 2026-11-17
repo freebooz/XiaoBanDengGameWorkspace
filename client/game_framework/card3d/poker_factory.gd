@@ -26,7 +26,10 @@ func face_material(card: Dictionary) -> StandardMaterial3D:
 	if _faces.has(path): return _faces[path]
 	var material := StandardMaterial3D.new()
 	material.albedo_texture = load(path)
-	material.roughness = 0.28
+	# Printed faces need a broad soft reflection; a sharp highlight can erase ink
+	# when the user's hand tilts toward the mobile camera.
+	material.roughness = 0.74
+	material.metallic_specular = 0.12
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_faces[path] = material
 	return material

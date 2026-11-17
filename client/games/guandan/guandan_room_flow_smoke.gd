@@ -5,6 +5,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	var before_design := root.content_scale_size
 	var apps: Array = []
 	var games: Array = []
 	for seat in range(4):
@@ -67,5 +68,9 @@ func _run() -> void:
 			return
 	for app in apps: app._return_to_lobby()
 	await process_frame
+	if root.content_scale_size!=before_design:
+		push_error("Last battle did not restore the lobby display")
+		quit(8)
+		return
 	print("GUANDAN_ROOM_FLOW_OK clients=4 room=",room_id," login=true lobby=true matching=true ready=true cards=108 play=true leave=true")
 	quit()

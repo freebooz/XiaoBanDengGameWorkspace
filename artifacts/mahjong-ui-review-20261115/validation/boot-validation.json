@@ -1,0 +1,16 @@
+{
+  "engine": "Godot 4.7.2",
+  "asset": "client/foundation/ui/branding/freeboozstudio_splash.png",
+  "sha256": "CC89F3862B58603FFC4EB1510AF2681229376EA52FB783D2CAF7997EBD2CE95F",
+  "source_byte_identical": true,
+  "configured_show_image": true,
+  "configured_stretch_mode": "1 Keep aspect ratio",
+  "configured_background": "black",
+  "configured_minimum_display_time_ms": 0,
+  "native_launch": "executed",
+  "engine_boot_screenshot": "not captured",
+  "capture_error": "Computer Use: foreground window did not report a process id",
+  "temporary_capture_override_removed": true,
+  "runtime_readback": "validation/boot-settings-readback.log",
+  "official_setting_reference": "https://docs.godotengine.org/en/stable/classes/class_projectsettings.html#class-projectsettings-property-application-boot-splash-stretch-mode"
+}

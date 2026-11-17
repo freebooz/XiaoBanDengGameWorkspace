@@ -5,6 +5,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	var before_design := root.content_scale_size
 	var app = load("res://scripts/main.gd").new()
 	root.add_child(app)
 	app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -48,7 +49,7 @@ func _run() -> void:
 		return
 	game._request_leave()
 	await process_frame
-	if app._state!="lobby":
+	if app._state!="lobby" or root.content_scale_size!=before_design:
 		quit(6)
 		return
 	print("GUANDAN_LIVE_FLOW_OK guest_login=true lobby=true training_cards=27 human_play=true bots=true return_lobby=true")

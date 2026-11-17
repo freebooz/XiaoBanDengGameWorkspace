@@ -1,0 +1,192 @@
+{
+  "size": [
+    4096,
+    2048
+  ],
+  "authoring_size": [
+    8192,
+    4096
+  ],
+  "cell_stride": [
+    896,
+    1024
+  ],
+  "face_region": [
+    160,
+    0,
+    704,
+    1024
+  ],
+  "tiles": [
+    {
+      "name": "Characters_1",
+      "column": 0,
+      "row_from_top": 0
+    },
+    {
+      "name": "Characters_2",
+      "column": 1,
+      "row_from_top": 0
+    },
+    {
+      "name": "Characters_3",
+      "column": 2,
+      "row_from_top": 0
+    },
+    {
+      "name": "Characters_4",
+      "column": 3,
+      "row_from_top": 0
+    },
+    {
+      "name": "Characters_5",
+      "column": 4,
+      "row_from_top": 0
+    },
+    {
+      "name": "Characters_6",
+      "column": 5,
+      "row_from_top": 0
+    },
+    {
+      "name": "Characters_7",
+      "column": 6,
+      "row_from_top": 0
+    },
+    {
+      "name": "Characters_8",
+      "column": 7,
+      "row_from_top": 0
+    },
+    {
+      "name": "Characters_9",
+      "column": 8,
+      "row_from_top": 0
+    },
+    {
+      "name": "Bamboo_1",
+      "column": 0,
+      "row_from_top": 1
+    },
+    {
+      "name": "Bamboo_2",
+      "column": 1,
+      "row_from_top": 1
+    },
+    {
+      "name": "Bamboo_3",
+      "column": 2,
+      "row_from_top": 1
+    },
+    {
+      "name": "Bamboo_4",
+      "column": 3,
+      "row_from_top": 1
+    },
+    {
+      "name": "Bamboo_5",
+      "column": 4,
+      "row_from_top": 1
+    },
+    {
+      "name": "Bamboo_6",
+      "column": 5,
+      "row_from_top": 1
+    },
+    {
+      "name": "Bamboo_7",
+      "column": 6,
+      "row_from_top": 1
+    },
+    {
+      "name": "Bamboo_8",
+      "column": 7,
+      "row_from_top": 1
+    },
+    {
+      "name": "Bamboo_9",
+      "column": 8,
+      "row_from_top": 1
+    },
+    {
+      "name": "Dots_1",
+      "column": 0,
+      "row_from_top": 2
+    },
+    {
+      "name": "Dots_2",
+      "column": 1,
+      "row_from_top": 2
+    },
+    {
+      "name": "Dots_3",
+      "column": 2,
+      "row_from_top": 2
+    },
+    {
+      "name": "Dots_4",
+      "column": 3,
+      "row_from_top": 2
+    },
+    {
+      "name": "Dots_5",
+      "column": 4,
+      "row_from_top": 2
+    },
+    {
+      "name": "Dots_6",
+      "column": 5,
+      "row_from_top": 2
+    },
+    {
+      "name": "Dots_7",
+      "column": 6,
+      "row_from_top": 2
+    },
+    {
+      "name": "Dots_8",
+      "column": 7,
+      "row_from_top": 2
+    },
+    {
+      "name": "Dots_9",
+      "column": 8,
+      "row_from_top": 2
+    },
+    {
+      "name": "North",
+      "column": 0,
+      "row_from_top": 3
+    },
+    {
+      "name": "White_Dragon",
+      "column": 1,
+      "row_from_top": 3
+    },
+    {
+      "name": "South",
+      "column": 2,
+      "row_from_top": 3
+    },
+    {
+      "name": "Red_Dragon",
+      "column": 3,
+      "row_from_top": 3
+    },
+    {
+      "name": "Green_Dragon",
+      "column": 4,
+      "row_from_top": 3
+    },
+    {
+      "name": "East",
+      "column": 5,
+      "row_from_top": 3
+    },
+    {
+      "name": "West",
+      "column": 6,
+      "row_from_top": 3
+    }
+  ]
+}

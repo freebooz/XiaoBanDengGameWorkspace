@@ -38,6 +38,12 @@ docker compose up --build
 - PostgreSQL：localhost:5432
 - Redis：localhost:6379
 
+Compose 默认使用管理后台的 Vite 开发镜像，经同源代理访问业务 API。
+开发和生产模式均需要服务端颁发的管理员凭据。使用根目录 Compose 联调时，需在服务端挂载凭据文件并配置 `XBD_ADMIN_CREDENTIAL_FILE`。
+修改前端代码后运行 `docker compose up --build -d admin-web` 更新镜像；
+单独检查生产构建可运行 `docker build --target production -t xbd-admin-production ./admin-web`。
+管理员凭据与权限配置见 [麻将运营权限](docs/MAHJONG_MODERATION_OPERATIONS.md)。
+
 > 微信 AppId、商户号、APIv3 Key 等绝不写入仓库。示例值仅用于说明环境变量名称。
 
 ## Godot 产品组合
@@ -60,17 +66,24 @@ client/.generated/guandan/
 
 安装 Godot 4.x 后可直接打开对应生成目录的 `project.godot`。
 
-### 贵阳麻将本地对局
+象棋客户端生命周期回归检查（先生成并导入象棋工程）：
 
-先运行 `docker compose up -d --build server`，再执行 `powershell -ExecutionPolicy Bypass -File tools/compose-godot.ps1 -Product mahjong`。使用 Godot 打开 `client/.generated/mahjong/project.godot`，启动四个客户端，分别点击“游客登录”“快速对局”“准备”，四人到齐后进入同一牌桌。
+```powershell
+godot --headless --path client/.generated/chinese_chess --editor --quit
+godot --headless --path client/.generated/chinese_chess --script ../../tests/chess_lifecycle_test.gd --disable-vsync --max-fps 0
+```
 
-麻将对局使用从虚幻项目导入的三维桌模型、可复用立体牌身及源项目牌面，提供低、中、高画质。服务端按贵阳麻将默认规则管理四人座位、108 张万筒条牌、骰子开门、摸打碰杠胡、七对、抢杠胡、特殊鸡及结算；仅向每位玩家发送其本人暗牌。对局支持断线后在服务进程存活期间按原账号重连。移植范围和验证记录见 `docs/MAHJONG_PORT.md`。
+### 小板凳麻将本地对局
+
+执行 `powershell -ExecutionPolicy Bypass -File tools/compose-godot.ps1 -Product mahjong`，用 Godot 打开 `client/.generated/mahjong/project.godot`，并配置约定开发域名的公共测试 CA。游客登录后可选择贵阳捉鸡或基础 108。快速开局可自动匹配。好友房由一人创建，另外三人凭四位房号加入，准备后开局。人机训练可与三位电脑按所选规则对局。[开发域名与证书配置](docs/MAHJONG_WIFI_DOMAIN.md)
+
+麻将对局使用导入的三维桌、牌身及牌面，提供低、中、高画质。服务端按房间锁定的版本处理牌墙、碰杠胡、超时和结算，仅向每位玩家发送其本人暗牌。服务进程存活且本局未结束时可按原账号回桌。玩法、预览和验证见 [麻将大厅、好友房与训练房](docs/MAHJONG_ONLINE_UI.md)；原始移植记录见 [贵阳麻将移植记录](docs/MAHJONG_PORT.md)。
 
 斗地主使用 Blender 建模的三维牌桌和 63×88×1.3 毫米立体扑克牌，牌面为 54 张独立纹理，提供低、中、高画质。登录后可进入大厅、单人训练，或匹配三名玩家并准备开局；叫地主、出牌、比牌和结算由服务端判定。可编辑模型、玩法范围和验证方法见 `docs/LANDLORD.md`。
 
 掼蛋采用四人搭档、双副 108 张牌，每人 27 张；支持级牌、红桃配牌、排名升级、贡还、抗贡与过 A。斗地主和掼蛋共同引用 `client/game_framework/card3d` 的唯一一套扑克模型与纹理，可编辑源在 `SourceAssets/Poker`。生成掼蛋产品后打开 `client/.generated/guandan/project.godot`，四个客户端分别登录、快速对局、准备即可开局；大厅提供三个电脑对手的训练。说明与验证记录见 `docs/GUANDAN.md`。
 
-象棋、麻将、斗地主和掼蛋均提供登录、大厅、训练、房间、三维对局入口。登录页可填写并保存服务端地址：PC 本机可使用 `http://127.0.0.1:8080`；安卓手机或平板在同一局域网内应填写运行服务端的电脑 IP 地址，例如 `http://192.168.1.10:8080`。客户端以 720×1280 竖屏为基准等比显示，在手机、平板和 PC 窗口尺寸下保留完整操作区。已完成桌面窗口尺寸检查；Android 安装包和实体设备验收仍需导出模板及设备测试。
+象棋、麻将、斗地主和掼蛋均提供登录、大厅、训练、房间和三维对局入口。生成工程默认使用 `https://api.xbd.freeboozstudio.test`。联调包使用该域名的有效证书，对局沿用同一域名的 WSS。回环服务用于隔离自动化测试。登录与大厅按实际窗口和安全区布局，进入对局后切换横屏，退出牌桌后恢复大厅显示。对局保留真实三维模型、透视相机、独立世界和低、中、高画质。扑克的黑桃、梅花和小王使用蓝色墨迹，红桃、方块和大王使用红色。横屏截图见 `artifacts/landscape/`。
 
 ## 设计原则
 

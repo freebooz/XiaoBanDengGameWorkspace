@@ -1,0 +1,13 @@
+{
+  "product": "mahjong",
+  "source_preserved": true,
+  "png_frames": 10,
+  "ico_frames": 7,
+  "native_windows_128px_decoder": "passed",
+  "other_product": "chinese_chess",
+  "icon_mapping_isolated": true,
+  "native_device_install": false,
+  "adaptive_preview": "Circle 66dp and 72dp; rounded square 72dp; brand text visually intact.",
+  "candidate": "client/.generated/icon-isolation-chess-final-20261115",
+  "verified_after_application_version_mapping": true
+}

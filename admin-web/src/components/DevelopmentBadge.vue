@@ -1,5 +1,9 @@
+<script setup lang="ts">
+withDefaults(defineProps<{ label?: string }>(), { label: "开发环境" });
+</script>
+
 <template>
-  <span class="development-badge">开发环境</span>
+  <span class="development-badge">{{ label }}</span>
 </template>
 
 <style scoped>
@@ -8,10 +12,10 @@
   align-items: center;
   gap: 5px;
   padding: 5px 10px;
-  border: 1px solid #efcfab;
+  border: 1px solid var(--xbd-border-control);
   border-radius: 999px;
-  color: #9c5b1f;
-  background: #fff4e5;
+  color: var(--xbd-warning);
+  background: var(--xbd-warning-bg);
   font-size: 11px;
   font-weight: 650;
 }

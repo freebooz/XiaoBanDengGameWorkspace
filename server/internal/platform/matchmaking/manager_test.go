@@ -102,6 +102,35 @@ func TestQuickMatchIsIdempotentForSameAccount(t *testing.T) {
 	}
 }
 
+func TestQuickMatchRefusesDifferentProductWhileAssigned(t *testing.T) {
+	rooms := room.NewManager()
+	manager := NewManager(rooms)
+	request := QuickMatchRequest{AccountID: "shared-player", ProductID: "xbd_chinese_chess", GameID: "chinese_chess", RuleSetID: "standard", RuleVersion: "1.0.0"}
+	first, err := manager.QuickMatch(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	landlord := QuickMatchRequest{AccountID: request.AccountID, ProductID: "xbd_landlord", GameID: "landlord", RuleSetID: "classic_three_player", RuleVersion: "2.0.0"}
+	if _, err := manager.QuickMatch(landlord); err == nil {
+		t.Fatal("a request for a different game should not return the existing room")
+	}
+	same, err := manager.QuickMatch(request)
+	if err != nil || same.RoomID != first.RoomID {
+		t.Fatalf("existing room must remain recoverable: result=%+v err=%v", same, err)
+	}
+	if err := manager.Cancel(request.AccountID); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := rooms.Get(first.RoomID); exists {
+		t.Fatal("an empty waiting room must release its room number")
+	}
+	next, err := manager.QuickMatch(landlord)
+	if err != nil || next.GameID != landlord.GameID {
+		t.Fatalf("account should be able to enter the new game after leaving: result=%+v err=%v", next, err)
+	}
+}
+
 func TestQuickMatchSeparatesDifferentRuleVersions(t *testing.T) {
 	manager := NewManager(room.NewManager())
 	first, err := manager.QuickMatch(QuickMatchRequest{

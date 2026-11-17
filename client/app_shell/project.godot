@@ -5,6 +5,11 @@ config_version=5
 [application]
 config/name="XiaoBanDeng Product"
 run/main_scene="res://scenes/main.tscn"
+boot_splash/image="res://modules/foundation/ui/branding/freeboozstudio_splash.png"
+boot_splash/show_image=true
+boot_splash/stretch_mode=1
+boot_splash/bg_color=Color(0, 0, 0, 1)
+boot_splash/use_filter=true
 
 [display]
 window/size/viewport_width=720
@@ -12,8 +17,11 @@ window/size/viewport_height=1280
 window/size/window_width_override=720
 window/size/window_height_override=1280
 window/stretch/mode="canvas_items"
-window/stretch/aspect="keep"
-window/handheld/orientation=1
+window/stretch/aspect="expand"
+window/handheld/orientation=6
+
+[gui]
+theme/custom="res://modules/foundation/ui/xbd_theme.tres"
 
 [rendering]
 renderer/rendering_method="mobile"
@@ -25,3 +33,6 @@ driver/enable_input=true
 
 [network]
 limits/debugger/max_queued_messages=2048
+
+[xiaobandeng]
+network/default_server_url="https://api.xbd.freeboozstudio.test"

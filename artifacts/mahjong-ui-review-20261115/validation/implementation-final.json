@@ -1,0 +1,95 @@
+{
+  "timestamp": "2026-11-15T23:08:56.6533603+08:00",
+  "project": "client/.generated/mahjong",
+  "input_height_multiplier": 1.25,
+  "main_layouts": 42,
+  "settings_layouts": 28,
+  "main_native_pngs": 30,
+  "login_sizes": 9,
+  "error_sizes": 7,
+  "settlement_landscape_sizes": 6,
+  "leave_landscape_sizes": 4,
+  "nine_patch_button_states": 75,
+  "nine_patch_panel_sizes": 4,
+  "source_files": [
+    {
+      "path": "client/foundation/ui/aspect_nine_patch_style.gd",
+      "sha256": "D39F39DE0034514CB511429D7249E6A8493130AF5034C95A4D83BFD0F22895A6"
+    },
+    {
+      "path": "client/foundation/ui/nine_patch_panel_style.gd",
+      "sha256": "A8772F23A1717736DA9444542EF29135ACF5AA68B3372A71DAD8DF73DA9D3CD9"
+    },
+    {
+      "path": "client/foundation/ui/overlapping_panel_title.gd",
+      "sha256": "82FF5B3540502A714187A5B4B05A747637B6A58D244DF8F466B6EF12095EAC7B"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_rural_theme.gd",
+      "sha256": "1FF28C89690B1B076E1ABFEE6EB4FCE2B0E3975E450A984288C90045C9A6E4B0"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_rural_modal.gd",
+      "sha256": "9EC03FE9F2569A4384485EAEB210756B502CE2E16850A053AE3731BC02759994"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_login_view.gd",
+      "sha256": "D10C4A7D1A352663C847E80DEC34390B798A27823024CA1A73879F2C8BA15651"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_guest_identity_view.gd",
+      "sha256": "746F922EF1B9E34D268C9939502EEA257BFC80534FC66886A30A599796746571"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_room_pages.gd",
+      "sha256": "A9EDC7F2CF2C45004C29CD410C0635CE2BA189F240BF4DCBAD77EF0BABF41250"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_lobby_view.gd",
+      "sha256": "AF9A6E64AE5A77D55BC6314A2716A75887E74DF312552CE7809B1741A649D29F"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_settings_view.gd",
+      "sha256": "2C4E42FED2B06B66771957C4AAA841711723DF45852A24FF168D3566CAA0C577"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_settlement_view.gd",
+      "sha256": "7100A9AD9D07F88C8C5F4522F769A605341C04719CF91FA1FFEF9947E29C75F8"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_error_view.gd",
+      "sha256": "0D1A4218C1C3391B464B7FC2C6B9E85F52B8FECBC9BAD7C782CA5477E7E7717E"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_app.gd",
+      "sha256": "84D749EB3FFA6DAD667A47DE026A39A4200AA9896E311F4B1669F88DE070F4A1"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_battle_art.gd",
+      "sha256": "4972444C094F7BC3920AF802E7E54E2D65329A6FC22F7EA9E5A44875BE9B7FB0"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/guiyang_3d_screen.gd",
+      "sha256": "4312E7BCE55F8750162B3372F11C62384CA59EEBF0BF3DDEB06E7BC536F5335E"
+    },
+    {
+      "path": "client/app_shell/project.godot",
+      "sha256": "7ECFCCDF884CAFE1399757CE74D2B2C3BAA411C3CAF0CE267FA909AA67D338CD"
+    },
+    {
+      "path": "products/mahjong/product.json",
+      "sha256": "134BC8BFFD49EFCD7168FA8F4C30BD319986DC24D6973C7BA6DF423F4BD140AE"
+    },
+    {
+      "path": "tools/compose-godot.ps1",
+      "sha256": "3784A71A0368BC89754301FEED976655F5C73E5ECE4778194F21E5C5EADB4D69"
+    },
+    {
+      "path": "tools/export-mahjong-brand-icons.ps1",
+      "sha256": "E6559326008570D8C0DDEE29AF15DD7706D2A7BCC709EA15D286F918B34EE2E4"
+    }
+  ],
+  "composed_source_mismatches": [],
+  "render_device": "Windows native Godot 4.7.2 Vulkan RTX4090; phone and tablet sizes simulated",
+  "test_fixture": "stopped; containers and data volume preserved"
+}

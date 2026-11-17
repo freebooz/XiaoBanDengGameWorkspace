@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-16T00:30:53.3141948+08:00",
+  "candidate": "client/.generated/mahjong",
+  "source": [
+    {
+      "Path": "E:\\work\\2026\\XiaoBanDengGameWorkspace\\client\\games\\mahjong\\guiyang\\mahjong_login_view.gd",
+      "Hash": "92B11884047C6230B8E7F6BA267C479B760B29C8506D3D23C6218B566EA6283D"
+    },
+    {
+      "Path": "E:\\work\\2026\\XiaoBanDengGameWorkspace\\client\\games\\mahjong\\guiyang\\mahjong_app.gd",
+      "Hash": "1ED71836E7AEC108198963FA07B471094B64C6753DE66972D0317439A3999038"
+    },
+    {
+      "Path": "E:\\work\\2026\\XiaoBanDengGameWorkspace\\client\\tests\\mahjong_login_tablet_smoke.gd",
+      "Hash": "DB1C8674CD8E77AD36723E3444B674F628E1FF10F7CFB05F0610BC7A2D38849A"
+    }
+  ],
+  "passed": [
+    "mahjong_login_tablet_smoke headless exit 0",
+    "mahjong_login_tablet_smoke Windows native exit 0"
+  ],
+  "sizes": 10,
+  "registrationSizes": 5,
+  "render": "Windows RTX4090 Vulkan Forward Mobile; desktop ratio simulation, not physical phone",
+  "max_fps": 0,
+  "vsync": "disabled",
+  "ratios": {
+    "reference": "941x1672",
+    "input": "740x90",
+    "primary": "740x116",
+    "secondary": "265x74",
+    "nearSquare": "2024x1620 center x=1012, same control sizes",
+    "phone": "390x844 input366x54,primary366x60,secondary131x48"
+  },
+  "screenshots": 17,
+  "candidateSync": [
+    "mahjong_login_view.gd copied to matching module after small-screen height fix",
+    "mahjong_app.gd copied to module and scripts/main.gd after compact registration password hint"
+  ],
+  "network": "No gateway or authentication behavior changed; no new live network verification this layout-only pass"
+}

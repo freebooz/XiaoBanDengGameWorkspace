@@ -38,10 +38,20 @@ type snapshot struct {
 	HandsRevealed    json.RawMessage `json:"hands_revealed"`
 }
 
-func post(base, path string, payload any) (map[string]any, error) {
+func post(base, path string, payload any, token string) (map[string]any, error) {
 	body, _ := json.Marshal(payload)
-	client := http.Client{Timeout: 10 * time.Second}
-	response, err := client.Post(base+path, "application/json", bytes.NewReader(body))
+	request, err := http.NewRequest(http.MethodPost, base+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	client := http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	response, err := client.Do(request)
 	if err != nil {
 		return nil, err
 	}
@@ -79,14 +89,19 @@ func next(conn *websocket.Conn, epoch, connected int) (snapshot, error) {
 
 func run(base string) error {
 	var accounts [4]string
+	var tokens [4]string
 	roomID := ""
 	for seat := range accounts {
-		result, err := post(base, "/api/v1/auth/guest", map[string]any{})
+		result, err := post(base, "/api/v1/auth/guest", map[string]any{}, "")
 		if err != nil {
 			return err
 		}
-		accounts[seat] = result["account_id"].(string)
-		result, err = post(base, "/api/v1/matchmaking/quick", map[string]any{"account_id": accounts[seat], "product_id": "xbd_guandan", "game_id": "guandan", "rule_set_id": "classic_partnership", "rule_version": "1.0.0"})
+		accounts[seat], _ = result["account_id"].(string)
+		tokens[seat], _ = result["session_token"].(string)
+		if accounts[seat] == "" || tokens[seat] == "" {
+			return fmt.Errorf("guest login did not return an authenticated account")
+		}
+		result, err = post(base, "/api/v1/matchmaking/quick", map[string]any{"account_id": accounts[seat], "product_id": "xbd_guandan", "game_id": "guandan", "rule_set_id": "classic_partnership", "rule_version": "1.0.0"}, tokens[seat])
 		if err != nil {
 			return err
 		}
@@ -99,8 +114,8 @@ func run(base string) error {
 	if len(roomID) != 4 {
 		return fmt.Errorf("room number is not four digits: %s", roomID)
 	}
-	for _, account := range accounts {
-		if _, err := post(base, "/api/v1/matchmaking/ready", map[string]any{"account_id": account, "room_id": roomID}); err != nil {
+	for seat, account := range accounts {
+		if _, err := post(base, "/api/v1/matchmaking/ready", map[string]any{"account_id": account, "room_id": roomID}, tokens[seat]); err != nil {
 			return err
 		}
 	}
@@ -123,7 +138,7 @@ func run(base string) error {
 		}
 	}()
 	for seat := range connections {
-		conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+		conn, _, err := websocket.DefaultDialer.Dial(u.String(), http.Header{"Authorization": {"Bearer " + tokens[seat]}})
 		if err != nil {
 			return err
 		}

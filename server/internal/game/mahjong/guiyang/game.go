@@ -8,9 +8,11 @@ import (
 )
 
 const (
-	PhaseTurn     = "turn"
-	PhaseReaction = "reaction"
-	PhaseFinished = "finished"
+	PhaseDingque       = "dingque"
+	PhaseTurn          = "turn"
+	PhaseReaction      = "reaction"
+	PhaseFinished      = "finished"
+	actionEventHistory = 32
 )
 
 type Meld struct {
@@ -28,6 +30,30 @@ type Discard struct {
 type ActionOption struct {
 	Type   string `json:"type"`
 	TileID int    `json:"tile_id,omitempty"`
+	Suit   string `json:"suit,omitempty"`
+}
+
+// ActionEvent describes a committed public action without exposing tile data.
+type ActionEvent struct {
+	Sequence int    `json:"sequence"`
+	Seat     int    `json:"seat"`
+	Type     string `json:"type"`
+}
+
+// PublicBoardSnapshot is the tile and turn data available to observers.
+type PublicBoardSnapshot struct {
+	Phase          string          `json:"phase"`
+	Turn           int             `json:"turn"`
+	HandCounts     [4]int          `json:"hand_counts"`
+	Melds          [4][]Meld       `json:"melds"`
+	Discards       []Discard       `json:"discards"`
+	Remaining      int             `json:"remaining"`
+	ActionEvents   []ActionEvent   `json:"action_events"`
+	Dealer         int             `json:"dealer"`
+	Epoch          int             `json:"epoch"`
+	MissingSuits   *[4]string      `json:"missing_suits,omitempty"`
+	ScoreTransfers []ScoreTransfer `json:"score_transfers,omitempty"`
+	RobbedTile     *Tile           `json:"robbed_tile,omitempty"`
 }
 
 type JiEvent struct {
@@ -64,37 +90,70 @@ type Game struct {
 	WinFrom             int
 	WinKind             string
 	Scores              [4]int
+	ScoreBreakdown      *ScoreBreakdown   `json:",omitempty"`
+	ScoreLedger         []ScoreTransfer   `json:",omitempty"`
+	Local               *localRoundState  `json:",omitempty"`
+	LastKongScore       *kongScoreReceipt `json:",omitempty"`
+	MissingSuits        *[4]string        `json:",omitempty"`
+	RobbedTile          *Tile             `json:",omitempty"`
 	FlippedJi           Tile
 	JiCounts            [4]int
 	JiEvents            []JiEvent
 	FirstSpecialDiscard int
 	Reason              string
 	Epoch               int
+	actionSequence      int
+	actionEvents        []ActionEvent
+	replay              *Replay
 }
 
 func NewGame(players [4]string, seed int64) *Game {
-	rules := NewRuleSet()
+	return NewGameWithRules(players, seed, NewRuleSet())
+}
+
+func NewGameWithRules(players [4]string, seed int64, rules RuleSet) *Game {
+	return NewGameWithDealer(players, seed, rules, -1)
+}
+
+// NewGameWithDealer continues from a specified dealer, or picks the opening
+// dealer for this preset when dealer is -1.
+func NewGameWithDealer(players [4]string, seed int64, rules RuleSet, dealer int) *Game {
 	wall := rules.BuildWall()
 	rng := rand.New(rand.NewSource(seed))
 	rng.Shuffle(len(wall), func(i, j int) { wall[i], wall[j] = wall[j], wall[i] })
+	if dealer < 0 || dealer >= 4 {
+		dealer = 0
+		if rules.RotatesDealer() {
+			dealer = rng.Intn(4)
+		}
+	}
 	// 与虚幻版一致：三颗骰子决定开门边和从右数的牌墩，随后顺时针抓牌。
 	diceTotal := 0
 	for roll := 0; roll < 3; roll++ {
 		diceTotal += rng.Intn(6) + 1
 	}
-	breakSide, breakStack, start := wallBreak(0, diceTotal)
+	breakSide, breakStack, start := wallBreak(dealer, diceTotal)
 	wall = append(append([]Tile{}, wall[start:]...), wall[:start]...)
-	g := &Game{Rules: rules, Players: players, Wall: wall, WallBreakDiceTotal: diceTotal, WallBreakSide: breakSide, WallBreakStack: breakStack, Phase: PhaseTurn, Turn: 0, Dealer: 0, PendingFrom: -1, WinFrom: -1, FirstSpecialDiscard: -1, Epoch: 1}
+	g := &Game{Rules: rules, Players: players, Wall: wall, WallBreakDiceTotal: diceTotal, WallBreakSide: breakSide, WallBreakStack: breakStack, Phase: PhaseTurn, Turn: dealer, Dealer: dealer, PendingFrom: -1, WinFrom: -1, FirstSpecialDiscard: -1, Epoch: 1, ScoreBreakdown: &ScoreBreakdown{}}
+	g.replay = &Replay{Version: ReplayVersion, Dealer: g.Dealer}
+	if rules.localRules() {
+		g.Local = &localRoundState{}
+	}
+	if rules.Dingque() {
+		g.Phase = PhaseDingque
+		g.MissingSuits = &[4]string{}
+	}
 	// 虚幻版发牌顺序：三轮每家四张，再每家一张，庄家补一张。
 	for round := 0; round < 3; round++ {
-		for seat := 0; seat < 4; seat++ {
+		for offset := 0; offset < 4; offset++ {
+			seat := (g.Dealer + offset) % 4
 			for count := 0; count < 4; count++ {
 				g.drawTo(seat)
 			}
 		}
 	}
-	for seat := 0; seat < 4; seat++ {
-		g.drawTo(seat)
+	for offset := 0; offset < 4; offset++ {
+		g.drawTo((g.Dealer + offset) % 4)
 	}
 	g.LastDrawnID = g.drawTo(g.Dealer).ID
 	for seat := 0; seat < 4; seat++ {
@@ -119,6 +178,10 @@ func (g *Game) drawTo(seat int) Tile {
 	if g.Remaining() <= 0 {
 		return Tile{}
 	}
+	if g.Local != nil {
+		g.Local.DeclinedHu[seat], g.Local.DeclinedPeng[seat] = false, 0
+		g.Local.ReplacementDraw, g.Local.HotDiscard = false, false
+	}
 	tile := g.Wall[g.NextWall]
 	g.NextWall++
 	g.Hands[seat] = append(g.Hands[seat], tile)
@@ -128,6 +191,9 @@ func (g *Game) drawTo(seat int) Tile {
 func (g *Game) Options(seat int) []ActionOption {
 	if seat < 0 || seat >= 4 || g.Phase == PhaseFinished {
 		return nil
+	}
+	if g.Phase == PhaseDingque {
+		return g.missingSuitOptions(seat)
 	}
 	if g.Phase == PhaseReaction {
 		choices, eligible := g.Candidates[seat]
@@ -139,7 +205,9 @@ func (g *Game) Options(seat int) []ActionOption {
 		}
 		out := []ActionOption{{Type: "pass"}}
 		for _, choice := range choices {
-			out = append(out, ActionOption{Type: choice})
+			if g.validReaction(seat, choice) {
+				out = append(out, ActionOption{Type: choice})
+			}
 		}
 		return out
 	}
@@ -147,11 +215,25 @@ func (g *Game) Options(seat int) []ActionOption {
 		return nil
 	}
 	out := []ActionOption{{Type: "play"}}
-	if ok, _ := g.Rules.CanHuHand(g.Hands[seat], len(g.Melds[seat])); ok {
+	if g.Rules.Dingque() {
+		out = nil
+		for _, tile := range g.Hands[seat] {
+			if g.canDiscard(seat, tile) {
+				out = append(out, ActionOption{Type: "play", TileID: tile.ID})
+			}
+		}
+	}
+	if g.canSelfDraw(seat) {
 		out = append(out, ActionOption{Type: "hu"})
+	}
+	if g.Remaining() == 0 {
+		return out
 	}
 	seen := map[int]bool{}
 	for _, tile := range g.Hands[seat] {
+		if g.isMissingSuit(seat, tile) {
+			continue
+		}
 		index := tileIndex(tile)
 		if seen[index] {
 			continue
@@ -176,7 +258,13 @@ func (g *Game) Apply(seat int, action string, tileID int) error {
 	if g.Phase == PhaseFinished {
 		return errors.New("本局已经结束")
 	}
+	if g.Phase == PhaseDingque {
+		return errors.New("须先完成定缺")
+	}
 	if g.Phase == PhaseReaction {
+		if g.Rules.Dingque() && tileID != 0 {
+			return errors.New("响应操作不指定手牌")
+		}
 		return g.applyReaction(seat, action)
 	}
 	if seat != g.Turn {
@@ -186,18 +274,31 @@ func (g *Game) Apply(seat int, action string, tileID int) error {
 	case "play":
 		return g.play(seat, tileID)
 	case "hu":
-		if ok, _ := g.Rules.CanHuHand(g.Hands[seat], len(g.Melds[seat])); !ok {
+		if (g.Rules.Dingque() && tileID != 0) || !g.canSelfDraw(seat) {
 			return errors.New("当前手牌不能胡")
 		}
 		g.settle([]int{seat}, -1, "zi_mo")
 		return nil
 	case "an_gang":
+		if g.Remaining() == 0 {
+			return errors.New("牌墙已无补牌，不能杠牌")
+		}
 		return g.anGang(seat, tileID)
 	case "bu_gang":
+		if g.Remaining() == 0 {
+			return errors.New("牌墙已无补牌，不能杠牌")
+		}
 		return g.beginBuGang(seat, tileID)
 	default:
 		return errors.New("当前阶段不支持该操作")
 	}
+}
+
+func (g *Game) canSelfDraw(seat int) bool {
+	if _, drawn := g.findTile(seat, g.LastDrawnID); !drawn {
+		return false
+	}
+	return g.winningHand(seat, g.Hands[seat])
 }
 
 func (g *Game) play(seat, tileID int) error {
@@ -212,9 +313,15 @@ func (g *Game) play(seat, tileID int) error {
 		return errors.New("目标牌不在你的手牌中")
 	}
 	played := g.Hands[seat][index]
+	if !g.canDiscard(seat, played) {
+		return errors.New("必须先打出定缺花色")
+	}
 	g.Hands[seat] = append(g.Hands[seat][:index], g.Hands[seat][index+1:]...)
 	g.Discards = append(g.Discards, Discard{Seat: seat, Tile: played})
-	if g.FirstSpecialDiscard < 0 && (isBasicJi(played) || isWuGuJi(played)) {
+	discardIndex := len(g.Discards) - 1
+	g.recordReplay(ReplayEvent{Seat: seat, Kind: "play", Tile: &played, DiscardIndex: &discardIndex})
+	options := g.Rules.effectiveOptions()
+	if options.ChargeChicken && g.FirstSpecialDiscard < 0 && (isBasicJi(played) || (options.BlackEight && isWuGuJi(played))) {
 		g.FirstSpecialDiscard = len(g.Discards) - 1
 		units := 2
 		if isWuGuJi(played) {
@@ -223,6 +330,9 @@ func (g *Game) play(seat, tileID int) error {
 		g.JiEvents = append(g.JiEvents, JiEvent{Kind: "chong_feng", ActorSeat: seat, TargetSeat: -1, Tile: played, ValueUnits: units, DiscardIndex: g.FirstSpecialDiscard})
 	}
 	g.PendingTile, g.PendingFrom, g.PendingKind = played, seat, "discard"
+	if g.Local != nil {
+		g.Local.HotDiscard, g.Local.ReplacementDraw = g.Local.ReplacementDraw, false
+	}
 	g.Candidates = map[int][]string{}
 	g.Submitted = map[int]string{}
 	for other := 0; other < 4; other++ {
@@ -230,17 +340,16 @@ func (g *Game) play(seat, tileID int) error {
 			continue
 		}
 		choices := []string{}
-		if g.hasCompletedGang(other) {
-			testHand := append(append([]Tile(nil), g.Hands[other]...), played)
-			if ok, _ := g.Rules.CanHuHand(testHand, len(g.Melds[other])); ok {
-				choices = append(choices, "hu")
+		if g.canClaimHu(other, played) {
+			choices = append(choices, "hu")
+		}
+		if !g.isMissingSuit(other, played) {
+			if g.Remaining() > 0 && g.Rules.CanGangFromDiscard(g.Hands[other], played) {
+				choices = append(choices, "ming_gang")
 			}
-		}
-		if g.Rules.CanGangFromDiscard(g.Hands[other], played) {
-			choices = append(choices, "ming_gang")
-		}
-		if g.Rules.CanPeng(g.Hands[other], played) {
-			choices = append(choices, "peng")
+			if g.Rules.CanPeng(g.Hands[other], played) && g.allowsLocalReaction(other, "peng", played) {
+				choices = append(choices, "peng")
+			}
 		}
 		if len(choices) > 0 {
 			g.Candidates[other] = choices
@@ -269,9 +378,10 @@ func (g *Game) applyReaction(seat int, action string) error {
 			allowed = true
 		}
 	}
-	if !allowed {
+	if !allowed || !g.validReaction(seat, action) {
 		return errors.New("操作不在服务端候选列表中")
 	}
+	g.recordLocalDeclines(seat, action)
 	g.Submitted[seat] = action
 	g.Epoch++
 	if len(g.Submitted) == len(g.Candidates) {
@@ -283,7 +393,7 @@ func (g *Game) applyReaction(seat int, action string) error {
 func (g *Game) resolveReactions() {
 	huSeats := []int{}
 	for seat, action := range g.Submitted {
-		if action == "hu" {
+		if action == "hu" && g.validReaction(seat, action) {
 			huSeats = append(huSeats, seat)
 		}
 	}
@@ -294,7 +404,11 @@ func (g *Game) resolveReactions() {
 		if g.PendingKind == "discard" && len(g.Discards) > 0 {
 			g.Discards[len(g.Discards)-1].Claimed = true
 		}
-		g.settle(huSeats, g.PendingFrom, "dian_pao")
+		kind := "dian_pao"
+		if g.Rules.Dingque() && g.PendingKind == "bu_gang" {
+			kind = "qiang_gang"
+		}
+		g.settle(huSeats, g.PendingFrom, kind)
 		return
 	}
 	if g.PendingKind == "bu_gang" {
@@ -303,6 +417,9 @@ func (g *Game) resolveReactions() {
 	}
 	claimSeat, claimAction, bestPriority, bestDistance := -1, "", -1, 5
 	for seat, action := range g.Submitted {
+		if !g.validReaction(seat, action) {
+			continue
+		}
 		priority := 0
 		if action == "peng" {
 			priority = 1
@@ -332,21 +449,26 @@ func (g *Game) claim(seat int, kind string) {
 	removed := g.removeType(seat, g.PendingTile, count)
 	removed = append(removed, g.PendingTile)
 	g.Melds[seat] = append(g.Melds[seat], Meld{Kind: kind, Tiles: removed, FromSeat: g.PendingFrom})
-	if len(g.Discards)-1 == g.FirstSpecialDiscard && (isBasicJi(g.PendingTile) || isWuGuJi(g.PendingTile)) {
-		g.Scores[seat]++
-		g.Scores[g.PendingFrom]--
+	if g.FirstSpecialDiscard >= 0 && len(g.Discards)-1 == g.FirstSpecialDiscard {
+		g.transferScore(scoreJi, g.PendingFrom, seat, 1)
 		g.JiEvents = append(g.JiEvents, JiEvent{Kind: "ze_ren", ActorSeat: seat, TargetSeat: g.PendingFrom, Tile: g.PendingTile, ValueUnits: 1, DiscardIndex: g.FirstSpecialDiscard})
 	}
 	if len(g.Discards) > 0 {
 		g.Discards[len(g.Discards)-1].Claimed = true
 	}
+	discardIndex := len(g.Discards) - 1
+	g.recordReplayMeld(seat, len(g.Melds[seat])-1, &discardIndex)
 	g.Turn = seat
+	g.LastDrawnID = 0
+	from := g.PendingFrom
 	g.Phase = PhaseTurn
 	g.clearPending()
+	g.LastKongScore = nil
 	if kind == "ming_gang" {
-		g.awardGang(seat)
+		g.awardGang(seat, kind, from)
 		g.drawReplacement(seat)
 	}
+	g.recordAction(seat, kind)
 	g.Epoch++
 }
 
@@ -366,20 +488,22 @@ func (g *Game) removeType(seat int, target Tile, count int) []Tile {
 
 func (g *Game) anGang(seat, tileID int) error {
 	tile, ok := g.findTile(seat, tileID)
-	if !ok || CountType(g.Hands[seat], tile) != 4 {
+	if !ok || g.isMissingSuit(seat, tile) || CountType(g.Hands[seat], tile) != 4 {
 		return errors.New("手中没有可暗杠的四张同牌")
 	}
 	removed := g.removeType(seat, tile, 4)
 	g.Melds[seat] = append(g.Melds[seat], Meld{Kind: "an_gang", Tiles: removed, FromSeat: seat})
-	g.awardGang(seat)
+	g.recordReplayMeld(seat, len(g.Melds[seat])-1, nil)
+	g.awardGang(seat, "an_gang", seat)
 	g.drawReplacement(seat)
+	g.recordAction(seat, "an_gang")
 	g.Epoch++
 	return nil
 }
 
 func (g *Game) beginBuGang(seat, tileID int) error {
 	tile, ok := g.findTile(seat, tileID)
-	if !ok {
+	if !ok || g.isMissingSuit(seat, tile) {
 		return errors.New("补杠牌不在手中")
 	}
 	foundPeng := false
@@ -391,15 +515,20 @@ func (g *Game) beginBuGang(seat, tileID int) error {
 	if !foundPeng {
 		return errors.New("没有可补杠的碰牌")
 	}
+	g.LastKongScore = nil
 	g.PendingTile, g.PendingFrom, g.PendingKind = tile, seat, "bu_gang"
+	if !g.Rules.effectiveOptions().RobKong {
+		g.completeBuGang()
+		g.Epoch++
+		return nil
+	}
 	g.Candidates = map[int][]string{}
 	g.Submitted = map[int]string{}
 	for other := 0; other < 4; other++ {
-		if other == seat || !g.hasCompletedGang(other) {
+		if other == seat {
 			continue
 		}
-		testHand := append(append([]Tile(nil), g.Hands[other]...), tile)
-		if ok, _ := g.Rules.CanHuHand(testHand, len(g.Melds[other])); ok {
+		if g.canClaimHu(other, tile) {
 			g.Candidates[other] = []string{"hu"}
 		}
 	}
@@ -424,13 +553,15 @@ func (g *Game) completeBuGang() {
 		if g.Melds[seat][index].Kind == "peng" && sameType(g.Melds[seat][index].Tiles[0], tile) {
 			g.Melds[seat][index].Kind = "bu_gang"
 			g.Melds[seat][index].Tiles = append(g.Melds[seat][index].Tiles, tile)
+			g.recordReplayMeld(seat, index, nil)
 			break
 		}
 	}
 	g.Phase, g.Turn = PhaseTurn, seat
 	g.clearPending()
-	g.awardGang(seat)
+	g.awardGang(seat, "bu_gang", seat)
 	g.drawReplacement(seat)
+	g.recordAction(seat, "bu_gang")
 	g.Epoch++
 }
 
@@ -452,11 +583,18 @@ func (g *Game) hasCompletedGang(seat int) bool {
 	return false
 }
 
-func (g *Game) awardGang(seat int) {
+func (g *Game) awardGang(seat int, kind string, from int) {
+	if g.Local != nil {
+		g.awardLocalGang(seat, kind, from)
+		return
+	}
+	if g.Rules.Dingque() {
+		g.awardTrialGang(seat, kind, from)
+		return
+	}
 	for other := 0; other < 4; other++ {
 		if other != seat {
-			g.Scores[other]--
-			g.Scores[seat]++
+			g.transferScore(scoreGang, other, seat, 1)
 		}
 	}
 }
@@ -467,10 +605,14 @@ func (g *Game) drawReplacement(seat int) {
 		return
 	}
 	g.LastDrawnID = g.drawTo(seat).ID
+	if g.Local != nil {
+		g.Local.ReplacementDraw = true
+	}
 	SortHand(g.Hands[seat])
 }
 
 func (g *Game) advanceFrom(seat int) {
+	g.LastKongScore = nil
 	g.clearPending()
 	g.Turn = (seat + 1) % 4
 	if g.Remaining() == 0 {
@@ -483,9 +625,22 @@ func (g *Game) advanceFrom(seat int) {
 	g.Epoch++
 }
 
-func (g *Game) finishDraw() { g.Phase, g.Reason = PhaseFinished, "wall_exhausted"; g.Epoch++ }
+func (g *Game) finishDraw() {
+	g.LastKongScore = nil
+	g.Phase, g.Reason = PhaseFinished, "wall_exhausted"
+	if g.Rules.Dingque() {
+		g.awardTrialDraw()
+	} else if g.Local != nil {
+		g.settleLocalDraw()
+	}
+	g.recordReplay(ReplayEvent{Seat: -1, Kind: g.Reason})
+	g.Epoch++
+}
 
 func (g *Game) settle(winners []int, from int, kind string) {
+	if g.Local != nil {
+		kind = g.localWinKind(kind)
+	}
 	winningTile := g.PendingTile
 	if from < 0 {
 		winningTile, _ = g.findTile(winners[0], g.LastDrawnID)
@@ -498,52 +653,108 @@ func (g *Game) settle(winners []int, from int, kind string) {
 			}
 		}
 	}
+	if kind == "qiang_gang" {
+		g.RobbedTile = &winningTile
+	}
 	g.Winners, g.WinFrom, g.WinKind = append([]int(nil), winners...), from, kind
 	g.Phase, g.Reason = PhaseFinished, "hu"
-	if g.Remaining() > 0 {
-		g.FlippedJi = g.Wall[g.NextWall]
-		g.NextWall++
+	var replayClaim *int
+	if g.PendingKind == "discard" && len(g.Discards) > 0 && g.Discards[len(g.Discards)-1].Claimed {
+		discardIndex := len(g.Discards) - 1
+		replayClaim = &discardIndex
 	}
 	for _, winner := range winners {
+		g.recordAction(winner, "hu")
+		g.recordReplay(ReplayEvent{Seat: winner, Kind: "hu", DiscardIndex: replayClaim, RobbedTile: g.RobbedTile})
+		if g.Local != nil {
+			continue
+		}
+		if g.Rules.Dingque() {
+			g.awardTrialHu(winner, from, kind, winningTile)
+			continue
+		}
 		for other := 0; other < 4; other++ {
 			if other == winner {
 				continue
 			}
 			if from == -1 {
-				g.Scores[winner] += 2
-				g.Scores[other] -= 2
+				g.transferScore(scoreHu, other, winner, 2)
 			}
 			if from == other {
-				g.Scores[winner] += 3
-				g.Scores[other] -= 3
+				g.transferScore(scoreHu, other, winner, 3)
 			}
 		}
 	}
+	if g.Rules.Dingque() && kind == "dian_pao" {
+		g.revokeHeatCannonKong(from)
+	}
+	g.LastKongScore = nil
+	if g.Local != nil {
+		g.settleLocalHu(winners, from, winningTile)
+	} else if g.Rules.chickenEnabled() {
+		g.scoreChicken(winners, from, winningTile)
+	}
+	g.clearPending()
+	g.Epoch++
+}
+
+func (g *Game) recordAction(seat int, kind string) {
+	g.actionSequence++
+	event := ActionEvent{Sequence: g.actionSequence, Seat: seat, Type: kind}
+	if len(g.actionEvents) == actionEventHistory {
+		copy(g.actionEvents, g.actionEvents[1:])
+		g.actionEvents[len(g.actionEvents)-1] = event
+		return
+	}
+	g.actionEvents = append(g.actionEvents, event)
+}
+
+func (g *Game) scoreChicken(winners []int, from int, winningTile Tile) {
+	if g.Remaining() > 0 {
+		g.FlippedJi = g.Wall[g.NextWall]
+		g.NextWall++
+	}
+	blackEight := g.Rules.effectiveOptions().BlackEight
+	units := func(tile Tile) int {
+		value := jiUnits(tile, g.FlippedJi, blackEight)
+		if g.Local != nil && isGoldenChicken(tile, g.FlippedJi, blackEight) {
+			value *= 2
+		}
+		return value
+	}
 	for seat := 0; seat < 4; seat++ {
 		for _, tile := range g.Hands[seat] {
-			g.JiCounts[seat] += jiUnits(tile, g.FlippedJi)
+			g.JiCounts[seat] += units(tile)
 		}
 		for _, meld := range g.Melds[seat] {
 			for _, tile := range meld.Tiles {
-				g.JiCounts[seat] += jiUnits(tile, g.FlippedJi)
+				g.JiCounts[seat] += units(tile)
 			}
 		}
 		if from >= 0 && containsSeat(winners, seat) {
-			g.JiCounts[seat] += jiUnits(winningTile, g.FlippedJi)
+			g.JiCounts[seat] += units(winningTile)
 		}
 	}
 	for _, discard := range g.Discards {
 		if !discard.Claimed {
-			g.JiCounts[discard.Seat] += jiUnits(discard.Tile, g.FlippedJi)
+			if !g.Rules.Dingque() {
+				g.JiCounts[discard.Seat] += units(discard.Tile)
+			} else if isBasicJi(discard.Tile) {
+				g.JiCounts[discard.Seat]++
+			}
 		}
 	}
-	for _, event := range g.JiEvents {
+	for index := range g.JiEvents {
+		event := &g.JiEvents[index]
 		if event.Kind != "chong_feng" {
 			continue
 		}
+		if g.Local != nil && isGoldenChicken(event.Tile, g.FlippedJi, blackEight) {
+			event.ValueUnits *= 2
+		}
 		already := 0
 		if event.DiscardIndex >= 0 && event.DiscardIndex < len(g.Discards) && !g.Discards[event.DiscardIndex].Claimed {
-			already = jiUnits(event.Tile, g.FlippedJi)
+			already = units(event.Tile)
 		}
 		if event.ValueUnits > already {
 			g.JiCounts[event.ActorSeat] += event.ValueUnits - already
@@ -552,12 +763,16 @@ func (g *Game) settle(winners []int, from int, kind string) {
 	for a := 0; a < 4; a++ {
 		for b := a + 1; b < 4; b++ {
 			delta := g.JiCounts[a] - g.JiCounts[b]
-			g.Scores[a] += delta
-			g.Scores[b] -= delta
+			switch {
+			case !g.Rules.Dingque():
+				g.transferScore(scoreJi, b, a, delta)
+			case delta > 0:
+				g.recordScore(scoreJi, b, a, delta, "chicken_difference", "")
+			case delta < 0:
+				g.recordScore(scoreJi, a, b, -delta, "chicken_difference", "")
+			}
 		}
 	}
-	g.clearPending()
-	g.Epoch++
 }
 
 func (g *Game) clearPending() {
@@ -570,9 +785,18 @@ func (g *Game) clearPending() {
 
 // Timeout 自动打出刚摸的牌或自动过响应，使用者以 Epoch 拒绝旧计时器。
 func (g *Game) Timeout() {
+	if g.Phase == PhaseDingque {
+		for seat, suit := range *g.MissingSuits {
+			if suit == "" {
+				_ = g.ChooseMissingSuit(seat, g.DefaultMissingSuit(seat))
+			}
+		}
+		return
+	}
 	if g.Phase == PhaseReaction {
 		for seat := range g.Candidates {
 			if _, done := g.Submitted[seat]; !done {
+				g.recordLocalDeclines(seat, "pass")
 				g.Submitted[seat] = "pass"
 			}
 		}
@@ -586,7 +810,63 @@ func (g *Game) Timeout() {
 	if _, ok := g.findTile(g.Turn, chosen); !ok && len(g.Hands[g.Turn]) > 0 {
 		chosen = g.Hands[g.Turn][len(g.Hands[g.Turn])-1].ID
 	}
+	if g.Rules.Dingque() {
+		if drawn, _ := g.findTile(g.Turn, chosen); !g.canDiscard(g.Turn, drawn) {
+			for _, tile := range g.Hands[g.Turn] {
+				if g.canDiscard(g.Turn, tile) {
+					chosen = tile.ID
+					break
+				}
+			}
+		}
+	}
 	_ = g.play(g.Turn, chosen)
+}
+
+// PublicBoard returns a detached snapshot with every concealed kong masked.
+func (g *Game) PublicBoard() PublicBoardSnapshot {
+	return g.boardFor(-1)
+}
+
+// NextDealer returns the winner nearest the feeder, or the incumbent on a draw.
+func (g *Game) NextDealer() int {
+	if !g.Rules.RotatesDealer() {
+		return 0
+	}
+	if len(g.Winners) > 0 {
+		return g.Winners[0]
+	}
+	return g.Dealer
+}
+
+func (g *Game) boardFor(seat int) PublicBoardSnapshot {
+	board := PublicBoardSnapshot{
+		Phase: g.Phase, Turn: g.Turn, Discards: append([]Discard{}, g.Discards...),
+		Remaining: g.Remaining(), ActionEvents: append([]ActionEvent{}, g.actionEvents...), Dealer: g.Dealer, Epoch: g.Epoch,
+	}
+	if g.MissingSuits != nil && g.Phase != PhaseDingque {
+		suits := *g.MissingSuits
+		board.MissingSuits = &suits
+	}
+	board.ScoreTransfers = g.SettlementScoreTransfers()
+	if g.RobbedTile != nil && g.Phase == PhaseFinished {
+		tile := *g.RobbedTile
+		board.RobbedTile = &tile
+	}
+	for other := 0; other < 4; other++ {
+		board.HandCounts[other] = len(g.Hands[other])
+		board.Melds[other] = make([]Meld, 0, len(g.Melds[other]))
+		for _, meld := range g.Melds[other] {
+			copyMeld := meld
+			if other != seat && meld.Kind == "an_gang" {
+				copyMeld.Tiles = make([]Tile, 4)
+			} else {
+				copyMeld.Tiles = append([]Tile(nil), meld.Tiles...)
+			}
+			board.Melds[other] = append(board.Melds[other], copyMeld)
+		}
+	}
+	return board
 }
 
 // SnapshotFor 不序列化其它玩家暗牌；暗杠也只显示四张牌背。
@@ -595,30 +875,44 @@ func (g *Game) SnapshotFor(seat int) map[string]any {
 	if options == nil {
 		options = []ActionOption{}
 	}
-	counts := make([]int, 4)
-	publicMelds := make([][]Meld, 4)
-	for other := 0; other < 4; other++ {
-		counts[other] = len(g.Hands[other])
-		publicMelds[other] = make([]Meld, 0, len(g.Melds[other]))
-		for _, meld := range g.Melds[other] {
-			copyMeld := meld
-			if other != seat && meld.Kind == "an_gang" {
-				copyMeld.Tiles = make([]Tile, 4)
-			}
-			publicMelds[other] = append(publicMelds[other], copyMeld)
-		}
-	}
+	board := g.boardFor(seat)
 	hand := append([]Tile{}, g.Hands[seat]...)
-	return map[string]any{
-		"type": "mahjong_state", "phase": g.Phase, "turn": g.Turn, "your_seat": seat,
-		"players": g.Players, "hand": hand, "hand_counts": counts, "melds": publicMelds,
-		"discards": append([]Discard{}, g.Discards...), "remaining": g.Remaining(),
+	snapshot := map[string]any{
+		"type": "mahjong_state", "phase": g.Phase, "turn": g.Turn, "dealer": board.Dealer, "your_seat": seat,
+		"players": g.Players, "hand": hand, "hand_counts": board.HandCounts[:], "melds": board.Melds[:],
+		"discards": board.Discards, "remaining": board.Remaining,
 		"options": options, "winners": append([]int{}, g.Winners...),
 		"win_from": g.WinFrom, "win_kind": g.WinKind, "scores": g.Scores,
 		"reason": g.Reason, "epoch": g.Epoch, "last_discard": g.PendingTile,
+		"pending_kind": g.PendingKind, "pending_from": g.PendingFrom,
 		"wall_break_dice_total": g.WallBreakDiceTotal, "wall_break_side": g.WallBreakSide, "wall_break_stack": g.WallBreakStack,
 		"flipped_ji": g.FlippedJi, "ji_counts": g.JiCounts, "ji_events": append([]JiEvent{}, g.JiEvents...),
+		"action_events": board.ActionEvents,
 	}
+	if board.MissingSuits != nil {
+		snapshot["missing_suits"] = *board.MissingSuits
+	}
+	if board.ScoreTransfers != nil {
+		snapshot["score_transfers"] = board.ScoreTransfers
+	}
+	if board.RobbedTile != nil {
+		snapshot["robbed_tile"] = *board.RobbedTile
+	}
+	if g.Phase == PhaseTurn && seat == g.Turn && g.LastDrawnID > 0 {
+		if _, held := g.findTile(seat, g.LastDrawnID); held {
+			snapshot["drawn_tile_id"] = g.LastDrawnID
+		}
+	}
+	if breakdown := g.SettlementScoreBreakdown(); breakdown != nil {
+		snapshot["score_breakdown"] = breakdown
+	}
+	if details := g.SettlementHuDetails(); len(details) > 0 {
+		snapshot["hu_details"] = details
+	}
+	if ready := g.SettlementReadySeats(); ready != nil {
+		snapshot["ready_seats"] = ready
+	}
+	return snapshot
 }
 
 func containsSeat(seats []int, target int) bool {
@@ -633,12 +927,12 @@ func containsSeat(seats []int, target int) bool {
 func isBasicJi(tile Tile) bool { return tile.Suit == "tiao" && tile.Rank == 1 }
 func isWuGuJi(tile Tile) bool  { return tile.Suit == "tong" && tile.Rank == 8 }
 
-func jiUnits(tile, flipped Tile) int {
+func jiUnits(tile, flipped Tile, blackEight bool) int {
 	units := 0
 	if isBasicJi(tile) {
 		units = 1
 	}
-	if isWuGuJi(tile) {
+	if blackEight && isWuGuJi(tile) {
 		units = 2
 	}
 	if validType(flipped) && tile.Suit == flipped.Suit && tile.Rank == flipped.Rank%9+1 && units < 1 {

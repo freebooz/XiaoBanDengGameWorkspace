@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="35" height="35" viewBox="0 0 35 35">
+  <defs><linearGradient id="fill" x2="0" y2="1"><stop stop-color="#fff9e8"/><stop offset="1" stop-color="#ecd1a7"/></linearGradient></defs>
+  <circle cx="17.5" cy="19.5" r="15" fill="#523018" opacity=".32"/>
+  <circle cx="17.5" cy="16.5" r="15" fill="#bf9058" stroke="#ab753e" stroke-width="1"/>
+  <circle cx="17.5" cy="16.3" r="13" fill="url(#fill)" stroke="#fff3dc" stroke-width="1.25"/>
+</svg>

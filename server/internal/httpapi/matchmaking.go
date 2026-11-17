@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/domain"
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/matchmaking"
 )
 
@@ -19,10 +20,26 @@ func (s *Server) quickMatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "请求体不是合法JSON")
 		return
 	}
-	result, err := s.matchmaking.QuickMatch(req)
+	if !s.verifyPlayerAccount(w, r, req.AccountID) {
+		return
+	}
+	manager := s.matchmaking
+	if req.GameID == string(domain.GameMahjong) || req.ProductID == string(domain.ProductMahjong) {
+		manager = s.mahjong.matches
+	}
+	match := manager.QuickMatch
+	if manager != s.matchmaking {
+		match = s.mahjong.quickMatch
+	}
+	result, err := match(req)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if result.GameID == string(domain.GameMahjong) {
+		s.mahjong.publishLobby(result.RoomID, req.AccountID)
+	} else {
+		s.monitor.notify()
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -38,10 +55,28 @@ func (s *Server) roomReady(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "请求体不是合法JSON")
 		return
 	}
-	result, err := s.matchmaking.Ready(req)
+	if !s.verifyPlayerAccount(w, r, req.AccountID) {
+		return
+	}
+	manager := s.matchmaking
+	if s.rooms != nil {
+		if item, exists := s.rooms.Get(req.RoomID); exists && item.GameID == string(domain.GameMahjong) {
+			manager = s.mahjong.matches
+		}
+	}
+	ready := manager.Ready
+	if manager != s.matchmaking {
+		ready = s.mahjong.ready
+	}
+	result, err := ready(req)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if manager != s.matchmaking {
+		s.mahjong.publishLobby(result.RoomID, req.AccountID)
+	} else {
+		s.monitor.notify()
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -57,9 +92,39 @@ func (s *Server) cancelMatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "请求体不是合法JSON")
 		return
 	}
-	if err := s.matchmaking.Cancel(req.AccountID); err != nil {
+	accountID := req.AccountID
+	if !s.verifyPlayerAccount(w, r, accountID) {
+		return
+	}
+	var err error
+	if s.mahjong != nil {
+		if current, assigned := s.mahjong.matches.MahjongAssignment(accountID); assigned {
+			err = s.mahjong.leaveLobbyRoom(accountID, current)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			s.mahjong.publishLobby(current.RoomID, accountID)
+			writeJSON(w, http.StatusOK, map[string]any{"status": "cancelled"})
+			return
+		}
+	}
+	if err = s.matchmaking.Cancel(accountID); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	s.monitor.notify()
 	writeJSON(w, http.StatusOK, map[string]any{"status": "cancelled"})
+}
+
+func (s *Server) verifyPlayerAccount(w http.ResponseWriter, r *http.Request, accountID string) bool {
+	session, ok := s.requireSession(w, r)
+	if !ok {
+		return false
+	}
+	if session.AccountID != accountID {
+		writeError(w, http.StatusForbidden, "账号与当前登录会话不符")
+		return false
+	}
+	return true
 }

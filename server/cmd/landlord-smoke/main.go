@@ -42,9 +42,20 @@ type state struct {
 	ConnectedPlayers int    `json:"connected_players"`
 }
 
-func post(base, path string, payload any) (map[string]any, error) {
+func post(base, path string, payload any, token string) (map[string]any, error) {
 	body, _ := json.Marshal(payload)
-	response, err := http.Post(base+path, "application/json", bytes.NewReader(body))
+	request, err := http.NewRequest(http.MethodPost, base+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	client := http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	response, err := client.Do(request)
 	if err != nil {
 		return nil, err
 	}
@@ -81,16 +92,21 @@ func nextState(conn *websocket.Conn, minimumEpoch int, minimumConnected int) (st
 
 func run(base string) error {
 	accounts := [3]string{}
+	tokens := [3]string{}
 	for i := range accounts {
-		result, err := post(base, "/api/v1/auth/guest", map[string]any{})
+		result, err := post(base, "/api/v1/auth/guest", map[string]any{}, "")
 		if err != nil {
 			return err
 		}
-		accounts[i] = result["account_id"].(string)
+		accounts[i], _ = result["account_id"].(string)
+		tokens[i], _ = result["session_token"].(string)
+		if accounts[i] == "" || tokens[i] == "" {
+			return fmt.Errorf("guest login did not return an authenticated account")
+		}
 	}
 	roomID := ""
-	for _, account := range accounts {
-		result, err := post(base, "/api/v1/matchmaking/quick", map[string]any{"account_id": account, "product_id": "xbd_landlord", "game_id": "landlord", "rule_set_id": "classic_three_player", "rule_version": "1.0.0"})
+	for seat, account := range accounts {
+		result, err := post(base, "/api/v1/matchmaking/quick", map[string]any{"account_id": account, "product_id": "xbd_landlord", "game_id": "landlord", "rule_set_id": "classic_three_player", "rule_version": "2.0.0"}, tokens[seat])
 		if err != nil {
 			return err
 		}
@@ -100,8 +116,8 @@ func run(base string) error {
 			return fmt.Errorf("players entered different rooms")
 		}
 	}
-	for _, account := range accounts {
-		if _, err := post(base, "/api/v1/matchmaking/ready", map[string]any{"account_id": account, "room_id": roomID}); err != nil {
+	for seat, account := range accounts {
+		if _, err := post(base, "/api/v1/matchmaking/ready", map[string]any{"account_id": account, "room_id": roomID}, tokens[seat]); err != nil {
 			return err
 		}
 	}
@@ -125,7 +141,7 @@ func run(base string) error {
 		}
 	}()
 	for seat := 0; seat < 3; seat++ {
-		conn, _, err := websocket.DefaultDialer.Dial(parsedURL.String(), nil)
+		conn, _, err := websocket.DefaultDialer.Dial(parsedURL.String(), http.Header{"Authorization": {"Bearer " + tokens[seat]}})
 		if err != nil {
 			return err
 		}
@@ -161,8 +177,23 @@ func run(base string) error {
 			return err
 		}
 	}
-	if snapshots[0].Phase != "play" || len(snapshots[0].Hand) != 20 {
+	if snapshots[0].Phase != "double" || len(snapshots[0].Hand) != 20 {
 		return fmt.Errorf("landlord did not receive bottom cards")
+	}
+	for snapshots[0].Phase == "double" {
+		current := snapshots[0]
+		if err := connections[current.Turn].WriteJSON(map[string]any{"type": "landlord_action", "action": "double", "enabled": false}); err != nil {
+			return err
+		}
+		for seat := 0; seat < 3; seat++ {
+			snapshots[seat], err = nextState(connections[seat], current.Epoch+1, 3)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if snapshots[0].Phase != "play" {
+		return fmt.Errorf("double decisions did not enter play")
 	}
 	for actionCount := 0; actionCount < 250; actionCount++ {
 		current := snapshots[0]

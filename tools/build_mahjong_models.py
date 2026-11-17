@@ -117,43 +117,21 @@ def beveled_box(name, dimensions, location, material, bevel):
 
 
 def export_tile():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    ivory = principled_material("M_Tile_Ivory", (0.93, 0.88, 0.73, 1), 0.29)
-    green = principled_material("M_Tile_GreenBack", (0.025, 0.19, 0.14, 1), 0.38)
-    face = principled_material("M_Tile_FacePlaceholder", (1, 1, 1, 1), 0.35)
-    source_face = WORKSPACE / "client/games/mahjong/guiyang/assets/tiles/T_Tile_FrontBlank.png"
-    image = bpy.data.images.load(str(source_face), check_existing=True)
-    image.pack()
-    texture = face.node_tree.nodes.new("ShaderNodeTexImage")
-    texture.image = image
-    shader = face.node_tree.nodes.get("Principled BSDF")
-    face.node_tree.links.new(texture.outputs["Color"], shader.inputs["Base Color"])
-    face.node_tree.links.new(texture.outputs["Alpha"], shader.inputs["Alpha"])
-    face.surface_render_method = "DITHERED"
-    beveled_box("TileBack", (0.042, 0.062, 0.008), (0, 0, 0.004), green, 0.003)
-    beveled_box("TileBody", (0.042, 0.062, 0.021), (0, 0, 0.0185), ivory, 0.003)
-    bpy.ops.mesh.primitive_plane_add(size=1, location=(0, 0, 0.0294))
-    top = bpy.context.object
-    top.name = "TileFace"
-    top.dimensions = (0.040, 0.059, 0)
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    top.data.materials.append(face)
-    bpy.context.preferences.filepaths.save_version = 0
-    bpy.ops.wm.save_as_mainfile(filepath=str(EDITABLE / "mahjong_tile.blend"))
-    bpy.ops.export_scene.gltf(filepath=str(OUTPUT / "mahjong_tile.glb"), export_format="GLB", export_apply=True)
-    return 3
+    # Keep this legacy full-table command on the same canonical real tile pipeline.
+    import runpy
+    runpy.run_path(str(WORKSPACE / "tools/import_real_mahjong_tile.py"), run_name="__main__")
+    return 2
 
 
 table_meshes = export_table()
 tile_meshes = export_tile()
-manifest = {
+manifest = json.loads((OUTPUT / "model_manifest.json").read_text(encoding="utf-8"))
+manifest.update({
     "source_table": str(SOURCE / "SM_StandardMahjongTable.glb"),
     "source_table_sha256": sha256(SOURCE / "SM_StandardMahjongTable.glb"),
-    "tile_face_source": "SourceArt/UI/Tiles",
-    "tile_model_note": "Unreal Mahjong50 tile meshes are .uasset only; reusable tile geometry was recreated for Godot.",
     "table_meshes": table_meshes,
     "tile_meshes": tile_meshes,
     "files": {path.name: {"bytes": path.stat().st_size, "sha256": sha256(path)} for path in list(OUTPUT.glob("*.glb")) + list(EDITABLE.glob("*.blend"))},
-}
-(OUTPUT / "model_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+})
+(OUTPUT / "model_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n', encoding="utf-8",newline='\n')
 print("MAHJONG_MODEL_IMPORT_OK", manifest["files"])

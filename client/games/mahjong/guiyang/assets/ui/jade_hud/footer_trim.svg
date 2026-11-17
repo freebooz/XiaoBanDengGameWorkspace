@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="460" height="84" viewBox="0 0 460 84">
+  <defs>
+    <linearGradient id="metal" x2="0" y2="1">
+      <stop stop-color="#fff2b1"/><stop offset=".22" stop-color="#ddad65"/><stop offset=".47" stop-color="#a16a36"/><stop offset=".67" stop-color="#e6a65a"/><stop offset="1" stop-color="#ad6937"/>
+    </linearGradient>
+    <linearGradient id="wood" x2="0" y2="1">
+      <stop stop-color="#9e6843"/><stop offset=".29" stop-color="#673d27"/><stop offset=".67" stop-color="#38231a"/><stop offset="1" stop-color="#5c3825"/>
+    </linearGradient>
+    <g id="line">
+      <path d="M3 53h68l15 8h111m-190-7h61m20 8h107" fill="none" stroke="#2e1a11" stroke-width="7" stroke-linecap="round"/>
+      <path d="M4 51h68l15 8h107" fill="none" stroke="url(#metal)" stroke-width="2.1" stroke-linecap="round"/>
+      <path d="M41 51h28l18 8h55" fill="none" stroke="#ffe4a5" stroke-opacity=".53" stroke-width=".65" stroke-linecap="round"/>
+    </g>
+    <g id="flourish">
+      <path d="M198 46c-20 7-31-1-44-14-9-9-21-15-27-6-4 5-3 10 2 12 4 1 9-2 6-7m47 9c-11-10-22-9-24-2-2 5 2 8 6 7m-14-4c-9 8-19 11-33 6-12-4-15-12-24-8-6 3-5 10 0 11 3 1 7-1 6-5m42 4c-5 5-12 8-22 7m30-19c-8-1-7-8-1-12 4-2 8-1 9 3" fill="none" stroke="#462614" stroke-width="7.2" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 2)" opacity=".76"/>
+      <path d="M198 46c-20 7-31-1-44-14-9-9-21-15-27-6-4 5-3 10 2 12 4 1 9-2 6-7m47 9c-11-10-22-9-24-2-2 5 2 8 6 7m-14-4c-9 8-19 11-33 6-12-4-15-12-24-8-6 3-5 10 0 11 3 1 7-1 6-5m42 4c-5 5-12 8-22 7m30-19c-8-1-7-8-1-12 4-2 8-1 9 3" fill="none" stroke="url(#metal)" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M101 41q8-2 13 4m14-18q7-8 19 0m24 14 14 4" fill="none" stroke="#ffdaa0" stroke-opacity=".72" stroke-width="1" stroke-linecap="round"/>
+      <path d="M102 55c8-3 13-3 17 2-6 4-13 3-17-2m39-26c-4-6-3-11 0-14 6 3 7 10 0 14m22 9c5-7 11-8 16-4-1 6-9 9-16 4Z" fill="url(#metal)" stroke="#81492c" stroke-width=".85"/>
+    </g>
+  </defs>
+  <use href="#line"/><use href="#line" transform="translate(460 0) scale(-1 1)"/>
+  <use href="#flourish"/><use href="#flourish" transform="translate(460 0) scale(-1 1)"/>
+  <ellipse cx="230" cy="47" rx="56" ry="35" fill="#23140e" opacity=".72"/>
+  <ellipse cx="230" cy="43" rx="51.5" ry="34.5" fill="url(#metal)" stroke="#664023" stroke-width="1.4"/>
+  <ellipse cx="230" cy="43" rx="47.5" ry="30.5" fill="url(#wood)" stroke="#3f2418" stroke-width="1.35"/>
+  <ellipse cx="230" cy="43" rx="44.5" ry="27.5" fill="none" stroke="#e4ab60" stroke-opacity=".74" stroke-width=".9"/>
+  <path d="M189 33c16-22 62-24 81-1" fill="none" stroke="#ffe7a1" stroke-width="1.2" stroke-opacity=".63" stroke-linecap="round"/>
+</svg>

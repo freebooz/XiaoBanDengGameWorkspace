@@ -5,6 +5,7 @@ extends Control
 ## 所有业务状态来自Go服务端；图片只负责表现，不把账号、房间、按钮文字烘焙进背景。
 
 const API_CLIENT_SCRIPT = preload("res://modules/foundation/network/api_client.gd")
+const PORTRAIT_FLOW := preload("res://modules/foundation/ui/portrait_flow.gd")
 
 const UI_ROOT := "res://modules/games/chinese_chess/assets/ui/mobile/"
 const BG_PATH := "res://modules/games/chinese_chess/assets/ink_landscape_background.png"
@@ -54,10 +55,12 @@ func _ready() -> void:
 	_screen_root.name = "FlowScreenRoot"
 	_screen_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(_screen_root)
+	resized.connect(_fit_flow)
 
 	_http_request = HTTPRequest.new()
 	_http_request.name = "FlowHttpRequest"
 	_http_request.timeout = 6.0
+	_http_request.max_redirects = 0
 	_http_request.request_completed.connect(_on_http_request_completed)
 	add_child(_http_request)
 
@@ -96,6 +99,7 @@ func _set_state(next_state: FlowState) -> void:
 
 
 func _clear_screen() -> void:
+	_fit_flow()
 	for child in _screen_root.get_children():
 		child.queue_free()
 	_status_label = null
@@ -107,6 +111,10 @@ func _clear_screen() -> void:
 	_room_status_label = null
 	_room_ready_button = null
 	_server_field = null
+
+
+func _fit_flow() -> void:
+	PORTRAIT_FLOW.fit(self, _screen_root, _state == FlowState.GAME)
 
 
 func _make_server_field(y: float) -> void:
@@ -466,10 +474,6 @@ func _show_lobby() -> void:
 	var rank := _make_label("休闲棋友 · 标准象棋", 13, Color("#e5b971"))
 	player_text.add_child(rank)
 
-	var currencies := _make_label("🪙 12880     🟢 860", 19, Color("#fff2c4"))
-	currencies.position = Vector2(420, 38)
-	currencies.size = Vector2(210, 50)
-	_screen_root.add_child(currencies)
 	var mail := _make_small_tool("消息", _on_info_tool.bind("消息"))
 	mail.position = Vector2(630, 28)
 	mail.size = Vector2(72, 64)
@@ -801,7 +805,7 @@ func _on_wechat_login() -> void:
 
 
 func _on_guest_login() -> void:
-	if _state != FlowState.LOGIN:
+	if _state != FlowState.LOGIN or _primary_button.disabled:
 		return
 	if not _apply_server_field():
 		return
@@ -953,6 +957,7 @@ func _on_info_tool(tool_name: String) -> void:
 
 func _post_json(url: String, payload: Dictionary) -> void:
 	var headers := PackedStringArray(["Content-Type: application/json"])
+	headers.append_array(_api.authorization_headers())
 	var error := _http_request.request(
 		url,
 		headers,
@@ -975,6 +980,9 @@ func _on_http_request_completed(
 	if result != HTTPRequest.RESULT_SUCCESS:
 		_handle_request_error("网络请求失败，结果码=%s" % str(result))
 		return
+	if response_code == 401 and _request_kind in ["match", "room_poll", "ready", "cancel"]:
+		_expire_session()
+		return
 	if response_code < 200 or response_code >= 300:
 		var message := "HTTP %s" % str(response_code)
 		if typeof(parsed) == TYPE_DICTIONARY and str(parsed.get("error", "")) != "":
@@ -986,10 +994,11 @@ func _on_http_request_completed(
 		"boot":
 			_show_login()
 		"login":
-			if typeof(parsed) != TYPE_DICTIONARY or str(parsed.get("account_id", "")) == "":
-				_handle_request_error("登录响应缺少 AccountId")
+			var guest: Dictionary = _api.accept_guest_login(parsed)
+			if guest.is_empty():
+				_handle_request_error("登录响应缺少有效的账号会话")
 				return
-			_account = parsed
+			_account = guest
 			_show_lobby()
 		"match":
 			_handle_match_response(parsed)
@@ -1103,6 +1112,8 @@ func _enter_game() -> void:
 	var screen = screen_script.new()
 	screen.set("product", _product)
 	if game_id == "chinese_chess":
+		screen.api = _api
+		screen.session_expired.connect(_on_game_session_expired.bind(screen))
 		var own_color := str(_match.get("seat_color", ""))
 		var opponent_id := str(_match.get("red_account_id", "")) if own_color == "black" else str(_match.get("black_account_id", ""))
 		screen.set("match_context", {
@@ -1125,3 +1136,18 @@ func _on_game_return_to_lobby() -> void:
 	_local_ready = false
 	_show_lobby()
 
+
+func _on_game_session_expired(screen: Control) -> void:
+	if _state == FlowState.GAME and not screen.is_queued_for_deletion() and screen.get_parent() == _screen_root:
+		_expire_session()
+
+
+func _expire_session() -> void:
+	_api.clear_session()
+	_account.clear()
+	_match.clear()
+	_local_ready = false
+	_request_kind = ""
+	_poll_timer.stop()
+	_show_login()
+	_status_label.text = "登录会话已失效，请重新登录。"

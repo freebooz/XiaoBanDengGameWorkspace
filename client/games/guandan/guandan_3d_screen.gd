@@ -13,9 +13,9 @@ func _init() -> void:
 
 func _handle_packet(raw: String) -> void:
 	super._handle_packet(raw)
-	if leave_on_join and not _state.is_empty():
-		leave_on_join = false
+	if leave_on_join and _actions_ready():
 		_request_leave()
+		if _leave_requested or training_mode: leave_on_join = false
 
 func _rank_name(rank: int) -> String:
 	match rank:
@@ -62,6 +62,7 @@ func _render() -> void:
 	elif int(_state.get("turn", -1)) == int(_state.get("your_seat", -2)):
 		_status.text = "轮到你出牌 · 选牌后点击出牌"
 	else: _status.text = "等待牌友出牌 · 对坐是你的搭档"
+	if not _actions_ready() and phase != "finished": _status.text = "连接恢复中，请稍候再操作"
 	print("GUANDAN_STATE room=%s phase=%s round=%s turn=%s seat=%s hand=%d" % [str(_state.get("room_id", "")), phase, str(_state.get("round", "")), str(_state.get("turn", "")), str(_state.get("your_seat", "")), _hand_nodes.size()])
 
 func _render_seats() -> void:
@@ -94,7 +95,7 @@ func _render_other_hands() -> void:
 		var count := mini(int(counts[seat]), 9)
 		for index in range(count):
 			var along := (float(index)-float(count-1)/2.0)*0.040
-			var stack_y := -0.016+index*0.0007
+			var stack_y := -0.016+index*0.0017
 			var location := Vector3(along, stack_y, -0.59)
 			if relative == 1: location = Vector3(0.84, stack_y, along-0.16)
 			elif relative == 3: location = Vector3(-0.84, stack_y, along-0.16)
@@ -114,7 +115,7 @@ func _render_last_play() -> void:
 		var column := index if row == 0 else index - first_row
 		var count := first_row if row == 0 else cards.size() - first_row
 		var along := (float(column)-float(count-1)/2.0)*minf(0.094,1.12/maxf(1.0,float(count-1)))
-		_card_model(cards[index], Vector3(along, -0.014+column*0.0005, -0.13+row*0.18), 1.55)
+		_card_model(cards[index], Vector3(along, -0.014+column*0.0022, -0.13+row*0.18), 1.55)
 	var point := _table_point(Vector3(0, 0, -0.13))
 	_label(_seat_layer, "上手 · " + _pattern_name(str(last.get("pattern", {}).get("kind", ""))), point.x - 190, point.y - 66, 380, 28, 17, Color("#efcf99"))
 
@@ -129,7 +130,7 @@ func _render_my_hand() -> void:
 		var card: Dictionary = hand[index]
 		var id := int(card.get("id", -1))
 		var along := (float(column)-float(count-1)/2.0)*0.114
-		var rest_y := 0.022+column*0.0008
+		var rest_y := 0.022+column*0.0034
 		var model := _card_model(card, Vector3(along, rest_y+(0.075 if _selected.has(id) else 0.0), 0.29+row*0.28), 2.35)
 		model.rotation.x = deg_to_rad(15.0)
 		model.set_meta("rest_y", rest_y)
@@ -146,6 +147,7 @@ func _update_selected() -> void:
 	var phase := str(_state.get("phase", ""))
 	var action := "进贡" if phase == "tribute" else ("还贡" if phase == "return" else "出牌")
 	_status.text = "已选 %d 张 · 点击%s提交" % [_selected.size(), action]
+	if not _actions_ready(): _status.text = "连接恢复中，请稍候再操作"
 
 func _add_exchange_marker(model: Node3D) -> void:
 	if _exchange_marker_material == null:
@@ -165,6 +167,9 @@ func _add_exchange_marker(model: Node3D) -> void:
 	model.add_child(marker)
 
 func _render_actions() -> void:
+	if not _actions_ready():
+		_action_heading("连接恢复中")
+		return
 	var phase := str(_state.get("phase", ""))
 	if str(_state.get("status", "")) != "playing": return
 	if phase == "tribute" or phase == "return":
@@ -187,6 +192,10 @@ func _render_actions() -> void:
 	_action_button("出牌", total - 1, total, _send_play, true)
 
 func _submit_exchange(kind: String) -> void:
+	if not _require_actions_ready(): return
+	if str(_state.get("phase", "")) != kind:
+		_status.text = "贡还阶段已结束"
+		return
 	if _selected.size() != 1:
 		_status.text = "请选择一张贡牌或还牌"
 		return
@@ -200,9 +209,9 @@ func _request_leave() -> void:
 	if training_mode:
 		_return_now()
 		return
-	if _socket.get_ready_state() == WebSocketPeer.STATE_OPEN:
-		_leave_requested = true
+	if _actions_ready():
 		_send({"type":"guandan_action", "action":"leave"})
+		_leave_requested = _last_send_error == OK
 	else: _status.text = "连接恢复后可离开房间"
 
 func _return_after_leave() -> void:
@@ -236,6 +245,6 @@ func _render_settlement() -> void:
 			if bool(value): ready_count += 1
 		_label(panel, "下一副准备 %d / 4" % ready_count, 24, 296, 736, 30, 18, Color("#9badab"))
 		var button := _button(panel, "已准备" if ready.size() > mine and bool(ready[mine]) else "下一副", 414, 350, 324, 64, func(): _send({"type":"guandan_action", "action":"next_round"}), true)
-		button.disabled = ready.size() > mine and bool(ready[mine])
+		button.disabled = not _actions_ready() or (ready.size() > mine and bool(ready[mine]))
 		_button(panel, "返回大厅", 46, 350, 324, 64, _request_leave)
 	else: _button(panel, "返回大厅", 242, 350, 300, 64, _return_after_leave, true)

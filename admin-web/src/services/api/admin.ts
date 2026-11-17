@@ -1,13 +1,21 @@
 import { apiGet } from "./client";
+import { useAuthStore } from "../../app/store/auth";
 import type {
   AICapability,
   AdminOverview,
   CollectionResult,
+  EggGrantReceipt,
+  EggGrantRequest,
+  EggWalletPlayer,
   GameDescriptor,
   HealthStatus,
   MatchDetail,
   MatchQuery,
   MatchSummary,
+  MahjongReport,
+  MahjongReportStatus,
+  MahjongRoomAdmissionRequest,
+  MahjongRoomOperation,
   PageResult,
   RoomQuery,
   RoomSummary,
@@ -26,26 +34,56 @@ export interface AdminProvider {
 
 /** adminApi（管理API）默认只调用真实Go服务，不自动回退到假数据。 */
 export const adminApi: AdminProvider = {
-  overview: () => apiGet<AdminOverview>("/api/v1/admin/overview"),
+  overview: () => useAuthStore().request<AdminOverview>("/api/v1/admin/overview"),
   users: (query = {}) =>
-    apiGet<PageResult<UserSummary>>(
+    useAuthStore().request<PageResult<UserSummary>>(
       "/api/v1/admin/users",
       query as Record<string, string | number | undefined>,
     ),
   rooms: (query = {}) =>
-    apiGet<CollectionResult<RoomSummary>>(
+    useAuthStore().request<CollectionResult<RoomSummary>>(
       "/api/v1/admin/rooms",
       query as Record<string, string | number | undefined>,
     ),
   roomDetail: (roomId) =>
-    apiGet<RoomSummary>("/api/v1/admin/rooms/" + encodeURIComponent(roomId)),
+    useAuthStore().request<RoomSummary>("/api/v1/admin/rooms/" + encodeURIComponent(roomId)),
   matches: (query = {}) =>
-    apiGet<PageResult<MatchSummary>>(
+    useAuthStore().request<PageResult<MatchSummary>>(
       "/api/v1/admin/matches",
       query as Record<string, string | number | undefined>,
     ),
   matchDetail: (matchId) =>
-    apiGet<MatchDetail>("/api/v1/admin/matches/" + encodeURIComponent(matchId)),
+    useAuthStore().request<MatchDetail>("/api/v1/admin/matches/" + encodeURIComponent(matchId)),
+};
+
+export const mahjongReportsApi = {
+  list: (status: MahjongReportStatus | "", limit: number, offset: number) =>
+    useAuthStore().request<{ items: MahjongReport[]; total: number }>(
+      "/api/v1/admin/mahjong/reports", { status, limit, offset },
+    ),
+  resolve: (id: string, status: Exclude<MahjongReportStatus, "pending">, note: string) =>
+    useAuthStore().request<{ report: MahjongReport }>(
+      "/api/v1/admin/mahjong/reports/" + encodeURIComponent(id) + "/resolve", undefined, { status, note },
+    ),
+};
+
+export const mahjongRoomsApi = {
+  setAdmission: (roomID: string, request: MahjongRoomAdmissionRequest, signal: AbortSignal) =>
+    useAuthStore().request<{ operation: MahjongRoomOperation }>(
+      "/api/v1/admin/mahjong/rooms/" + encodeURIComponent(roomID) + "/admission", undefined, request, signal,
+    ),
+  operations: (roomID: string, roomGeneration: string, signal: AbortSignal) =>
+    useAuthStore().request<{ items: MahjongRoomOperation[] }>(
+      "/api/v1/admin/mahjong/rooms/" + encodeURIComponent(roomID) + "/operations",
+      { room_generation: roomGeneration }, undefined, signal,
+    ),
+};
+
+export const eggWalletApi = {
+  player: (displayName: string, signal: AbortSignal) =>
+    useAuthStore().request<EggWalletPlayer>("/api/v1/admin/wallet/eggs/player", { display_name: displayName }, undefined, signal),
+  grant: (grant: EggGrantRequest, signal?: AbortSignal) =>
+    useAuthStore().request<EggGrantReceipt>("/api/v1/admin/wallet/eggs/grant", undefined, grant, signal),
 };
 
 /** platformApi（平台公共API）供工作台与游戏中心复用。 */

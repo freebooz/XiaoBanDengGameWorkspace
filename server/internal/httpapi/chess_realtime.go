@@ -25,6 +25,7 @@ type chessHub struct {
 	rooms       map[string]*chessRoom
 	matchmaking *matchmaking.Manager
 	turnTimeout time.Duration
+	monitor     *monitorSignal
 }
 
 // chessRoom（象棋实时房间）串行保护同一棋局中的座位、棋盘和广播。
@@ -44,6 +45,7 @@ type chessRoom struct {
 	finishedAt     time.Time
 	turnTimer      *time.Timer
 	moveNumber     int
+	monitor        *monitorSignal
 }
 
 // chessClient（象棋实时连接）保存单个 WebSocket 的房间、客户端标识与阵营。
@@ -121,6 +123,7 @@ func (h *chessHub) getOrCreateRoom(roomID string) *chessRoom {
 		roomID:     roomID,
 		board:      chinesechess.NewInitialBoard(),
 		moveNumber: 1,
+		monitor:    h.monitor,
 		clients:    map[*chessClient]struct{}{},
 		seats: map[chinesechess.Color]string{
 			chinesechess.Red:   "",
@@ -138,8 +141,8 @@ func (h *chessHub) findRoom(roomID string) *chessRoom {
 	return h.rooms[roomID]
 }
 
-// handleJoin（加入房间）按红方、黑方顺序分配座位；第三个连接进入观战。
-// 同一个 client_id 重新连接时尽量恢复原座位。
+// handleJoin（加入房间）校验已开局象棋房间的权威座位。
+// 一个 client_id 只能对应一个在房间中的活动连接；同一连接重复加入保持幂等。
 func (h *chessHub) handleJoin(client *chessClient, message map[string]any) {
 	roomID, _ := message["room_id"].(string)
 	clientID, _ := message["client_id"].(string)
@@ -147,14 +150,36 @@ func (h *chessHub) handleJoin(client *chessClient, message map[string]any) {
 		_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "加入象棋房间必须提供 room_id 和 client_id"})
 		return
 	}
+	if client.clientID != "" && client.clientID != clientID {
+		_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "已加入连接不能更改 client_id"})
+		return
+	}
+	if h.matchmaking != nil {
+		if _, ok := h.matchmaking.PlayingChessSeat(roomID, clientID); !ok {
+			_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "请从已准备完成的象棋房间入座"})
+			return
+		}
+	}
 
 	room := h.getOrCreateRoom(roomID)
+	if client.room != nil && client.room != room {
+		// 绑定真实对局实例；同号新局也先释放旧成员，且不同时持有两个房间锁。
+		h.disconnect(client)
+	}
 	room.mu.Lock()
 	defer room.mu.Unlock()
 
-	color := chinesechess.Color("")
-	if h.matchmaking != nil {
-		seat, ok := h.matchmaking.SeatFor(roomID, clientID)
+	for existing := range room.clients {
+		if existing != client && existing.clientID == clientID {
+			_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "该 client_id 已有活动连接"})
+			return
+		}
+	}
+
+	color := client.color
+	_, alreadyJoined := room.clients[client]
+	if !alreadyJoined && h.matchmaking != nil {
+		seat, ok := h.matchmaking.PlayingChessSeat(roomID, clientID)
 		if !ok {
 			_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "玩家不属于该匹配房间"})
 			return
@@ -169,12 +194,12 @@ func (h *chessHub) handleJoin(client *chessClient, message map[string]any) {
 			return
 		}
 		room.seats[color] = clientID
-	} else {
+	} else if !alreadyJoined {
 		// 测试/独立实时模块没有匹配服务时保留顺序分配回退。
-		if room.seats[chinesechess.Red] == "" || room.seats[chinesechess.Red] == clientID {
+		if room.seats[chinesechess.Red] == "" {
 			color = chinesechess.Red
 			room.seats[chinesechess.Red] = clientID
-		} else if room.seats[chinesechess.Black] == "" || room.seats[chinesechess.Black] == clientID {
+		} else if room.seats[chinesechess.Black] == "" {
 			color = chinesechess.Black
 			room.seats[chinesechess.Black] = clientID
 		}
@@ -229,8 +254,16 @@ func (h *chessHub) handleMove(client *chessClient, message map[string]any) {
 		_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "观战连接不能走棋"})
 		return
 	}
+	if _, joined := room.clients[client]; !joined || room.seats[client.color] != client.clientID {
+		_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "当前连接未占用该席位"})
+		return
+	}
 	if room.winner != "" || room.endReason != "" {
 		_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "本局已经结束"})
+		return
+	}
+	if room.seats[chinesechess.Red] == "" || room.seats[chinesechess.Black] == "" {
+		_ = client.writeJSON(map[string]any{"type": "chess_error", "message": "等待双方就绪后才能走棋"})
 		return
 	}
 	if room.board.Turn != client.color {
@@ -313,12 +346,17 @@ func (h *chessHub) disconnect(client *chessClient) {
 	room.mu.Lock()
 	defer room.mu.Unlock()
 	delete(room.clients, client)
+	room.monitor.notify()
 	if client.color == chinesechess.Red && room.seats[chinesechess.Red] == client.clientID {
 		room.seats[chinesechess.Red] = ""
 	}
 	if client.color == chinesechess.Black && room.seats[chinesechess.Black] == client.clientID {
 		room.seats[chinesechess.Black] = ""
 	}
+	client.roomID = ""
+	client.room = nil
+	client.clientID = ""
+	client.color = ""
 	if len(room.clients) == 0 {
 		if room.turnTimer != nil {
 			room.turnTimer.Stop()
@@ -342,6 +380,7 @@ func (h *chessHub) disconnect(client *chessClient) {
 
 // broadcastStateLocked（广播权威状态）要求调用方已经持有 room.mu。
 func (r *chessRoom) broadcastStateLocked() {
+	r.monitor.notify()
 	for client := range r.clients {
 		_ = client.writeJSON(r.snapshotFor(client))
 	}

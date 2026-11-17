@@ -20,6 +20,10 @@ func _run() -> void:
 		app._http_request.cancel_request()
 	app._account = {"account_id": "smoke-account", "display_name": "训练玩家"}
 	app._show_lobby()
+	await process_frame
+	var before_design := root.content_scale_size
+	var before_aspect := root.content_scale_aspect
+	var before_window := root.size
 	var lobby_state = app._state
 	if game_id == "mahjong":
 		app._enter_training()
@@ -49,5 +53,13 @@ func _run() -> void:
 			push_error("象棋训练无法返回大厅")
 			quit(1)
 			return
-	print("TRAINING_FLOW_SMOKE_OK game=" + game_id)
+	await process_frame
+	if root.content_scale_size != before_design or root.content_scale_aspect != before_aspect or (DisplayServer.get_name() != "headless" and root.size != before_window):
+		push_error("Returning from training did not restore the lobby display")
+		quit(2)
+		return
+	print("TRAINING_FLOW_SMOKE_OK game=" + game_id + " lobby_display_restored=true")
+	app.queue_free()
+	await process_frame
+	await create_timer(0.5).timeout
 	quit(0)

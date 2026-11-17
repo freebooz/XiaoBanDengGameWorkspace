@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="92" height="82" viewBox="0 0 92 82">
+  <defs><linearGradient id="paper" x2="0" y2="1"><stop stop-color="#fff0d4"/><stop offset=".6" stop-color="#fceed2"/><stop offset="1" stop-color="#f9e5c0"/></linearGradient></defs>
+  <rect x="1" y="1" width="90" height="80" rx="9" fill="url(#paper)" stroke="#d6ad76" stroke-width="1.4"/>
+  <rect x="3.7" y="3.7" width="84.6" height="74.6" rx="6.5" fill="none" stroke="#fff5e0" stroke-width="1"/>
+  <g fill="none" stroke="#c89655" stroke-width=".9" stroke-linecap="round" stroke-opacity=".63">
+    <path d="M4 17c5-2 7-4 7-8m-6 3c2 .4 4-.7 4-3-1-1.7-3-.6-2 1m5 .5c3 1 5-1 5-6m-1 4c-.8-2.4-3.4-2.2-3 .5"/>
+    <path d="M4 17c5-2 7-4 7-8m-6 3c2 .4 4-.7 4-3-1-1.7-3-.6-2 1m5 .5c3 1 5-1 5-6m-1 4c-.8-2.4-3.4-2.2-3 .5" transform="translate(92 0) scale(-1 1)"/>
+    <path d="M4 17c5-2 7-4 7-8m-6 3c2 .4 4-.7 4-3-1-1.7-3-.6-2 1m5 .5c3 1 5-1 5-6m-1 4c-.8-2.4-3.4-2.2-3 .5" transform="translate(0 82) scale(1 -1)"/>
+    <path d="M4 17c5-2 7-4 7-8m-6 3c2 .4 4-.7 4-3-1-1.7-3-.6-2 1m5 .5c3 1 5-1 5-6m-1 4c-.8-2.4-3.4-2.2-3 .5" transform="translate(92 82) scale(-1 -1)"/>
+  </g>
+</svg>

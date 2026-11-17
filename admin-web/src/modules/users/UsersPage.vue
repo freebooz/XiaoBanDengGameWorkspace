@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, onUnmounted, reactive, ref } from "vue";
 import FilterBar from "../../components/FilterBar.vue";
 import StatusTag from "../../components/StatusTag.vue";
-import DevelopmentBadge from "../../components/DevelopmentBadge.vue";
 import UserDetailDrawer from "./UserDetailDrawer.vue";
 import { adminApi } from "../../services/api/admin";
 import type { PageResult, UserSummary } from "../../services/api/types";
@@ -17,22 +16,26 @@ const result = ref<PageResult<UserSummary>>({
 });
 const selectedUser = ref<UserSummary | null>(null);
 const drawerVisible = ref(false);
+let requestRevision = 0;
 
 async function loadUsers(): Promise<void> {
+  const revision = ++requestRevision;
   loading.value = true;
   errorMessage.value = "";
   try {
-    result.value = await adminApi.users({
+    const users = await adminApi.users({
       page: page.value,
       page_size: pageSize.value,
       keyword: filters.keyword.trim() || undefined,
       status: filters.status || undefined,
     });
+    if (revision === requestRevision) result.value = users;
   } catch (error) {
+    if (revision !== requestRevision) return;
     errorMessage.value = error instanceof Error ? error.message : "用户数据加载失败";
     result.value = { items: [], total: 0, page: page.value, page_size: pageSize.value, data_source: "partial" };
   } finally {
-    loading.value = false;
+    if (revision === requestRevision) loading.value = false;
   }
 }
 
@@ -58,6 +61,7 @@ function formatDate(value: string): string {
 }
 
 onMounted(loadUsers);
+onUnmounted(() => { requestRevision++; });
 </script>
 
 <template>
@@ -67,7 +71,7 @@ onMounted(loadUsers);
         <h2>用户中心</h2>
         <p>统一查看 AccountId（统一账号标识）、账号类型与基础状态；未持久化信息明确标记待接入。</p>
       </div>
-      <DevelopmentBadge v-if="result.data_source === 'development'" />
+      <el-tag v-if="result.data_source === 'development'" type="warning" effect="light">开发数据</el-tag>
     </div>
 
     <FilterBar>
@@ -79,17 +83,17 @@ onMounted(loadUsers);
         style="width: 250px"
         @keyup.enter="applyFilters"
       />
-      <el-select
+      <select
         v-model="filters.status"
         data-testid="user-status"
-        clearable
-        placeholder="账号状态"
-        style="width: 140px"
+        aria-label="账号状态"
+        class="user-status"
       >
-        <el-option label="正常" value="active" />
-        <el-option label="冻结" value="frozen" />
-        <el-option label="停用" value="disabled" />
-      </el-select>
+        <option value="">全部账号状态</option>
+        <option value="active">正常</option>
+        <option value="frozen">冻结</option>
+        <option value="disabled">停用</option>
+      </select>
       <template #actions>
         <el-button data-testid="user-search" type="primary" @click="applyFilters">查询</el-button>
         <el-button @click="filters.keyword = ''; filters.status = ''; applyFilters()">重置</el-button>
@@ -168,6 +172,7 @@ onMounted(loadUsers);
 .page-heading h2 { margin: 0; font-size: 20px; font-weight: 700; }
 .page-heading p { margin: 5px 0 0; color: var(--xbd-text-secondary); font-size: 11px; }
 .error-alert { margin-bottom: 12px; }
+.user-status { min-width: 140px; min-height: 32px; padding: 0 9px; border: 1px solid var(--xbd-border); border-radius: 6px; background: var(--el-fill-color-blank); color: var(--xbd-text-primary); font: inherit; }
 .table-card :deep(.el-card__body) { padding: 0; }
 .table-card :deep(.el-table) { width: 100%; }
 .table-footer { min-height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-top: 1px solid var(--xbd-border); color: var(--xbd-text-secondary); font-size: 10px; }

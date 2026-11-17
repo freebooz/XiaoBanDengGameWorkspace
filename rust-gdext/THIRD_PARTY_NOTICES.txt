@@ -1,0 +1,49 @@
+Mahjong coach native extension third-party notices
+
+godot-rust (godot, godot-core, godot-ffi, godot-cell, godot-bindings,
+godot-codegen and godot-macros) 0.5.5 and gdextension-api 0.5.1
+Copyright (c) godot-rust; Bromeon and contributors.
+Licensed under the Mozilla Public License 2.0:
+https://www.mozilla.org/MPL/2.0/
+Source code for the distributed versions is available from:
+https://github.com/godot-rust/gdext
+https://crates.io/crates/godot/0.5.5
+https://crates.io/crates/gdextension-api/0.5.1
+Exact component versions are recorded in rust-gdext/Cargo.lock.
+
+The MIT-licensed components below are used under the MIT option when they
+provide several licenses. The permission notice applies to each component.
+
+glam 0.32.1 — https://crates.io/crates/glam/0.32.1
+heck 0.5.0 — Copyright (c) 2015 The Rust Project Developers
+https://crates.io/crates/heck/0.5.0
+nanoserde and nanoserde-derive 0.2.1
+Copyright (c) 2020 Makepad B.V. <info@makepad.nl>
+Copyright (c) 2020-2024 Fedor Logachev <not.fl3@gmail.com>
+https://crates.io/crates/nanoserde/0.2.1
+https://crates.io/crates/nanoserde-derive/0.2.1
+proc-macro2 1.0.107 — https://crates.io/crates/proc-macro2/1.0.107
+quote 1.0.47 — https://crates.io/crates/quote/1.0.47
+unicode-ident 1.0.27 — https://crates.io/crates/unicode-ident/1.0.27
+Unicode data and its accompanying notice:
+https://github.com/dtolnay/unicode-ident/blob/1.0.27/LICENSE-UNICODE
+venial 0.6.1 — Copyright (c) 2022 Olivier FAURE
+https://crates.io/crates/venial/0.6.1
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

@@ -2,8 +2,9 @@ extends Control
 ## Three-dimensional poker table. All live rules and hidden hands come from the server.
 
 signal request_return_to_lobby
+signal hint_received(card_ids: Array)
+signal session_expired
 
-const API_SCRIPT = preload("res://modules/foundation/network/api_client.gd")
 const STAGE_SCRIPT = preload("res://modules/game_framework/tabletop3d/tabletop_stage.gd")
 const DISPLAY = preload("res://modules/foundation/ui/battle_display.gd")
 const CHROME = preload("res://modules/foundation/ui/battle_chrome.gd")
@@ -19,8 +20,13 @@ const QUALITY_SIZES := [Vector2i(900, 500), Vector2i(1350, 750), Vector2i(1800, 
 var product: Dictionary = {}
 var match_context: Dictionary = {}
 var training_mode := false
+var api: XbdApiClient
 var _socket := WebSocketPeer.new()
+var _session_check: HTTPRequest
 var _joined := false
+var _join_sent := false
+var _fresh_state := false
+var _last_send_error: Error = OK
 var _state: Dictionary = {}
 var _reconnect_wait := 0.0
 var _quality := 1
@@ -44,6 +50,7 @@ var _back_button: Button
 var _instruction: Label
 var _table_rect := Rect2(116, 102, 1098, 610)
 var _menu_open := false
+var _exiting := false
 
 
 func _ready() -> void:
@@ -52,11 +59,13 @@ func _ready() -> void:
 	_build_ui()
 	resized.connect(_layout_ui)
 	call_deferred("_layout_ui")
-	_connect_socket()
 	set_process(true)
+	_connect_socket()
 
 
 func _exit_tree() -> void:
+	_exiting = true
+	if resized.is_connected(_layout_ui): resized.disconnect(_layout_ui)
 	_socket.close()
 	DISPLAY.leave(self)
 
@@ -134,7 +143,8 @@ func _canvas_size() -> Vector2:
 
 
 func _layout_ui() -> void:
-	if _board_view == null or _status == null: return
+	if _exiting or not is_inside_tree() or _board_view == null or _status == null: return
+	if _camera == null or not _camera.is_inside_tree(): return
 	var canvas := _canvas_size()
 	var available := Vector2(canvas.x - 342, canvas.y - 184)
 	var width := minf(available.x, available.y * 1.8)
@@ -164,6 +174,7 @@ func _seat_rect(relative: int) -> Rect2:
 
 
 func _table_point(location: Vector3) -> Vector2:
+	if _camera == null or not _camera.is_inside_tree(): return _table_rect.get_center()
 	return _table_rect.position + _camera.unproject_position(location) / Vector2(_viewport.size) * _table_rect.size
 
 
@@ -217,7 +228,17 @@ func _build_table() -> void:
 
 func _connect_socket() -> void:
 	_socket = WebSocketPeer.new()
-	var api = API_SCRIPT.new()
+	_socket.inbound_buffer_size = 256 * 1024
+	_socket.outbound_buffer_size = 256 * 1024
+	_joined = false
+	_join_sent = false
+	_fresh_state = false
+	_refresh_connection_actions()
+	if api == null or api.authorization_headers().is_empty():
+		_status.text = "请重新登录后进入牌桌。"
+		set_process(false)
+		return
+	_socket.handshake_headers = api.authorization_headers()
 	var err := _socket.connect_to_url(api.websocket_url())
 	if err != OK:
 		_status.text = "实时连接失败，正在重试：%s" % str(err)
@@ -232,24 +253,77 @@ func _process(delta: float) -> void:
 		return
 	_socket.poll()
 	var ready := _socket.get_ready_state()
-	if ready == WebSocketPeer.STATE_OPEN and not _joined:
-		_joined = true
+	if ready != WebSocketPeer.STATE_OPEN and (_joined or _fresh_state):
+		_joined = false
+		_join_sent = false
+		_fresh_state = false
+		_refresh_connection_actions()
+		_status.text = "连接已中断，正在恢复……"
+	if ready == WebSocketPeer.STATE_OPEN and not _join_sent:
+		_join_sent = true
 		if training_mode:
 			_send({"type": game_protocol + "_training_start"})
 		else:
 			_send({"type": game_protocol + "_join", "room_id": str(match_context.get("room_id", "")), "client_id": str(match_context.get("account_id", ""))})
+		if _last_send_error != OK: _join_sent = false
 	if ready == WebSocketPeer.STATE_OPEN:
 		while _socket.get_available_packet_count() > 0:
 			_handle_packet(_socket.get_packet().get_string_from_utf8())
 	elif ready == WebSocketPeer.STATE_CLOSED:
+		if XbdApiClient.socket_session_expired(_socket):
+			_expire_socket_session()
+			return
 		_joined = false
+		_join_sent = false
+		_fresh_state = false
+		if api != null and not is_instance_valid(_session_check):
+			_session_check = api.check_session(self, _expire_socket_session)
 		_reconnect_wait = 2.0
 		_status.text = "连接已断开，正在恢复……"
+		_refresh_connection_actions()
+
+
+func _expire_socket_session() -> void:
+	if _exiting or is_queued_for_deletion(): return
+	_joined = false
+	_fresh_state = false
+	_reconnect_wait = 0.0
+	set_process(false)
+	_socket.close()
+	session_expired.emit()
 
 
 func _send(payload: Dictionary) -> void:
-	if _socket.get_ready_state() == WebSocketPeer.STATE_OPEN:
-		_socket.send_text(JSON.stringify(payload))
+	_last_send_error = ERR_CONNECTION_ERROR
+	var kind := str(payload.get("type", ""))
+	if (kind.ends_with("_action") or kind.ends_with("_social")) and not _require_actions_ready(): return
+	if _socket_open(): _last_send_error = _socket.send_text(JSON.stringify(payload))
+	if _last_send_error != OK and _status != null:
+		_status.text = "发送未成功，请连接恢复后重试：%s" % error_string(_last_send_error)
+
+
+func _socket_open() -> bool:
+	return _socket.get_ready_state() == WebSocketPeer.STATE_OPEN
+
+
+func _actions_ready() -> bool:
+	return _socket_open() and _joined and _fresh_state
+
+
+func _require_actions_ready() -> bool:
+	if _actions_ready(): return true
+	_last_send_error = ERR_UNAVAILABLE
+	if _status != null: _status.text = "连接恢复中，请稍候再操作"
+	return false
+
+
+func _refresh_connection_actions() -> void:
+	if _action_layer == null or _exiting: return
+	_clear(_action_layer)
+	_render_actions()
+	if _overlay_layer != null and str(_state.get("phase", "")) == "round_finished":
+		_clear(_overlay_layer)
+		_render_settlement()
 
 
 func _handle_packet(raw: String) -> void:
@@ -257,21 +331,32 @@ func _handle_packet(raw: String) -> void:
 	if typeof(parsed) != TYPE_DICTIONARY: return
 	var kind := str(parsed.get("type", ""))
 	if kind == game_protocol + "_joined":
-		_status.text = "已入座，等待牌友连接"
+		_joined = true
+		_fresh_state = false
+		_status.text = "已入座，正在同步牌桌……"
+		_refresh_connection_actions()
 	elif kind == game_protocol + "_state":
+		_joined = true
+		_fresh_state = true
 		_state = parsed
 		_render()
 	elif kind == game_protocol + "_error":
 		_status.text = "操作未生效：" + str(parsed.get("message", "未知错误"))
 	elif kind == game_protocol + "_hint":
 		_selected.clear()
-		for id in parsed.get("card_ids", []): _selected[int(id)] = true
+		var ids: Array = []
+		for id in parsed.get("card_ids", []):
+			ids.append(int(id))
+			_selected[int(id)] = true
 		_update_selected()
+		if ids.is_empty(): _status.text = "没有可压过的牌，可选择不出"
+		hint_received.emit(ids)
 
 
 func _on_board_input(event: InputEvent) -> void:
 	var touch := Vector2.ZERO
 	if event is InputEventMouseButton:
+		if event.device == InputEvent.DEVICE_ID_EMULATION: return
 		if not event.pressed or event.button_index != MOUSE_BUTTON_LEFT:
 			return
 		touch = event.position
@@ -385,7 +470,7 @@ func _render_other_hands() -> void:
 		for index in range(count):
 			var along := (float(index) - float(count-1)/2.0) * 0.030
 			var x := -0.84 if relative == 2 else 0.84
-			var card := _card_model({}, Vector3(x, -0.017 + index * 0.0006, along - 0.16), 1.15, true)
+			var card := _card_model({}, Vector3(x, -0.017 + index * 0.0017, along - 0.16), 1.15, true)
 			card.rotation.y = PI * 0.5 if relative == 2 else -PI * 0.5
 
 
@@ -403,7 +488,7 @@ func _render_last_play() -> void:
 	var cards: Array = last.get("cards", [])
 	for index in range(cards.size()):
 		var along := (float(index) - float(cards.size()-1)/2.0) * minf(0.094, 1.12/maxf(1.0,float(cards.size()-1)))
-		_card_model(cards[index], Vector3(along, -0.014+index*0.0005, -0.055), 1.65)
+		_card_model(cards[index], Vector3(along, -0.014+index*0.0023, -0.055), 1.65)
 	var point := _table_point(Vector3(0, 0, -0.055))
 	_label(_seat_layer, "上手 · " + _pattern_name(str(last.get("pattern", {}).get("kind", ""))), point.x - 190, point.y - 72, 380, 28, 17, Color("#ead1a7"))
 
@@ -418,7 +503,7 @@ func _render_my_hand() -> void:
 		var card: Dictionary = hand[index]
 		var id := int(card.get("id", -1))
 		var along := (float(index)-float(hand.size()-1)/2.0) * minf(0.117,1.85/maxf(1.0,float(hand.size()-1)))
-		var rest_y := 0.020 + index * 0.0007
+		var rest_y := 0.020 + index * 0.0035
 		var model := _card_model(card, Vector3(along, rest_y + (0.075 if _selected.has(id) else 0.0), 0.49), 2.45)
 		model.rotation.x = deg_to_rad(15)
 		model.set_meta("rest_y", rest_y)
@@ -431,9 +516,13 @@ func _update_selected() -> void:
 	for index in range(_hand_nodes.size()):
 		_hand_nodes[index].position.y = float(_hand_nodes[index].get_meta("rest_y", 0.020)) + (0.075 if _selected.has(_hand_ids[index]) else 0.0)
 	_status.text = "已选 %d 张 · 点击出牌提交" % _selected.size()
+	if not _actions_ready(): _status.text = "连接恢复中，请稍候再操作"
 
 
 func _render_actions() -> void:
+	if not _actions_ready():
+		_action_heading("连接恢复中")
+		return
 	if str(_state.get("status", "")) != "playing": return
 	if int(_state.get("turn", -1)) != int(_state.get("your_seat", -2)):
 		_action_heading("等待牌友行动")
@@ -460,14 +549,17 @@ func _clear_selection() -> void:
 
 
 func _send_bid(amount: int) -> void:
+	if not _require_actions_ready(): return
 	_send({"type":game_protocol + "_action", "action":"bid", "amount":amount})
 
 
 func _send_pass() -> void:
+	if not _require_actions_ready(): return
 	_send({"type":game_protocol + "_action", "action":"pass"})
 
 
 func _send_play() -> void:
+	if not _require_actions_ready(): return
 	if _selected.is_empty():
 		_status.text = "请先点击桌上的三维手牌"
 		return

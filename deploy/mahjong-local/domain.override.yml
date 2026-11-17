@@ -1,0 +1,9 @@
+# Existing development domain, served on the selected LAN interface only.
+# Combine with compose.yml and the existing fixture.env; preserve its data volume.
+services:
+  edge:
+    ports:
+      - '${XBD_MAHJONG_LAN_HOST:?Select the active LAN address}:443:443'
+    volumes:
+      - ./domain.conf:/etc/nginx/conf.d/xbd-domain.conf:ro
+      - ${XBD_MAHJONG_DOMAIN_TLS_DIR:?Existing-domain certificate directory}:/etc/nginx/xbd-domain:ro

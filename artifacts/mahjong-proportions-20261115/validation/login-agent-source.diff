@@ -1,0 +1,355 @@
+diff --git a/.tmp/login-proportion-before/mahjong_login_view.gd b/client/games/mahjong/guiyang/mahjong_login_view.gd
+index 7081b23..6a3187e 100644
+--- a/.tmp/login-proportion-before/mahjong_login_view.gd
++++ b/client/games/mahjong/guiyang/mahjong_login_view.gd
+@@ -277,38 +277,49 @@ func _fit() -> void:
+ 	if not is_instance_valid(form): return
+ 	var safe := RURAL.safe_insets(self)
+ 	var touch := RURAL.touch_extent(self)
+-	var wide := size.x >= size.y * 1.12
+-	background.texture = MODAL.VILLAGE_LANDSCAPE if wide else MODAL.LOGIN_BACKDROP
+-	form.add_theme_stylebox_override("panel", MODAL._slice(MODAL.VILLAGE_PAPER, Vector4.ZERO, Vector4(16, 12, 16, 12)) if wide else StyleBoxEmpty.new())
+ 	var available := size - Vector2(safe.x + safe.z, safe.y + safe.w)
++	# Near-square desktop windows keep the approved centered composition. A
++	# short tablet uses two bounded columns so neither group needs stretching.
++	var wide := available.x >= 900.0 and (available.x >= available.y * 1.5 or available.y < 1100.0)
++	var landscape_art := available.x >= available.y * 0.85
++	background.texture = MODAL.VILLAGE_LANDSCAPE if landscape_art else MODAL.LOGIN_BACKDROP
++	form.add_theme_stylebox_override("panel", MODAL._slice(MODAL.VILLAGE_PAPER, Vector4.ZERO, Vector4(16, 12, 16, 12)) if landscape_art else StyleBoxEmpty.new())
+ 	var edge := clampf(available.x * 0.025, 12.0, 32.0)
+-	var width := minf(740.0, available.x - edge * 2.0)
+-	if wide: width = (available.x - edge * 3.0) * 0.57
+-	var unit := clampf(width / 740.0, 0.48, 1.0)
+-	if wide: unit = minf(unit, clampf(available.y / 1100.0, 0.48, 0.68))
+ 	var footer_height := clampf(available.y * 0.029, 30.0, 49.0)
+ 	var top := clampf(available.y * 0.025, 12.0, 43.0)
++	var width := minf(740.0, available.x - edge * 2.0)
++	if wide:
++		# Native font metrics and integer row sizes need a little more room than
++		# the reference's 952 px artwork-only column on short landscape screens.
++		var height_scale := minf(1.0, (available.y - top - footer_height - 40.0) / 980.0)
++		width = minf(740.0 * height_scale, (available.x - edge * 3.0 - 32.0) * 0.57)
++	var unit := minf(width / 740.0, 1.0)
+ 	_margin.add_theme_constant_override("margin_left", roundi(safe.x + edge))
+ 	_margin.add_theme_constant_override("margin_right", roundi(safe.z + edge))
+ 	_margin.add_theme_constant_override("margin_top", roundi(safe.y + top))
+ 	_margin.add_theme_constant_override("margin_bottom", roundi(safe.w + footer_height + 8))
+ 	_layout.vertical = not wide
+ 	_center.size_flags_vertical = Control.SIZE_EXPAND_FILL if wide else Control.SIZE_SHRINK_BEGIN
+-	_layout.custom_minimum_size = Vector2(available.x - edge * 2.0, maxf(1.0, available.y - top - footer_height - 8.0)) if wide else Vector2.ZERO
++	_layout.custom_minimum_size = Vector2.ZERO
+ 	_layout.add_theme_constant_override("separation", roundi(18.0 * unit if not wide else edge))
+-	form.custom_minimum_size.x = width
+-	_header.custom_minimum_size = Vector2(available.x - width - edge * 3.0, 0.0) if wide else Vector2(width, clampf(available.y * 0.266, 168.0, 445.0))
+-	var logo_width := minf(_header.custom_minimum_size.x, 600.0 if not wide else 540.0)
++	form.size_flags_vertical = Control.SIZE_SHRINK_CENTER
++	form.custom_minimum_size.x = width + (32.0 if landscape_art else 0.0)
++	_header.size_flags_vertical = Control.SIZE_SHRINK_CENTER if wide else Control.SIZE_FILL
++	_header.custom_minimum_size = Vector2(width * 0.72, 0.0) if wide else Vector2(width, 0.0)
++	var logo_width := minf(540.0, width * 0.72) if wide else minf(600.0, width * 600.0 / 740.0)
+ 	logo.custom_minimum_size = Vector2(logo_width, logo_width / MODAL.VILLAGE_BRAND.get_size().aspect())
+ 	_column.add_theme_constant_override("separation", roundi(18.0 * unit))
+-	_title.get_parent().custom_minimum_size = Vector2(width * 0.88, maxf(61.0, 114.0 * unit))
++	var title_width := width * 700.0 / 740.0
++	_title.get_parent().custom_minimum_size = Vector2(title_width, title_width / MODAL.LOGIN_TITLE.get_size().aspect())
+ 	_title.add_theme_font_size_override("font_size", roundi(maxf(32.0, 70.0 * unit)))
+ 	for index in _fields.size():
+-		_fields[index].size_flags_vertical = Control.SIZE_EXPAND_FILL if wide else Control.SIZE_FILL
+-		_fields[index].custom_minimum_size.y = RURAL.form_control_height(maxf(54.0, 90.0 * unit), touch)
++		_fields[index].size_flags_vertical = Control.SIZE_FILL
++		_fields[index].custom_minimum_size.y = maxf(touch, maxf(54.0, 90.0 * unit))
+ 		var field_skin := _fields[index].get_theme_stylebox("panel")
+ 		field_skin.set_content_margin(SIDE_LEFT, maxf(20.0, 42.0 * unit))
+ 		field_skin.set_content_margin(SIDE_RIGHT, maxf(20.0, 32.0 * unit))
++		field_skin.set_content_margin(SIDE_TOP, 5.0 * unit)
++		field_skin.set_content_margin(SIDE_BOTTOM, 7.0 * unit)
+ 		_field_labels[index].custom_minimum_size.x = maxf(50.0, 138.0 * unit)
+ 		_field_labels[index].add_theme_font_size_override("font_size", roundi(maxf(24.0, 51.0 * unit)))
+ 		var row := _fields[index].get_child(0) as HBoxContainer
+@@ -329,7 +340,7 @@ func _fit() -> void:
+ 	_forgot.custom_minimum_size.x = width * 0.28
+ 	_forgot.add_theme_font_size_override("font_size", roundi(maxf(19.0, 39.0 * unit)))
+ 	for button in [submit, wechat, guest]:
+-		button.size_flags_vertical = Control.SIZE_EXPAND_FILL if wide else Control.SIZE_FILL
++		button.size_flags_vertical = Control.SIZE_FILL
+ 		button.custom_minimum_size.y = maxf(touch, maxf(60.0, 116.0 * unit))
+ 		button.add_theme_font_size_override("font_size", roundi(maxf(29.0, 63.0 * unit)))
+ 		button.add_theme_constant_override("icon_max_width", roundi(82.0 * unit))
+@@ -350,6 +361,8 @@ func _fit() -> void:
+ 	_bottom.custom_minimum_size.y = maxf(touch, maxf(48.0, 74.0 * unit))
+ 	_bottom_separator.add_theme_font_size_override("font_size", roundi(38.0 * unit))
+ 	for button in [exit_button, register_button]:
++		button.size_flags_vertical = Control.SIZE_FILL
++		button.custom_minimum_size.y = maxf(touch, maxf(48.0, 74.0 * unit))
+ 		button.add_theme_font_size_override("font_size", roundi(maxf(19.0, 34.0 * unit)))
+ 		button.add_theme_constant_override("icon_max_width", roundi(39.0 * unit))
+ 		button.add_theme_constant_override("h_separation", roundi(9.0 * unit))
+@@ -360,3 +373,6 @@ func _fit() -> void:
+ 	footer.offset_right = -safe.z
+ 	footer.offset_top = -safe.w - footer_height
+ 	footer.offset_bottom = -safe.w
++	if not wide:
++		var scene_budget := available.y - top - footer_height - 8.0 - _layout.get_theme_constant("separation") - form.get_combined_minimum_size().y
++		_header.custom_minimum_size.y = maxf(logo.custom_minimum_size.y, minf(400.0 * unit, scene_budget))
+diff --git a/.tmp/login-proportion-before/mahjong_app.gd b/client/games/mahjong/guiyang/mahjong_app.gd
+index e65bcf7..6e78664 100644
+--- a/.tmp/login-proportion-before/mahjong_app.gd
++++ b/client/games/mahjong/guiyang/mahjong_app.gd
+@@ -344,6 +344,7 @@ func _build_login_tray() -> VBoxContainer:
+ 	layout.name = "MahjongLoginLayout"
+ 	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+ 	layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
++	layout.alignment = BoxContainer.ALIGNMENT_CENTER
+ 	scroll.add_child(layout)
+ 	_login_layout = layout
+ 	_login_header = VBoxContainer.new()
+@@ -421,54 +422,60 @@ func _layout_screen() -> void:
+ 	if not is_instance_valid(_login_margin): return
+ 	var viewport_size := _screen.size
+ 	var touch := LOGIN_THEME.touch_extent(_screen)
+-	var wide := viewport_size.x >= viewport_size.y * 1.12
++	var available := viewport_size - Vector2(safe.x + safe.z, safe.y + safe.w)
++	var wide := available.x >= 900.0 and (available.x >= available.y * 1.5 or available.y < 1100.0)
+ 	var form := _state != "login"
+-	var content_cap := 630.0 if form else 560.0
+-	var edge := maxi(20, roundi((viewport_size.x - safe.x - safe.z) * 0.025)) if wide and form else maxi(20, roundi((viewport_size.x - safe.x - safe.z - content_cap) * 0.5))
++	var form_width := minf(740.0, available.x - 40.0) if form else minf(560.0, available.x - 40.0)
++	var column_gap := 24.0
++	if wide and form: form_width = minf(form_width, (available.x - 40.0 - column_gap) * 0.60)
++	var header_width := minf(440.0, form_width * 0.60) if wide and form else form_width
++	var content_width := form_width + header_width + column_gap if wide and form else form_width
++	var edge := maxf(20.0, (available.x - content_width) * 0.5)
+ 	_login_margin.offset_left = edge + safe.x
+ 	_login_margin.offset_right = -edge - safe.z
+ 	var top := clampf(viewport_size.y * (0.045 if wide else 0.068), 15.0, 89.0) if form else clampf(viewport_size.y * 0.032, 12.0, 42.0)
+ 	_login_margin.offset_top = safe.y + top
+-	var entry_height := maxf(touch, clampf(viewport_size.y * (0.085 if wide and form else 0.072), 54.0, 92.0 if wide and form else 76.0))
++	var unit := minf(form_width / 740.0, 1.0)
++	var entry_height := maxf(touch, maxf(60.0, 116.0 * unit))
+ 	var footer_height := 43.0
+ 	_login_footer.offset_left = safe.x
+ 	_login_footer.offset_right = -safe.z
+ 	_login_footer.offset_top = -safe.w - footer_height
+ 	_login_footer.offset_bottom = -safe.w
+ 	_login_margin.offset_bottom = -safe.w - footer_height - 8.0
+-	_login_layout.add_theme_constant_override("separation", 11 if wide else 14)
++	_login_layout.add_theme_constant_override("separation", roundi(column_gap) if wide else 14)
+ 	_login_layout.vertical = not (wide and form)
+-	_login_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL if wide and form else Control.SIZE_FILL
+-	_login_header.size_flags_stretch_ratio = 0.43
+-	_login_tray.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+-	_login_tray.size_flags_stretch_ratio = 0.57
+-	_login_tray.size_flags_vertical = Control.SIZE_EXPAND_FILL if wide and form else Control.SIZE_FILL
+-	if wide and form:
+-		_login_header.custom_minimum_size = Vector2.ZERO
+-		_login_tray.custom_minimum_size.x = maxf(1.0, (viewport_size.x - safe.x - safe.z - 2.0 * edge - 11.0) * 0.57)
+-	else:
+-		_login_tray.custom_minimum_size.x = 0.0
+-	_login_logo.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if form else Control.SIZE_SHRINK_CENTER
++	_login_header.size_flags_horizontal = Control.SIZE_FILL
++	_login_header.size_flags_vertical = Control.SIZE_SHRINK_CENTER
++	_login_header.custom_minimum_size = Vector2(header_width, 0.0)
++	_login_tray.size_flags_horizontal = Control.SIZE_FILL
++	_login_tray.size_flags_vertical = Control.SIZE_SHRINK_CENTER
++	_login_tray.custom_minimum_size.x = form_width
++	_login_logo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+ 	_login_logo.size_flags_vertical = Control.SIZE_FILL
+-	var usable_width := viewport_size.x - safe.x - safe.z - 2.0 * edge
+-	var logo_width := minf(minf(usable_width, 510.0), viewport_size.y * (0.5 if wide else 0.55))
+-	_login_logo.custom_minimum_size = Vector2(logo_width, logo_width * 0.46)
++	var logo_width := minf(header_width, 510.0)
++	if not wide: logo_width = minf(logo_width, available.y * 0.30)
++	_login_logo.custom_minimum_size = Vector2(logo_width, logo_width / _login_logo.texture.get_size().aspect())
+ 	var motto := _login_header.get_child(1) as Label
+-	motto.add_theme_font_size_override("font_size", 18 if usable_width < 420.0 else 22)
++	motto.add_theme_font_size_override("font_size", 18 if header_width < 420.0 else 22)
+ 	for side in ["left", "right"]: _login_pad.add_theme_constant_override("margin_" + side, 22 if form else 5)
+ 	_login_pad.add_theme_constant_override("margin_top", 13 if form else 6)
+ 	_login_pad.add_theme_constant_override("margin_bottom", 14 if form else 3)
+-	_login_content.add_theme_constant_override("separation", roundi(clampf(viewport_size.y * 0.045 - 18.0, 12.0, 35.0)) if wide and form else 12)
++	_login_content.add_theme_constant_override("separation", roundi(maxf(8.0, 12.0 * unit)))
+ 	# A short landscape viewport keeps full-size fields and the paper rim;
+ 	# reclaim space between rows rather than shrinking readable bold glyphs.
+ 	if wide and form and viewport_size.y < 800.0:
+ 		_login_content.add_theme_constant_override("separation", 8)
+-	_login_content.alignment = BoxContainer.ALIGNMENT_CENTER if wide and form else BoxContainer.ALIGNMENT_BEGIN
++	_login_content.alignment = BoxContainer.ALIGNMENT_BEGIN
+ 	for child in _login_content.get_children():
+ 		if child is PanelContainer and child.has_meta("account_field"):
+-			child.custom_minimum_size.y = LOGIN_THEME.form_control_height(clampf(viewport_size.y * 0.10, 72.0, 108.0) if wide and form else 66.0, touch)
+-	_login_art.texture = MODAL_THEME.VILLAGE_LANDSCAPE if wide else MODAL_THEME.LOGIN_BACKDROP
++			child.size_flags_vertical = Control.SIZE_FILL
++			child.custom_minimum_size.y = maxf(touch, maxf(76.0, 90.0 * unit))
++	if _state == "account_register" and is_instance_valid(_login_secret):
++		_login_secret.placeholder_text = "8–128位" if form_width < 420.0 else "输入 8–128 个字符"
++	_login_art.texture = MODAL_THEME.VILLAGE_LANDSCAPE if available.x >= available.y * 0.85 else MODAL_THEME.LOGIN_BACKDROP
+ 	for button in _entry_buttons:
++		button.size_flags_vertical = Control.SIZE_FILL
+ 		button.custom_minimum_size.y = entry_height
+ 		button.add_theme_font_size_override("font_size", clampi(roundi(entry_height * 0.39), 22, 30))
+ 	if touch > 0.0:
+@@ -487,21 +494,9 @@ func _layout_screen() -> void:
+ 
+ func _center_login_form(tray: Control) -> void:
+ 	if not is_instance_valid(tray) or tray != _login_tray or not is_instance_valid(_login_header): return
+-	var safe := LOGIN_THEME.safe_insets(_screen)
+-	if not _login_layout.vertical:
+-		_login_header.custom_minimum_size.y = 0.0
+-		var available_width := _screen.size.x - safe.x - safe.z - 2.0 * maxf(20.0, (_screen.size.x - safe.x - safe.z) * 0.025)
+-		var logo_width := minf(510.0, (available_width - 11.0) * 0.43)
+-		_login_logo.custom_minimum_size = Vector2(logo_width, logo_width * 0.46)
+-		return
+-	var midpoint := (safe.y + _screen.size.y - safe.w) * 0.5
+-	var gap := _login_layout.get_theme_constant("separation")
+-	var heading_height := midpoint - _login_margin.offset_top - gap - tray.get_combined_minimum_size().y * 0.5
+-	var motto := _login_header.get_child(1) as Label
+-	var logo_height := maxf(minf(78.0, _screen.size.y * 0.09), heading_height - motto.get_combined_minimum_size().y - _login_header.get_theme_constant("separation"))
+-	var logo_width := minf(minf(_login_margin.size.x, 510.0), logo_height / 0.46)
+-	_login_logo.custom_minimum_size = Vector2(logo_width, logo_width * 0.46)
+-	_login_header.custom_minimum_size.y = maxf(0.0, heading_height)
++	# The box centers the complete logo/form group. No artificial header height
++	# or expanding field is needed to consume the remaining screen space.
++	_login_header.custom_minimum_size.y = 0.0
+ 
+ 
+ func _add_login_status(parent: Container, message: String) -> void:
+@@ -779,6 +774,7 @@ func _account_field(parent: Container, title: String, placeholder: String, icon:
+ 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+ 	var field := LineEdit.new()
+ 	field.placeholder_text = placeholder
++	field.tooltip_text = placeholder
+ 	field.secret = hide_text
+ 	field.add_theme_font_override("font", MODAL_THEME.village_font())
+ 	field.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+@@ -791,7 +787,7 @@ func _account_field(parent: Container, title: String, placeholder: String, icon:
+ 	field.add_theme_color_override("font_placeholder_color", Color("#887765"))
+ 	field.add_theme_color_override("selection_color", Color("#efd194"))
+ 	field.add_theme_font_size_override("font_size", 21)
+-	field.custom_minimum_size.y = LOGIN_THEME.form_control_height(44.0, LOGIN_THEME.touch_extent(_screen))
++	field.custom_minimum_size.y = maxf(44.0, LOGIN_THEME.touch_extent(_screen))
+ 	stack.add_child(field)
+ 	if hide_text:
+ 		var eye := Button.new()
+diff --git a/.tmp/login-proportion-before/mahjong_login_tablet_smoke.gd b/client/tests/mahjong_login_tablet_smoke.gd
+index 8abebd3..7889e4c 100644
+--- a/.tmp/login-proportion-before/mahjong_login_tablet_smoke.gd
++++ b/client/tests/mahjong_login_tablet_smoke.gd
+@@ -1,6 +1,8 @@
+ extends SceneTree
+ 
+ const APP := preload("res://scripts/main.gd")
++const RURAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_theme.gd")
++const MODAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_modal.gd")
+ 
+ class AppFixture extends APP:
+ 	var quit_requested := false
+@@ -8,6 +10,7 @@ class AppFixture extends APP:
+ 	func _quit_game() -> void: quit_requested = true
+ 
+ var _failed := false
++var _measurements: Array[Dictionary] = []
+ 
+ func _initialize() -> void:
+ 	call_deferred("_run")
+@@ -39,6 +42,7 @@ func _run() -> void:
+ 	_expect(app.find_child("MahjongServerAddress", true, false) == null and app.find_child("MahjongConnectionSettingsButton", true, false) == null,
+ 		"The login screen retains the fixed gateway")
+ 	for example in [[Vector2i(941,1672), "approved_login_941x1672.png"], [Vector2i(390,844), "phone_login_390x844.png"],
++		[Vector2i(2024,1620), "near_square_login_2024x1620.png"],
+ 		[Vector2i(1600,720), "phone_20_9_login.png"], [Vector2i(1280,720), "phone_16_9_login.png"],
+ 		[Vector2i(1024,768), "tablet_4_3_login.png"], [Vector2i(1280,800), "tablet_16_10_login.png"],
+ 		[Vector2i(1440,810), "desktop_login.png"], [Vector2i(1920,1080), "desktop_large_login.png"],
+@@ -57,17 +61,42 @@ func _run() -> void:
+ 			"Password entry and the primary action do not overlap")
+ 		_expect(exit_button.get_global_rect().end.y <= copyright.get_global_rect().position.y,
+ 			"Exit stays above the footer")
+-		if root.size.x >= root.size.y * 1.12:
+-			var form_bounds: Rect2 = app._login_tray.get_global_rect()
+-			_expect(form_bounds.size.x >= bounds.size.x * 0.50 and form_bounds.end.x >= bounds.end.x - maxf(35.0, bounds.size.x * 0.03),
+-				"Wide login uses the available screen width rather than a fixed narrow column")
+-			_expect(form_bounds.end.y >= copyright.get_global_rect().position.y - 12.0,
+-				"Wide login fills available height above the safe footer")
++		# The fixture's immediate health reply replaces the initial view in the
++		# same frame; the queued old sibling may temporarily reserve its name.
++		var entry: Control = app._login_art.get_parent()
++		var composition: BoxContainer = entry._layout
++		var safe := RURAL.safe_insets(app._screen)
++		var safe_center_x := (bounds.position.x + safe.x + bounds.end.x - safe.z) * 0.5
++		_expect(absf(composition.get_global_rect().get_center().x - safe_center_x) <= 2.0,
++			"The complete login composition is centered in the safe area at %s: %s" % [root.size, composition.get_global_rect()])
++		if root.size == Vector2i(2024,1620) or root.size.x < root.size.y:
++			_expect(composition.vertical and absf(submit.get_global_rect().get_center().x - safe_center_x) <= 2.0,
++				"Portrait and near-square windows center the form beneath the logo")
++		var unit := minf(1.0, submit.size.x / 740.0)
++		var touch := RURAL.touch_extent(app._screen)
++		var primary_height := maxf(touch, maxf(60.0, 116.0 * unit))
++		var field_height := maxf(touch, maxf(54.0, 90.0 * unit))
++		var secondary_height := maxf(touch, maxf(48.0, 74.0 * unit))
++		_expect(absf(submit.size.y - primary_height) <= 2.0,
++			"Primary action retains the reference 116/740 proportion with a touch floor at %s: %s expected height %s" % [root.size, submit.size, primary_height])
++		for field: PanelContainer in entry._fields:
++			_expect(absf(field.size.y - field_height) <= 2.0,
++				"Input capsule retains the reference 90/740 proportion with a touch floor at %s: %s expected height %s" % [root.size, field.size, field_height])
++		for secondary: Button in [entry.exit_button, entry.register_button]:
++			_expect(absf(secondary.size.y - secondary_height) <= 2.0 and absf(secondary.size.y / submit.size.y - secondary_height / primary_height) < 0.025,
++				"Secondary actions retain the reference 74/116 height relative to primary actions at %s: %s vs %s" % [root.size, secondary.size, submit.size])
++		_expect(absf(logo.size.aspect() - logo.texture.get_size().aspect()) < 0.02,
++			"Logo control keeps the approved texture aspect ratio")
++		var title: Control = entry._title.get_parent()
++		_expect(absf(title.size.y - title.size.x / MODAL.LOGIN_TITLE.get_size().aspect()) <= 1.0,
++			"Login title preserves the approved plaque aspect ratio at %s: %s" % [root.size, title.size])
++		_measurements.append({"viewport": str(root.size), "composition": str(composition.get_global_rect()), "input": str(entry._fields[0].size),
++			"primary": str(submit.size), "secondary": str(exit_button.size), "logo": str(logo.size), "title": str(title.size)})
+ 		if example[0] == Vector2i(941,1672):
+ 			_expect(absf(logo.get_global_rect().get_center().x - 470.5) < 3 and logo.position.y < 60,
+ 				"Approved portrait centers the shared logo in the upper scene")
+-			_expect(absf(submit.get_global_rect().position.y - 988) < 35,
+-				"Portrait retains the reference composition after two input rows grow by 25 percent")
++			_expect(absf(submit.get_global_rect().position.y - 943) < 35,
++				"Portrait retains the approved reference composition and control proportions")
+ 		_expect(copyright.text.contains("Freeboozstudio") and is_equal_approx(copyright.get_global_rect().end.y, bounds.end.y),
+ 			"Copyright stays on the safe bottom edge")
+ 		await _capture(example[1])
+@@ -109,6 +138,7 @@ func _run() -> void:
+ 	await _activate(app.find_child("MahjongRegisterButton", true, false))
+ 	_expect(app._state == "account_register" and app._login_secret.secret, "Register opens the real registration form")
+ 	for example in [[Vector2i(941,1672), "registration_941x1672.png"], [Vector2i(390,844), "registration_390x844.png"],
++		[Vector2i(2024,1620), "registration_2024x1620.png"],
+ 		[Vector2i(1280,720), "registration_1280x720.png"], [Vector2i(2560,1080), "registration_ultrawide.png"]]:
+ 		root.size = example[0]
+ 		await _settle()
+@@ -116,9 +146,18 @@ func _run() -> void:
+ 		_expect(back.is_visible_in_tree() and back.get_global_rect().end.x <= root.size.x and back.get_global_rect().position.x > root.size.x * 0.65,
+ 			"Registration uses the common return button in the top-right safe area")
+ 		_expect(app._screen.get_global_rect().encloses(app._submit_account.get_global_rect()), "Registration submit stays reachable in portrait")
+-		if root.size.x >= root.size.y * 1.12:
+-			_expect(app._login_tray.get_global_rect().size.x >= root.size.x * 0.50 and app._login_tray.get_global_rect().end.x >= root.size.x - maxf(35.0, root.size.x * 0.03),
+-				"Registration expands its form and scenic columns across the wide safe area: %s in %s" % [app._login_tray.get_global_rect(), root.size])
++		var group: Rect2 = app._login_header.get_global_rect().merge(app._login_tray.get_global_rect())
++		_expect(absf(group.get_center().x - root.size.x * 0.5) <= 2.0,
++			"Registration centers the bounded logo/form group at %s: %s" % [root.size, group])
++		_expect(app._login_tray.size.x <= 741.0 and app._submit_account.size.y <= 117.0,
++			"Registration controls do not grow unbounded with screen height or width")
++		if root.size == Vector2i(390,844):
++			var hint_width := app._login_secret.get_theme_font("font").get_string_size(app._login_secret.placeholder_text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, app._login_secret.get_theme_font_size("font_size")).x
++			_expect(app._login_secret.placeholder_text == "8–128位" and hint_width <= app._login_secret.size.x - 4.0,
++				"The compact password length hint is complete rather than misleadingly clipped")
++		for child in app._login_content.get_children():
++			if child is PanelContainer and child.has_meta("account_field"):
++				_expect(child.size.y <= 91.0, "Registration input capsules keep bounded design heights")
+ 		await _capture(example[1])
+ 	await _activate(app._login_form_back)
+ 	_expect(app._state == "login", "The shared top-right back button returns to the unified login screen")
+@@ -152,7 +191,11 @@ func _run() -> void:
+ 	app.queue_free()
+ 	await process_frame
+ 	await create_timer(0.2).timeout
+-	if not _failed: print("MAHJONG_LOGIN_TABLET_SMOKE_OK direct_account=true three_colors=true sizes=9 wide_fill=true real_pointer=%s keyboard_input=true focus_preserved=true unconfigured_wechat=true guest_back=true exit_cancel_confirm=true max_fps=0 vsync_disabled=true" % str(DisplayServer.get_name() != "headless"))
++	for arg in OS.get_cmdline_user_args():
++		if arg.begins_with("--preview-dir="):
++			var report := FileAccess.open(arg.trim_prefix("--preview-dir=").path_join("login_proportions.json"), FileAccess.WRITE)
++			if report != null: report.store_string(JSON.stringify(_measurements, "\t"))
++	if not _failed: print("MAHJONG_LOGIN_TABLET_SMOKE_OK direct_account=true three_colors=true sizes=10 near_square_centered=true design_proportions=true real_pointer=%s keyboard_input=true focus_preserved=true unconfigured_wechat=true guest_back=true exit_cancel_confirm=true max_fps=0 vsync_disabled=true" % str(DisplayServer.get_name() != "headless"))
+ 	quit(int(_failed))
+ 
+ func _activate(button: Button) -> void:

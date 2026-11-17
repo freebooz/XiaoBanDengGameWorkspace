@@ -12,9 +12,9 @@ $suits = @(
     @{Name='diamond'; Symbol='♦'; Color=[System.Drawing.Color]::FromArgb(185,31,48)}
 )
 $width=378; $height=528
-$rankFont = [System.Drawing.Font]::new('Arial', 50, [System.Drawing.FontStyle]::Bold)
+$rankFont = [System.Drawing.Font]::new('Arial', 95, [System.Drawing.FontStyle]::Bold)
 $suitFont = [System.Drawing.Font]::new('Segoe UI Symbol', 135, [System.Drawing.FontStyle]::Regular)
-$smallFont = [System.Drawing.Font]::new('Segoe UI Symbol', 45, [System.Drawing.FontStyle]::Regular)
+$smallFont = [System.Drawing.Font]::new('Segoe UI Symbol', 62, [System.Drawing.FontStyle]::Regular)
 $jokerFont = [System.Drawing.Font]::new('Arial', 48, [System.Drawing.FontStyle]::Bold)
 try {
     foreach($suit in $suits) {
@@ -29,12 +29,12 @@ try {
                 $g.Clear([System.Drawing.Color]::FromArgb(255,252,245))
                 $g.DrawRectangle($pen,12,12,$width-24,$height-24)
                 $g.DrawString($ranks[$index],$rankFont,$brush,18,22)
-                $g.DrawString($suit.Symbol,$smallFont,$brush,21,94)
+                $g.DrawString($suit.Symbol,$smallFont,$brush,21,154)
                 $g.DrawString($suit.Symbol,$suitFont,$brush,107,184)
                 $g.TranslateTransform($width,$height)
                 $g.RotateTransform(180)
                 $g.DrawString($ranks[$index],$rankFont,$brush,18,22)
-                $g.DrawString($suit.Symbol,$smallFont,$brush,21,94)
+                $g.DrawString($suit.Symbol,$smallFont,$brush,21,154)
                 $path = Join-Path $output ('{0}_{1}.png' -f $suit.Name,$ranks[$index])
                 $bmp.Save($path,[System.Drawing.Imaging.ImageFormat]::Png)
             } finally { $brush.Dispose();$pen.Dispose();$g.Dispose();$bmp.Dispose() }
@@ -65,7 +65,10 @@ try {
                 $color = if($kind -eq 'big_joker') {[System.Drawing.Color]::FromArgb(183,33,45)} else {$blueInk}
                 $brush = [System.Drawing.SolidBrush]::new($color)
                 try {
-                    $g.DrawString('JOKER',$jokerFont,$brush,27,39)
+                    # Vertical index remains readable when neighboring cards overlap.
+                    for($letter=0;$letter -lt 5;$letter++) {
+                        $g.DrawString(('JOKER'[$letter]).ToString(),$jokerFont,$brush,23,(35+$letter*76))
+                    }
                     $g.DrawString('★',$suitFont,$brush,100,200)
                     $g.DrawString($(if($kind -eq 'big_joker') {'BIG'} else {'SMALL'}),$jokerFont,$brush,100,414)
                 } finally { $brush.Dispose() }

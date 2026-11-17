@@ -79,19 +79,20 @@ static func encode_samples(frames: PackedVector2Array, source_rate: float) -> Di
 	return {"sample_rate":SAMPLE_RATE,"pcm_base64":Marshalls.raw_to_base64(bytes),"duration_ms":int(float(count)*1000/SAMPLE_RATE)}
 
 static func decode_stream(payload: Dictionary) -> AudioStreamWAV:
-	if int(payload.get("sample_rate",0))!=SAMPLE_RATE:
+	var rate := int(payload.get("sample_rate",0))
+	if rate not in [8000,16000]:
 		return null
 	var encoded := str(payload.get("pcm_base64",""))
-	if encoded.length()>106668:
+	if encoded.length()>int(MAX_SECONDS*rate)*8/3+4:
 		return null
 	var bytes := Marshalls.base64_to_raw(encoded)
-	if bytes.size()<SAMPLE_RATE/5 or bytes.size()>int(MAX_SECONDS*SAMPLE_RATE)*2 or bytes.size()%2!=0:
+	if bytes.size()<rate/5 or bytes.size()>int(MAX_SECONDS*rate)*2 or bytes.size()%2!=0:
 		return null
-	if int(payload.get("duration_ms",0))!=int(float(bytes.size())*500/SAMPLE_RATE):
+	if int(payload.get("duration_ms",0))!=int(float(bytes.size())*500/rate):
 		return null
 	var stream := AudioStreamWAV.new()
 	stream.format = AudioStreamWAV.FORMAT_16_BITS
-	stream.mix_rate = SAMPLE_RATE
+	stream.mix_rate = rate
 	stream.stereo = false
 	stream.data = bytes
 	return stream
@@ -110,7 +111,11 @@ func set_playback_enabled(enabled: bool) -> void:
 		_playback.volume_db = 0.0 if enabled else -80.0
 
 func _exit_tree() -> void:
-	if is_instance_valid(_microphone): _microphone.stop()
-	if is_instance_valid(_playback): _playback.stop()
+	if is_instance_valid(_microphone):
+		_microphone.stop()
+		_microphone.stream = null
+	if is_instance_valid(_playback):
+		_playback.stop()
+		_playback.stream = null
 	var index := AudioServer.get_bus_index(_bus_name)
 	if index >= 0: AudioServer.remove_bus(index)

@@ -66,4 +66,3 @@ finally {
         Remove-Item -LiteralPath $tempProfile -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
-

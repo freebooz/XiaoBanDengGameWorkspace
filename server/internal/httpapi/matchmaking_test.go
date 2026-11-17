@@ -13,7 +13,8 @@ import (
 
 func TestQuickMatchHandlerReturnsWaitingThenMatched(t *testing.T) {
 	rooms := room.NewManager()
-	s := &Server{matchmaking: matchmaking.NewManager(rooms)}
+	accounts := &fixtureAccounts{}
+	s := &Server{matchmaking: matchmaking.NewManager(rooms), accounts: accounts}
 
 	request := func(accountID string) matchmaking.QuickMatchResult {
 		body, _ := json.Marshal(matchmaking.QuickMatchRequest{
@@ -24,6 +25,7 @@ func TestQuickMatchHandlerReturnsWaitingThenMatched(t *testing.T) {
 			RuleVersion: "1.0.0",
 		})
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/matchmaking/quick", bytes.NewReader(body))
+		req.Header = accounts.header(t, accountID)
 		res := httptest.NewRecorder()
 		s.quickMatch(res, req)
 		if res.Code != http.StatusOK {

@@ -16,6 +16,7 @@ type guandanHub struct {
 	mu      sync.Mutex
 	rooms   map[string]*guandanRoom
 	matches *matchmaking.Manager
+	monitor *monitorSignal
 }
 type guandanRoom struct {
 	mu              sync.Mutex
@@ -25,6 +26,7 @@ type guandanRoom struct {
 	started, closed bool
 	timer           *time.Timer
 	lastActionAt    time.Time
+	monitor         *monitorSignal
 }
 type guandanClient struct {
 	wire         *chessClient
@@ -80,7 +82,7 @@ func (h *guandanHub) roomFor(id string, players [4]string) *guandanRoom {
 			return existing
 		}
 	}
-	created := &guandanRoom{id: id, game: guandan.NewGame(players, guandanSeed()), clients: map[*guandanClient]struct{}{}}
+	created := &guandanRoom{id: id, game: guandan.NewGame(players, guandanSeed()), clients: map[*guandanClient]struct{}{}, monitor: h.monitor}
 	h.rooms[id] = created
 	return created
 }
@@ -246,6 +248,7 @@ func (r *guandanRoom) connectedSeats() int {
 	return len(seats)
 }
 func (r *guandanRoom) broadcastLocked() {
+	r.monitor.notify()
 	for c := range r.clients {
 		state := r.game.SnapshotFor(c.seat)
 		state["room_id"] = r.id

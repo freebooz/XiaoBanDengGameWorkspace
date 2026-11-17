@@ -4,7 +4,7 @@
   "game_category": "card",
   "game_id": "landlord",
   "rule_set_id": "classic_three_player",
-  "rule_version": "1.0.0",
+  "rule_version": "2.0.0",
   "android_package": "com.freebooz.xiaobandeng.landlord",
   "modules": [
     "foundation",

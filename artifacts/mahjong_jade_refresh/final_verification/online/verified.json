@@ -1,0 +1,50 @@
+[
+  {
+    "client": 1,
+    "pid": 47100,
+    "seat": 0,
+    "room_id": "5547",
+    "match_id": "3b62fc73-de34-4435-ad34-b961d78738ac",
+    "first_match_id": "51a9981b-69f8-451b-bb97-5bd80a8c99e1",
+    "first_round_reason": "wall_exhausted",
+    "first_round_discards": 56,
+    "own_accepted_commands": 14,
+    "title": "小板凳麻将 · 客户端 1 · 房间 5547 · 东座 (DEBUG)"
+  },
+  {
+    "client": 2,
+    "pid": 38900,
+    "seat": 1,
+    "room_id": "5547",
+    "match_id": "3b62fc73-de34-4435-ad34-b961d78738ac",
+    "first_match_id": "51a9981b-69f8-451b-bb97-5bd80a8c99e1",
+    "first_round_reason": "wall_exhausted",
+    "first_round_discards": 56,
+    "own_accepted_commands": 15,
+    "title": "小板凳麻将 · 客户端 2 · 房间 5547 · 南座 (DEBUG)"
+  },
+  {
+    "client": 3,
+    "pid": 45448,
+    "seat": 2,
+    "room_id": "5547",
+    "match_id": "3b62fc73-de34-4435-ad34-b961d78738ac",
+    "first_match_id": "51a9981b-69f8-451b-bb97-5bd80a8c99e1",
+    "first_round_reason": "wall_exhausted",
+    "first_round_discards": 56,
+    "own_accepted_commands": 16,
+    "title": "小板凳麻将 · 客户端 3 · 房间 5547 · 西座 (DEBUG)"
+  },
+  {
+    "client": 4,
+    "pid": 53532,
+    "seat": 3,
+    "room_id": "5547",
+    "match_id": "3b62fc73-de34-4435-ad34-b961d78738ac",
+    "first_match_id": "51a9981b-69f8-451b-bb97-5bd80a8c99e1",
+    "first_round_reason": "wall_exhausted",
+    "first_round_discards": 56,
+    "own_accepted_commands": 18,
+    "title": "小板凳麻将 · 客户端 4 · 房间 5547 · 北座 (DEBUG)"
+  }
+]

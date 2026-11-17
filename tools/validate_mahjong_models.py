@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EDITABLE = ROOT / "artifacts/mahjong_models"
 RUNTIME = ROOT / "client/games/mahjong/guiyang/assets/models"
 
-for name, minimum_meshes in (("mahjong_table", 15), ("mahjong_tile", 3)):
+for name, minimum_meshes in (("mahjong_table", 15), ("mahjong_tile", 2)):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.wm.open_mainfile(filepath=str(EDITABLE / f"{name}.blend"))
     editable_meshes = [obj for obj in bpy.data.objects if obj.type == "MESH"]

@@ -8,10 +8,12 @@ import (
 )
 
 const (
-	PhaseBid      = "bid"
-	PhaseDouble   = "double"
-	PhasePlay     = "play"
-	PhaseFinished = "finished"
+	RuleVersionLegacy   = "1.0.0"
+	RuleVersionDoubling = "2.0.0"
+	PhaseBid            = "bid"
+	PhaseDouble         = "double"
+	PhasePlay           = "play"
+	PhaseFinished       = "finished"
 )
 
 type Play struct {
@@ -149,7 +151,7 @@ func (g *Game) SuggestedCards(seat int) []int {
 		groups[len(groups)-1] = append(groups[len(groups)-1], card)
 	}
 	capacity := make([]int, len(groups)+1)
-	for index := len(groups)-1; index >= 0; index-- {
+	for index := len(groups) - 1; index >= 0; index-- {
 		capacity[index] = capacity[index+1] + len(groups[index])
 	}
 	selected := []Card{}
@@ -162,34 +164,52 @@ func (g *Game) SuggestedCards(seat int) []int {
 				return false
 			}
 			found = make([]int, len(selected))
-			for index, card := range selected { found[index] = card.ID }
+			for index, card := range selected {
+				found[index] = card.ID
+			}
 			return true
 		}
-		if index == len(groups) || remaining > capacity[index] { return false }
+		if index == len(groups) || remaining > capacity[index] {
+			return false
+		}
 		maximum := len(groups[index])
-		if maximum > remaining { maximum = remaining }
+		if maximum > remaining {
+			maximum = remaining
+		}
 		for count := maximum; count >= 0; count-- {
 			length := len(selected)
 			selected = append(selected, groups[index][:count]...)
-			if search(index+1, remaining-count) { return true }
+			if search(index+1, remaining-count) {
+				return true
+			}
 			selected = selected[:length]
 		}
 		return false
 	}
-	if search(0, previous.Length) { return found }
+	if search(0, previous.Length) {
+		return found
+	}
 	for _, group := range groups {
-		if len(group) < 4 { continue }
+		if len(group) < 4 {
+			continue
+		}
 		pattern, err := Classify(group[:4])
 		if err == nil && Beats(pattern, previous) {
-			return []int{group[0].ID,group[1].ID,group[2].ID,group[3].ID}
+			return []int{group[0].ID, group[1].ID, group[2].ID, group[3].ID}
 		}
 	}
 	var small, big = -1, -1
 	for _, card := range hand {
-		if card.Rank == 16 { small = card.ID }
-		if card.Rank == 17 { big = card.ID }
+		if card.Rank == 16 {
+			small = card.ID
+		}
+		if card.Rank == 17 {
+			big = card.ID
+		}
 	}
-	if small >= 0 && big >= 0 { return []int{small,big} }
+	if small >= 0 && big >= 0 {
+		return []int{small, big}
+	}
 	return []int{}
 }
 
@@ -383,6 +403,10 @@ func (g *Game) SnapshotFor(seat int) map[string]any {
 	hand := append([]Card(nil), g.Hands[seat]...)
 	state := map[string]any{"type": "landlord_state", "phase": g.Phase, "turn": g.Turn, "your_seat": seat, "players": g.Players, "hand": hand, "hand_counts": counts, "bottom": bottom, "landlord": g.Landlord, "highest_bid": g.HighestBid, "bids": g.Bids, "deal_number": g.DealNumber, "last_play": g.LastPlay, "has_last_play": g.HasLastPlay, "pass_count": g.PassCount, "winner": g.Winner, "multiplier": g.Multiplier, "scores": g.Scores, "epoch": g.Epoch}
 	state["double_decided"], state["doubled"] = g.DoubleDecided, g.Doubled
+	state["rule_version"] = RuleVersionLegacy
+	if g.EnableDoubling {
+		state["rule_version"] = RuleVersionDoubling
+	}
 	if g.Phase == PhaseFinished {
 		state["hands_revealed"] = g.Hands
 	}

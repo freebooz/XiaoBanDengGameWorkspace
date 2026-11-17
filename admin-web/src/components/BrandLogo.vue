@@ -32,7 +32,7 @@ withDefaults(
 .brand-logo__copy strong, .brand-logo__copy span { display: block; }
 .brand-logo__copy strong { color: var(--xbd-text-primary); font-size: 18px; font-weight: 760; letter-spacing: .08em; }
 .brand-logo__copy span { margin-top: 2px; color: var(--xbd-text-secondary); font-size: 10px; letter-spacing: .08em; }
-.brand-logo.inverse .brand-logo__copy strong { color: #fff7ee; }
-.brand-logo.inverse .brand-logo__copy span { color: #a99a8d; }
+.brand-logo.inverse .brand-logo__copy strong { color: var(--xbd-text-primary); }
+.brand-logo.inverse .brand-logo__copy span { color: var(--xbd-text-muted); }
 .brand-logo.compact .brand-logo__mark { width: 38px; height: 38px; }
 </style>

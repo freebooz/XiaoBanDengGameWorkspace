@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="116" height="42" viewBox="0 0 116 42">
+  <defs>
+    <linearGradient id="metal" x2="0" y2="1">
+      <stop stop-color="#fff0b8"/>
+      <stop offset=".16" stop-color="#ffd48b"/>
+      <stop offset=".33" stop-color="#be813c"/>
+      <stop offset=".53" stop-color="#784f28"/>
+      <stop offset=".78" stop-color="#cb8e43"/>
+      <stop offset="1" stop-color="#ffde8d"/>
+    </linearGradient>
+    <linearGradient id="lip" x2="0" y2="1">
+      <stop stop-color="#fff7c9" stop-opacity=".93"/>
+      <stop offset=".33" stop-color="#f8d394" stop-opacity=".41"/>
+      <stop offset=".71" stop-color="#d69857" stop-opacity=".37"/>
+      <stop offset="1" stop-color="#ffbe65" stop-opacity=".88"/>
+    </linearGradient>
+    <linearGradient id="jade" x2="0" y2="1">
+      <stop stop-color="#65997f"/>
+      <stop offset=".3" stop-color="#356b58"/>
+      <stop offset=".51" stop-color="#193e35"/>
+      <stop offset=".73" stop-color="#102923"/>
+      <stop offset="1" stop-color="#246b4d"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx=".30" cy=".05" r=".76">
+      <stop stop-color="#a6dbb0" stop-opacity=".45"/>
+      <stop offset=".62" stop-color="#a6dbb0" stop-opacity=".11"/>
+      <stop offset="1" stop-color="#a6dbb0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="1" y="5" width="114" height="35.8" rx="17.4" fill="#1b1009" opacity=".62"/>
+  <rect x="1.4" y="2" width="113.2" height="36" rx="17.8" fill="url(#metal)" stroke="#815430" stroke-width=".9"/>
+  <rect x="2.8" y="3.4" width="110.4" height="32.9" rx="16.25" fill="none" stroke="url(#lip)" stroke-width="1.2"/>
+  <rect x="4.7" y="5" width="106.6" height="29.7" rx="14.5" fill="url(#jade)" stroke="#644421" stroke-width=".95"/>
+  <rect x="5.45" y="5.8" width="105.1" height="28.2" rx="14" fill="url(#sheen)" stroke="url(#lip)" stroke-width=".7"/>
+  <path d="M18 6.4q3.6-1 9-1h62q5.4 0 9 1M23 33.1h70" stroke="#fff7c4" stroke-opacity=".51" stroke-width=".65" stroke-linecap="round" fill="none"/>
+</svg>

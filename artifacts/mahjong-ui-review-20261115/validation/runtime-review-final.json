@@ -1,0 +1,202 @@
+{
+  "candidate": "client/.generated/mahjong-runtime-final-review-20261115",
+  "engine": "Godot 4.7.2 stable / Vulkan 1.4.341 / Forward Mobile / NVIDIA RTX 4090",
+  "device": "Windows desktop native rendering; mobile and tablet aspect ratios simulated on desktop",
+  "arguments": [
+    "--disable-vsync",
+    "--max-fps",
+    "0"
+  ],
+  "verified_max_fps": 0,
+  "verified_vsync_disabled": true,
+  "current_runtime_logs": [
+    "final-mahjong_session_smoke-headless.log",
+    "final-mahjong_lobby_app_smoke-headless.log",
+    "final-mahjong_login_tablet_smoke-headless.log",
+    "final-mahjong_efficiency_overlay_smoke-headless.log",
+    "final-login-native.log"
+  ],
+  "runtime_log_errors": 0,
+  "import_exit": 0,
+  "import_log": "final-runtime-import-recheck.log",
+  "editor_import_warning": "One sandbox/editor Safe save failed; resources imported and runtime checks passed without errors",
+  "login_sizes": 9,
+  "screenshots": [
+    {
+      "file": "approved_login_941x1672.png",
+      "width": 941,
+      "height": 1672,
+      "sha256": "4859B4C86013196D2B80892B2EED890A1F26DBF19A6C03AE0CF3DA7E81B73A50"
+    },
+    {
+      "file": "desktop_exit_confirmation.png",
+      "width": 1440,
+      "height": 810,
+      "sha256": "025B0BF82FEC652AE2449DAF64CBD5982D63AF9CB464AC49EE2FE2092324B8E6"
+    },
+    {
+      "file": "desktop_large_login.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "C8B8E1AB99C19ABB20EBC82CC55A965EFBB9FC5516BD0E4B297409E38AAB0363"
+    },
+    {
+      "file": "desktop_login.png",
+      "width": 1440,
+      "height": 810,
+      "sha256": "F08BC5803F516BF10A75485D9D1C92F1EDCA020356D1B7D5B4A797BD0D8DA912"
+    },
+    {
+      "file": "desktop_ultrawide_login.png",
+      "width": 2560,
+      "height": 1080,
+      "sha256": "E2DCA38E15D2D78E2D4D975CF7C2497111DC7BFCEE31E737ED15010E2333FF5A"
+    },
+    {
+      "file": "phone_16_9_login.png",
+      "width": 1280,
+      "height": 720,
+      "sha256": "70777C43E38B99483A0B53A8D459F07E2BDB44B53AE23561F64694F10F055069"
+    },
+    {
+      "file": "phone_20_9_login.png",
+      "width": 1600,
+      "height": 720,
+      "sha256": "1D23037E5DA294B8137DD2DDF6575CFDE1C5E256FEEA49F7F9EF5869D0C8E9A0"
+    },
+    {
+      "file": "phone_login_390x844.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "18B5493422995258F4DDC1B43DA662D0B81A6AEDE54FB87F33DEFB711713D94E"
+    },
+    {
+      "file": "phone_wechat_unavailable.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "102848AAC00E6DB6EDF8F1BABA51C8E58781A376F7A03490C6E7A858D9ED553E"
+    },
+    {
+      "file": "registration_1280x720.png",
+      "width": 1280,
+      "height": 720,
+      "sha256": "4B125E8BF0433D83F49821E1DC4D755E32009A7AD8033C7BA1DE15AE62183100"
+    },
+    {
+      "file": "registration_390x844.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "E3F98AA38D0165C5F1227FC6FB2B4C7DF9B1C53F124C514B513790A519F4C657"
+    },
+    {
+      "file": "registration_941x1672.png",
+      "width": 941,
+      "height": 1672,
+      "sha256": "E7CECFD378AFA83C98D317AB8D42D9CC794B0F5DA4D9DB9960D8F2F239AAAA47"
+    },
+    {
+      "file": "registration_ultrawide.png",
+      "width": 2560,
+      "height": 1080,
+      "sha256": "0347ED7B21C5C63830626E7AFC9F02BEC39D956D9F1F696EE70E9479F281FB4B"
+    },
+    {
+      "file": "tablet_16_10_login.png",
+      "width": 1280,
+      "height": 800,
+      "sha256": "D92336D2D9127FA14C5953E59026961B3FFEE182619236BC31684EAACB4CB8A8"
+    },
+    {
+      "file": "tablet_4_3_login.png",
+      "width": 1024,
+      "height": 768,
+      "sha256": "FF9582B6DA78B063169858EE0E15FD615B5E350D499AF73E70F3BC32DFE975C4"
+    }
+  ],
+  "real_fixture_login_log": "new-login-real-tls-native.log",
+  "real_fixture_room_log": "six-pages-live-native.log",
+  "real_network_scope": "Isolated HTTPS/WSS test server with trusted fixture CA. Production fixed-domain TLS acceptance is not claimed.",
+  "startup_branding": "boot-validation.json: byte-identical source and native startup/settings readback; engine boot-stage screenshot unavailable",
+  "icon_validation": "final-icon-isolation.json and ../branding/icon-export-manifest.json",
+  "mobile_hardware_verified": false,
+  "apk_install_verified": false,
+  "physical_soft_keyboard_verified": false,
+  "source_hashes": [
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_app.gd",
+      "sha256": "70C831E8BC2F68F2FA800E78F3B7AC747F4D30C7086565D4016B74D5B034ADD5"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_login_view.gd",
+      "sha256": "B137D40D69A7694C630100360AF5C67192744E7DDAF87B45DEAFD52929A2A2F1"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_rural_modal.gd",
+      "sha256": "AA0BCA93326AE908FBF07257FA6246408E3B39AB7E15E35C7089BC41ECD98DC5"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/mahjong_error_view.gd",
+      "sha256": "0D1A4218C1C3391B464B7FC2C6B9E85F52B8FECBC9BAD7C782CA5477E7E7717E"
+    },
+    {
+      "path": "client/foundation/ui/nine_patch_panel_style.gd",
+      "sha256": "A8772F23A1717736DA9444542EF29135ACF5AA68B3372A71DAD8DF73DA9D3CD9"
+    },
+    {
+      "path": "client/foundation/ui/aspect_nine_patch_style.gd",
+      "sha256": "D39F39DE0034514CB511429D7249E6A8493130AF5034C95A4D83BFD0F22895A6"
+    },
+    {
+      "path": "client/foundation/ui/overlapping_panel_title.gd",
+      "sha256": "82FF5B3540502A714187A5B4B05A747637B6A58D244DF8F466B6EF12095EAC7B"
+    },
+    {
+      "path": "client/games/mahjong/guiyang/assets/ui/harvest/bamboo_frame_approved.png",
+      "sha256": "4509544041B39BE302032ADE3EF4C7CD8F2C32B19055AC7251C9A575FEA69CFF"
+    },
+    {
+      "path": "products/mahjong/product.json",
+      "sha256": "134BC8BFFD49EFCD7168FA8F4C30BD319986DC24D6973C7BA6DF423F4BD140AE"
+    },
+    {
+      "path": "tools/compose-godot.ps1",
+      "sha256": "3784A71A0368BC89754301FEED976655F5C73E5ECE4778194F21E5C5EADB4D69"
+    },
+    {
+      "path": "tools/export-mahjong-brand-icons.ps1",
+      "sha256": "E6559326008570D8C0DDEE29AF15DD7706D2A7BCC709EA15D286F918B34EE2E4"
+    }
+  ],
+  "final_error_flow_recheck": {
+    "candidate": "client/.generated/mahjong",
+    "log": "final-error-flow-native.log",
+    "result": "passed",
+    "changed_file": "client/tests/mahjong_error_flow_smoke.gd",
+    "production_code_changed": false,
+    "root_cause": "Bare Control fixture had 0x0 app/screen/modal; retry center was outside viewport. Matched main.tscn FULL_RECT anchors and added viewport/hit bounds assertions.",
+    "normal_app_matches_source": true,
+    "test_sha256": "80363523E6979DC3DD1CC301C7F9F42100A22A1E523AA4636CFFCA8F8795A350"
+  },
+  "input_height_recheck": {
+    "candidate": "client/.generated/mahjong-input-height-review-20261115",
+    "headless_log": "input-height-login-headless.log",
+    "native_log": "input-height-login-native.log",
+    "result": "passed",
+    "sizes": 9,
+    "multiplier": 1.25,
+    "baseline_not_accumulated": true,
+    "changed_source": [
+      "client/games/mahjong/guiyang/mahjong_login_view.gd",
+      "client/games/mahjong/guiyang/mahjong_app.gd"
+    ],
+    "shared_helper": "mahjong_rural_theme.gd:form_control_height",
+    "native_device": "Windows Vulkan RTX 4090; desktop device-ratio simulation",
+    "font_and_icon_edits": false,
+    "mobile_390_register_submit_visible": true,
+    "scroll_available_for_short_viewports": true,
+    "app_sha256": "84D749EB3FFA6DAD667A47DE026A39A4200AA9896E311F4B1669F88DE070F4A1",
+    "login_view_sha256": "D10C4A7D1A352663C847E80DEC34390B798A27823024CA1A73879F2C8BA15651",
+    "modal_sha256": "7FA41D37362DED22217497BB5BED419A7AFB0C05028555DD8AF2C27EC094F9F5",
+    "rural_theme_sha256": "1FF28C89690B1B076E1ABFEE6EB4FCE2B0E3975E450A984288C90045C9A6E4B0"
+  }
+}

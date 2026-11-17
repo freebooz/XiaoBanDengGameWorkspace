@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>小板凳乡村麻将 · 登录首页</title>
+<style>
+:root {
+  font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  color:#fff0cf;
+  background:#91683d;
+}
+* { box-sizing:border-box }
+html,body { margin:0; width:100%; height:100%; overflow:hidden }
+main {
+  width:100%; height:100%; position:relative; isolation:isolate;
+  padding-top:7.4vh;
+  text-align:center;
+  background:url("assets/login-background.png") center/cover no-repeat;
+}
+main::before {
+  position:absolute; inset:0; z-index:-1; content:"";
+  background:linear-gradient(180deg,#3225160d 22%,#26351d3e 37%,#26351d16 56%,transparent 67%);
+}
+.logo {
+  display:block; width:66.5vw; max-width:650px; height:auto; margin:0 auto;
+  filter:drop-shadow(0 4px 9px #2a250931);
+}
+.motto {
+  margin:1.1vh 0 2.5vh; font-size:3.33vw; font-weight:800;
+  text-shadow:0 1px 2px #2a190e,0 3px 5px #2a190ed0;
+}
+.login-entries { width:76.5%; margin:0 auto; display:grid; gap:1.16vh }
+.login-button {
+  display:grid; place-items:center; position:relative; width:100%; border:0;
+  min-height:5.25vh; padding:.42vh 6vw .65vh;
+  background:var(--button-image) center/100% 100% no-repeat;
+  color:var(--button-text);
+  font:800 4.15vw/1.1 "Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  letter-spacing:.02em;
+  white-space:nowrap;
+  text-shadow:0 1px 1px #fef4db42;
+}
+.login-button img { width:3.4vw; height:3.4vw; position:absolute; left:2.6vw; object-fit:contain }
+.login-button[disabled] { opacity:.71 }
+.wechat { --button-image:url("assets/login/button_wechat.svg"); --button-text:#fff6d4 }
+.phone { --button-image:url("assets/login/button_phone.svg"); --button-text:#593710 }
+.guest { --button-image:url("assets/login/button_guest.svg"); --button-text:#233e49 }
+.account { --button-image:url("assets/login/button_account.svg"); --button-text:#ffe7bb }
+.login-button.account { width:33.5%; min-height:5.1vh; margin:auto; padding-inline:4.3vw 1vw; font-size:3.6vw }
+.login-button.account img { left:2.25vw; width:2.6vw; height:2.6vw }
+.other {
+  display:flex; align-items:center; justify-content:center; gap:1.7vw;
+  margin:.16vh 0; color:#ffefd6; font-size:2.75vw; font-weight:850;
+  text-shadow:0 2px 4px #46250fbd;
+}
+.other::before,.other::after {
+  content:""; width:6.6vw; height:2px; background:#ffdd9b;
+  border-radius:2px; box-shadow:0 2px 2px #5b351b75;
+}
+</style>
+</head>
+<body>
+<main data-screen="01">
+  <img class="logo" src="assets/original-village-logo.png" alt="小板凳乡村麻将">
+  <div class="motto">◇　乡里麻将 · 亲友对局 · 轻松娱乐　◇</div>
+  <div class="login-entries">
+    <button class="login-button wechat" disabled><img src="assets/login/icon_wechat.svg" alt="">微信登录</button>
+    <button class="login-button phone" disabled><img src="assets/login/icon_phone.svg" alt="">手机号登录</button>
+    <button class="login-button guest"><img src="assets/login/icon_person.svg" alt="">游客登录</button>
+    <div class="other">其他方式</div>
+    <button class="login-button account">账号登录</button>
+  </div>
+</main>
+</body>
+</html>

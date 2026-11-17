@@ -85,9 +85,24 @@ func _run() -> void:
 	mouse.position = soldier_pos
 	screen._on_board_gui_input(mouse)
 	_check(screen._selected == Vector2i(0, 6), "鼠标无法选中自己的棋子")
+	screen.size = Vector2(1440,810)
+	screen._layout_hud()
+	await process_frame
+	screen._selected = screen.INVALID_POS
+	var face_point: Vector2 = screen._camera.unproject_position(screen._board_to_world(Vector2i(0,6))) * screen._board_view.size / Vector2(screen._board_viewport.size)
+	var native_point: Vector2 = screen._board_view.get_viewport_transform() * screen._board_view.get_global_transform() * face_point
+	var actual_touch := InputEventScreenTouch.new()
+	actual_touch.position = native_point
+	actual_touch.pressed = true
+	Input.parse_input_event(actual_touch)
+	await process_frame
+	_check(screen._selected == Vector2i(0,6), "实际GUI触屏重复处理或投影错位")
+	actual_touch.pressed = false
+	Input.parse_input_event(actual_touch)
 	screen.queue_free()
 	await process_frame
+	await create_timer(0.1).timeout
 	_check(root.content_scale_size == before_design and root.content_scale_aspect == before_aspect, "离开象棋未恢复大厅显示")
 	if _failures.is_empty():
-		print("CHESS_LANDSCAPE_SMOKE_OK sizes=4 views=2 actions=6 touch=1 mouse=1")
+		print("CHESS_LANDSCAPE_SMOKE_OK sizes=4 views=2 actions=6 touch=1 mouse=1 actual_gui_touch=true")
 	quit(0 if _failures.is_empty() else 1)

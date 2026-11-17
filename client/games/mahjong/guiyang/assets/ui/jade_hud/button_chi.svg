@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="176" height="70" viewBox="0 0 176 70">
+  <defs>
+    <linearGradient id="metal" x2="0" y2="1">
+      <stop stop-color="#fff0b8"/>
+      <stop offset=".16" stop-color="#ffd48b"/>
+      <stop offset=".33" stop-color="#be813c"/>
+      <stop offset=".53" stop-color="#784f28"/>
+      <stop offset=".78" stop-color="#cb8e43"/>
+      <stop offset="1" stop-color="#ffde8d"/>
+    </linearGradient>
+    <linearGradient id="lip" x2="0" y2="1">
+      <stop stop-color="#fff7c9" stop-opacity=".93"/>
+      <stop offset=".33" stop-color="#f8d394" stop-opacity=".41"/>
+      <stop offset=".71" stop-color="#d69857" stop-opacity=".37"/>
+      <stop offset="1" stop-color="#ffbe65" stop-opacity=".88"/>
+    </linearGradient>
+    <linearGradient id="jade" x2="0" y2="1">
+      <stop stop-color="#699b9d"/>
+      <stop offset=".3" stop-color="#3b6b74"/>
+      <stop offset=".51" stop-color="#1f4554"/>
+      <stop offset=".73" stop-color="#14333e"/>
+      <stop offset="1" stop-color="#3b7279"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx=".30" cy=".05" r=".76">
+      <stop stop-color="#b6d7db" stop-opacity=".45"/>
+      <stop offset=".62" stop-color="#b6d7db" stop-opacity=".11"/>
+      <stop offset="1" stop-color="#b6d7db" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="woodland" x2=".7" y2="1">
+      <stop stop-color="#c5e7ae" stop-opacity=".50"/>
+      <stop offset="1" stop-color="#5ba970" stop-opacity=".10"/>
+    </linearGradient>
+  </defs>
+  <rect x="1.8" y="6.3" width="172.4" height="62" rx="29" fill="#110b06" opacity=".59"/>
+  <rect x="2.1" y="3" width="171.8" height="62" rx="29" fill="#664522" stroke="#3c2514" stroke-width="1.1"/>
+  <rect x="2.65" y="2" width="170.7" height="61.8" rx="29.8" fill="url(#metal)" stroke="#a46b32" stroke-width=".95"/>
+  <rect x="4.4" y="4" width="167.2" height="57.8" rx="27.2" fill="none" stroke="url(#lip)" stroke-width="1.1"/>
+  <rect x="6.05" y="5.8" width="163.9" height="54.2" rx="24.6" fill="url(#jade)" stroke="#5c381b" stroke-width="1"/>
+  <rect x="7" y="6.7" width="162" height="52.4" rx="24" fill="url(#sheen)" stroke="url(#lip)" stroke-width=".85"/>
+  <path d="M24 8.7Q31 6.5 39 6.5h98q8 0 15 2.2M32 57.1q4 .6 8 .6h96q4 0 8-.6" fill="none" stroke="#ffe9a8" stroke-opacity=".48" stroke-width=".8" stroke-linecap="round"/>
+
+
+</svg>

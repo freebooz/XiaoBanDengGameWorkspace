@@ -1,0 +1,13 @@
+# Mahjong face atlas image generation candidate
+
+Method: built-in image_gen image editing. The exposed tool has no model-version selector; no specific Image 2 model identifier is asserted.
+
+Source: `client/games/mahjong/guiyang/assets/models/textures/T_Mahjong50_FaceAtlas_BaseColor.png` (4096 × 2048).
+
+Saved result: `face-atlas-candidate.png`. Candidate only; not installed as a runtime replacement. The generated image has different native resolution/contours from the source. Existing normal/ORM/height maps register to the original contours. Replacing only color without validating alignment would make engraving slide away from pigment, and upscaling a smaller generated image does not recover source detail.
+
+Visual review: 1–9 characters, bamboo and dots retain their correct counts; honors remain in their original row. All 34 symbols require exact registration review before production use. The current client retains the matched 4K PBR set, with stronger concave normal depth (0.72) shared by hand/river/meld and no added texture fetches or parallax. The existing height map and normal slope were checked to confirm engraved recesses rather than raised embossing.
+
+## Prompt
+
+Use case: precise-object-edit. Edit the supplied production mahjong texture atlas ONLY to make the existing printed symbols cleaner and more legible on a small mobile screen. This is a flat orthographic PBR base-color atlas, NOT a render, not a photo, no tile geometry, no perspective, no shadows. Preserve the exact 2:1 canvas and exact existing layout: 9 columns and 4 equal rows, all original symbol centers, relative scale, whitespace, and row order. Row 1 is Chinese numbers 一 二 三 四 伍 六 七 八 九 with red 萬 underneath, row 2 bamboo 1 through 9 including the bird for 1, row 3 dots 1 through 9 with EXACT original circle count and arrangement/color. Row 4 has 北, blank white dragon frame, 南, 中, 發, 東, 西, then two blank cells. Never alter any numeral, pip or bamboo count, symbol arrangement, or UV location. Clean smooth strong edges with softly antialiased contours. Preserve traditional carved mahjong character shapes and dark black, deep green, pure red pigment on uniform ivory-white background. Improve recognition by gently simplifying only microscopic scratchy details, not reshaping any symbol. No grain, no blur, no sharpen halos, no added pattern, no text labels, no borders. Do not bake lighting or engraving shadows into the base-color: the game already uses matched normal/roughness maps. Output a high resolution production atlas at 4096x2048 if supported, same 2:1 aspect. Keep every symbol registered to the original image.

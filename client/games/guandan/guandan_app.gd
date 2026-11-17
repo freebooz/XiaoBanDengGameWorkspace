@@ -2,6 +2,7 @@ extends Control
 ## 小板凳掼蛋独立产品壳：账号、四人匹配、准备及牌局均复用平台服务端。
 
 const API_SCRIPT = preload("res://modules/foundation/network/api_client.gd")
+const PORTRAIT_FLOW := preload("res://modules/foundation/ui/portrait_flow.gd")
 const GAME_SCRIPT := "res://modules/games/guandan/guandan_3d_screen.gd"
 
 var _api
@@ -17,7 +18,9 @@ var _local_ready := false
 var _auto_flow := false
 var _cancel_pending := false
 var _cancel_requested := false
+var _login_pending := false
 var _status: Label
+var _guest_button: Button
 var _ready_button: Button
 var _seat_labels: Array[Label] = []
 var _server_field: LineEdit
@@ -34,8 +37,10 @@ func _ready() -> void:
 	_screen = Control.new()
 	_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(_screen)
+	resized.connect(_fit_flow)
 	_http = HTTPRequest.new()
 	_http.timeout = 7.0
+	_http.max_redirects = 0
 	_http.request_completed.connect(_on_response)
 	add_child(_http)
 	_timer = Timer.new()
@@ -58,9 +63,11 @@ func _texture(path: String) -> Texture2D:
 
 func _reset(next_state: String, _background: String) -> void:
 	_state = next_state
+	_fit_flow()
 	for child in _screen.get_children():
 		child.queue_free()
 	_status = null
+	_guest_button = null
 	_ready_button = null
 	_server_field = null
 	_seat_labels.clear()
@@ -75,6 +82,10 @@ func _reset(next_state: String, _background: String) -> void:
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_screen.add_child(shade)
 	print("GUANDAN_FLOW=%s" % next_state)
+
+
+func _fit_flow() -> void:
+	PORTRAIT_FLOW.fit(self, _screen, _state in ["game", "training"])
 
 
 func _style(color: Color, border: Color, radius: int = 16) -> StyleBoxFlat:
@@ -169,7 +180,7 @@ func _show_login() -> void:
 	_reset("login", "T_BG_Login_Guiyang.png")
 	_header("以牌会友 · 乐在其中")
 	_label("四人同桌 · 标准 108 张扑克牌 · 经典玩法", 55, 425, 610, 90, 25)
-	_button("游客登录", 145, 690, 430, 80, _login)
+	_guest_button = _button("游客登录", 145, 690, 430, 80, _login)
 	_server_input(830)
 	_status = _label("与平台账号和房间服务互通", 80, 920, 560, 60, 18)
 	if _auto_flow or "--auto-training" in OS.get_cmdline_user_args():
@@ -177,10 +188,12 @@ func _show_login() -> void:
 
 
 func _login() -> void:
-	if _state != "login":
+	if _state != "login" or _login_pending:
 		return
 	if not _apply_server():
 		return
+	_login_pending = true
+	_guest_button.disabled = true
 	_status.text = "正在登录……"
 	_request_kind = "login"
 	_post(_api.guest_login_url(), {})
@@ -322,13 +335,25 @@ func _request_ready() -> void:
 
 
 func _post(url: String, payload: Dictionary) -> void:
-	var error := _http.request(url, PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST, JSON.stringify(payload))
+	var headers := PackedStringArray(["Content-Type: application/json"])
+	if _request_kind != "login": headers.append_array(_api.authorization_headers())
+	var error := _http.request(url, headers, HTTPClient.METHOD_POST, JSON.stringify(payload))
 	if error != OK and _status != null:
+		if _request_kind == "login": _finish_login_request()
 		_status.text = "请求失败：%s" % str(error)
+
+
+func _finish_login_request() -> void:
+	_login_pending = false
+	if is_instance_valid(_guest_button): _guest_button.disabled = false
 
 
 func _on_response(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	var parsed = null if body.is_empty() else JSON.parse_string(body.get_string_from_utf8())
+	if _request_kind == "login": _finish_login_request()
+	if result == HTTPRequest.RESULT_SUCCESS and code == 401 and _request_kind in ["match", "ready", "cancel"]:
+		_expire_session()
+		return
 	if _cancel_pending:
 		if result == HTTPRequest.RESULT_SUCCESS and typeof(parsed) == TYPE_DICTIONARY and bool(parsed.get("start", false)):
 			_match.merge(parsed, true)
@@ -348,9 +373,12 @@ func _on_response(result: int, code: int, _headers: PackedStringArray, body: Pac
 	match _request_kind:
 		"health": _show_login()
 		"login":
-			if typeof(parsed) == TYPE_DICTIONARY and str(parsed.get("account_id", "")) != "":
-				_account = parsed
+			var guest: Dictionary = _api.accept_guest_login(parsed)
+			if not guest.is_empty():
+				_account = guest
 				_show_lobby()
+			elif _status != null:
+				_status.text = "登录响应无效，请重试"
 		"match":
 			if typeof(parsed) != TYPE_DICTIONARY:
 				return
@@ -393,6 +421,8 @@ func _enter_game(exit_after_join: bool = false) -> void:
 		_status = _label("掼蛋对局模块加载失败", 60, 580, 600, 80, 22)
 		return
 	var game = screen_script.new()
+	game.api = _api
+	game.session_expired.connect(_on_game_session_expired.bind(game))
 	game.leave_on_join = exit_after_join or _cancel_requested
 	game.product = _product
 	game.match_context = {"room_id": str(_match.get("room_id", "")), "account_id": str(_account.get("account_id", "")), "seat_index": int(_match.get("seat_index", -1))}
@@ -412,6 +442,8 @@ func _enter_training() -> void:
 		_status = _label("掼蛋训练模块加载失败", 60, 580, 600, 80, 22)
 		return
 	var game = screen_script.new()
+	game.api = _api
+	game.session_expired.connect(_on_game_session_expired.bind(game))
 	game.training_mode = true
 	game.match_context = {"room_id": "训练", "account_id": str(_account.get("account_id", "")), "seat_index": 0}
 	game.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -423,3 +455,21 @@ func _return_to_lobby() -> void:
 	_match = {}
 	_local_ready = false
 	_show_lobby()
+
+
+func _on_game_session_expired(game: Control) -> void:
+	if _state in ["game", "training"] and not game.is_queued_for_deletion() and game.get_parent() == _screen:
+		_expire_session()
+
+
+func _expire_session() -> void:
+	_api.clear_session()
+	_account.clear()
+	_match.clear()
+	_local_ready = false
+	_request_kind = ""
+	_cancel_pending = false
+	_cancel_requested = false
+	_timer.stop()
+	_show_login()
+	_status.text = "登录会话已失效，请重新登录。"

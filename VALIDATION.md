@@ -14,7 +14,7 @@
 6. /health 返回 service/postgres/redis 全部 ok。
 7. /api/v1/catalog 返回小板凳象棋和小板凳麻将·贵阳麻将两项。
 8. POST /api/v1/auth/guest 可真实写入 PostgreSQL 并返回 AccountId。
-9. POST /api/v1/rooms 可创建带 ProductId/GameId/RuleSetId/RuleVersion 的房间。
+9. 通用建房、匹配、准备、取消匹配和联机入座携带游客登录返回的 Bearer 会话凭据。匹配和入座使用当前登录账号，麻将建房通过麻将大厅。
 10. /api/v1/wallet 可查询家族级 xbd_point 资产，空账户按0返回。
 11. /api/v1/ai/capabilities 返回6项AI预留能力。
 12. 管理后台 http://localhost:5173 返回 HTTP 200。

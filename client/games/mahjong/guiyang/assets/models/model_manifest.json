@@ -1,26 +1,41 @@
 {
   "source_table": "E:\\work\\Game\\MahjongGame\\SourceArt\\3D\\MahjongTableProduction\\SM_StandardMahjongTable.glb",
   "source_table_sha256": "8cd674ec37fad38bc49256958a93e4d6b892e9f6623c9ec7466f8cc7c127e766",
-  "tile_face_source": "SourceArt/UI/Tiles",
-  "tile_model_note": "Unreal Mahjong50 tile meshes are .uasset only; reusable tile geometry was recreated for Godot.",
+  "tile_face_source": "E:\\work\\Game\\MahjongGame\\Saved\\Diagnostics\\Mahjong50",
+  "tile_model_note": "Imported actual UE diagnostic FBX, preserved rounded geometry and authored green vertex mask; shared engraved PBR atlas, not UI tile images.",
   "table_meshes": 18,
-  "tile_meshes": 3,
+  "tile_meshes": 2,
   "files": {
     "mahjong_table.glb": {
       "bytes": 13296276,
       "sha256": "34fbf4baba5b52e08ac4c7f8b927a50677900b485bb278f2e494b06a2c10d0a4"
     },
     "mahjong_tile.glb": {
-      "bytes": 18168,
-      "sha256": "8285aeda18df439d7d616dfc65e8582e92d92531b9f071df3233a68103b7bb98"
+      "bytes": 8556380,
+      "sha256": "27ed74b14c5f6c8ce573c8db78c28fb34f120c5b74e814312935a4c08d4c1ba3"
     },
     "mahjong_table.blend": {
       "bytes": 13297143,
       "sha256": "b7db04256a9fbf4f5737fff332d2ccba5e7a6bd21d6f6e7a4adf5501b10cc734"
     },
     "mahjong_tile.blend": {
-      "bytes": 100379,
-      "sha256": "7bc8a979b28e9baed5b0aa7265c9665a43908859bb810ed0a560452c11e4b2ea"
+      "bytes": 8778253,
+      "sha256": "b2b2e42394239b574c60941da3aba3e7f67dc43767e3da38086d5fb1055146d8"
     }
+  },
+  "tile_source_fbx": "E:\\work\\Game\\MahjongGame\\Saved\\Diagnostics\\Mahjong50\\SM_Mahjong50_Characters_1.fbx",
+  "tile_source_sha256": "5ae0d8cfb7ab142d7c2079132b553c9a95f581e8b77d75599be3a0119290be89",
+  "tile_dimensions_mm": [
+    36,
+    50,
+    26
+  ],
+  "tile_authoring": "E:\\work\\2026\\XiaoBanDengGameWorkspace\\SourceAssets\\Mahjong\\mahjong_tile.blend",
+  "tile_atlas_entries": 34,
+  "tile_source_textures": {
+    "T_Mahjong50_FaceAtlas_BaseColor.png": "a14fd8f61d20ed5ac04f924a9aab853fbafd75d61f3cc0ba50d8789a114be50a",
+    "T_Mahjong50_FaceAtlas_Height.png": "639cb989a4a652e5c68a2a6de152edb433bd6922343548ae252dda9c7b009886",
+    "T_Mahjong50_FaceAtlas_Normal.png": "d5d893adeffc98ccd38532eb11f89d10334c04627d92d3a57a4da3d68649d182",
+    "T_Mahjong50_FaceAtlas_ORM.png": "c1833cf5034c56c0ff7d9cc7d91c78af81fc3da7358534f8c02868fc1fb46c29"
   }
 }

@@ -1,7 +1,9 @@
 package guiyang
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 )
 
@@ -15,9 +17,198 @@ type Tile struct {
 type RuleSet struct {
 	ID      string
 	Version string
+	options RuleOptions
 }
 
 func NewRuleSet() RuleSet { return RuleSet{ID: "guiyang", Version: "2.0.0"} }
+
+const (
+	RuleOptionsVersion      = "1.0.0"
+	ZunyiRuleID             = "zunyi_dingque"
+	ZunyiRuleVersion        = "1.0.0"
+	ZunyiRuleOptionsVersion = "2.0.0"
+	customLegacyRuleSummary = "四人108张，不吃；点炮、抢杠胡及鸡分按本房设置，首胡窗口结算。"
+)
+
+// RuleOptions is the complete value of a friend's room rules. The schema
+// versions the switches and their semantics independently of the base preset.
+type RuleOptions struct {
+	Version             string `json:"version"`
+	Chicken             bool   `json:"chicken"`
+	ChargeChicken       bool   `json:"charge_chicken"`
+	BlackEight          bool   `json:"black_eight"`
+	RequiresKongToClaim bool   `json:"requires_kong_to_claim"`
+	RobKong             bool   `json:"rob_kong"`
+}
+
+func (r RuleOptions) MarshalJSON() ([]byte, error) {
+	if r.Version == ZunyiRuleOptionsVersion {
+		return json.Marshal(struct {
+			Version string `json:"version"`
+			Chicken bool   `json:"chicken"`
+			RobKong bool   `json:"rob_kong"`
+		}{r.Version, r.Chicken, r.RobKong})
+	}
+	type legacyOptions RuleOptions
+	return json.Marshal(legacyOptions(r))
+}
+
+type RuleDescriptor struct {
+	ID                  string      `json:"rule_set_id"`
+	Version             string      `json:"rule_version"`
+	Name                string      `json:"name"`
+	Summary             string      `json:"summary"`
+	AllowChi            bool        `json:"allow_chi"`
+	Chicken             bool        `json:"chicken"`
+	RequiresKongToClaim bool        `json:"requires_kong_to_claim"`
+	Options             RuleOptions `json:"options"`
+}
+
+// Key identifies the table rules after option validation and normalization.
+// The bit positions are part of the options schema, independent of UI order.
+func (r RuleDescriptor) Key() string {
+	var mask uint8
+	for bit, enabled := range [...]bool{r.Options.Chicken, r.Options.ChargeChicken, r.Options.BlackEight, r.Options.RequiresKongToClaim, r.Options.RobKong} {
+		if enabled {
+			mask |= 1 << bit
+		}
+	}
+	return fmt.Sprintf("%s@%s/%s/%02x", r.ID, r.Version, r.Options.Version, mask)
+}
+
+// Catalog metadata is derived from the preset. Keeping it out of the saved
+// struct lets existing checkpoint and room images decode without a migration.
+func (r RuleDescriptor) MarshalJSON() ([]byte, error) {
+	type savedRule RuleDescriptor
+	region := "基础"
+	mutableOptions := []string{"chicken", "charge_chicken", "black_eight", "rob_kong"}
+	switch r.ID {
+	case "guiyang":
+		region = "贵阳"
+	case ZunyiRuleID:
+		region = "遵义"
+		mutableOptions = []string{"chicken", "rob_kong"}
+	default:
+		mutableOptions = append(mutableOptions, "requires_kong_to_claim")
+	}
+	return json.Marshal(struct {
+		savedRule
+		RuleKey        string   `json:"rule_key"`
+		Region         string   `json:"region"`
+		SeatCount      int      `json:"seat_count"`
+		TileCount      int      `json:"tile_count"`
+		QuickMatch     bool     `json:"quick_match"`
+		MutableOptions []string `json:"mutable_options"`
+		Dingque        bool     `json:"dingque,omitempty"`
+	}{savedRule(r), r.Key(), region, 4, 108, r.AllowsQuickMatch(), mutableOptions, r.RuleSet().Dingque()})
+}
+
+func (r RuleDescriptor) AllowsQuickMatch() bool { return !r.RuleSet().Dingque() }
+
+func RuleDescriptors() []RuleDescriptor {
+	return []RuleDescriptor{
+		{ID: "guiyang", Version: "2.0.0", Name: "贵阳捉鸡", Summary: "四人108张，不吃；点炮与抢杠胡须已完成一个杠，计鸡分，首胡窗口结算。", Chicken: true, RequiresKongToClaim: true,
+			Options: RuleOptions{Version: RuleOptionsVersion, Chicken: true, ChargeChicken: true, BlackEight: true, RequiresKongToClaim: true, RobKong: true}},
+		{ID: "basic_108", Version: "1.0.0", Name: "基础 108", Summary: "四人108张，不吃；无杠也可点炮与抢杠胡，不计鸡分，首胡窗口结算。",
+			Options: RuleOptions{Version: RuleOptionsVersion, RobKong: true}},
+		{ID: "guiyang", Version: LocalRuleVersion, Name: "贵阳捉鸡·地方规则", Summary: localRuleSummary, Chicken: true, RequiresKongToClaim: true,
+			Options: RuleOptions{Version: RuleOptionsVersion, Chicken: true, ChargeChicken: true, BlackEight: true, RequiresKongToClaim: true, RobKong: true}},
+		{ID: ZunyiRuleID, Version: ZunyiRuleVersion, Name: "遵义定缺·试行", Summary: "四人108张，不吃；开局定缺，胡牌须清缺门，无杠可接炮。首胡窗口允许多响，荒庄查叫。",
+			Chicken: true, Options: RuleOptions{Version: ZunyiRuleOptionsVersion, Chicken: true, RobKong: true}},
+	}
+}
+
+func FindRuleDescriptor(id, version string) (RuleDescriptor, bool) {
+	for _, rule := range RuleDescriptors() {
+		if id == rule.ID && version == rule.Version {
+			return rule, true
+		}
+	}
+	return RuleDescriptor{}, false
+}
+
+// ResolveRuleDescriptor normalizes dependencies and returns the effective rules.
+// A nil override selects the preset defaults. A supplied override is complete.
+func ResolveRuleDescriptor(id, version string, options *RuleOptions) (RuleDescriptor, error) {
+	descriptor, exists := FindRuleDescriptor(id, version)
+	if !exists {
+		return RuleDescriptor{}, errors.New("未知的麻将玩法或版本")
+	}
+	if options == nil {
+		return descriptor, nil
+	}
+	if options.Version != descriptor.Options.Version {
+		return RuleDescriptor{}, errors.New("未知的麻将自定义规则版本")
+	}
+	effective := *options
+	if id == ZunyiRuleID && (effective.ChargeChicken || effective.BlackEight || effective.RequiresKongToClaim) {
+		return RuleDescriptor{}, errors.New("遵义试行只可设置鸡分和抢补杠")
+	}
+	if id == "guiyang" {
+		effective.RequiresKongToClaim = true
+	}
+	if !effective.Chicken {
+		effective.ChargeChicken = false
+		effective.BlackEight = false
+	}
+	if effective != descriptor.Options && id != ZunyiRuleID && !descriptor.RuleSet().localRules() {
+		descriptor.Summary = customLegacyRuleSummary
+	}
+	descriptor.Options = effective
+	descriptor.Chicken = effective.Chicken
+	descriptor.RequiresKongToClaim = effective.RequiresKongToClaim
+	return descriptor, nil
+}
+
+// UpgradeStoredRuleDescriptor canonicalizes a valid room saved before the
+// Guiyang kong requirement was enforced for custom options.
+func UpgradeStoredRuleDescriptor(saved RuleDescriptor) RuleDescriptor {
+	if saved.ID != "guiyang" || saved.Version != "2.0.0" || saved.RequiresKongToClaim || saved.Options.RequiresKongToClaim {
+		return saved
+	}
+	effective, err := ResolveRuleDescriptor(saved.ID, saved.Version, &saved.Options)
+	if err != nil {
+		return saved
+	}
+	legacy := effective
+	legacy.RequiresKongToClaim = false
+	legacy.Options.RequiresKongToClaim = false
+	legacy.Summary = customLegacyRuleSummary
+	if saved == legacy {
+		return effective
+	}
+	return saved
+}
+
+func (r RuleDescriptor) RuleSet() RuleSet {
+	return RuleSet{ID: r.ID, Version: r.Version, options: r.Options}
+}
+
+func (r RuleSet) effectiveOptions() RuleOptions {
+	if r.options.Version == RuleOptionsVersion || r.options.Version == ZunyiRuleOptionsVersion {
+		return r.options
+	}
+	descriptor, _ := FindRuleDescriptor(r.ID, r.Version)
+	return descriptor.Options
+}
+
+func (r RuleSet) chickenEnabled() bool {
+	return r.effectiveOptions().Chicken
+}
+
+func (r RuleSet) requiresKongToClaim() bool {
+	return r.ID == "guiyang" || r.effectiveOptions().RequiresKongToClaim
+}
+
+func (r RuleSet) Dingque() bool { return r.ID == ZunyiRuleID && r.Version == ZunyiRuleVersion }
+
+// RotatesDealer identifies the presets that use the winner or incumbent as
+// the dealer for the next hand.
+func (r RuleSet) RotatesDealer() bool { return r.Dingque() || r.localRules() }
+
+func (r RuleSet) effectiveKey() string {
+	return RuleDescriptor{ID: r.ID, Version: r.Version, Options: r.effectiveOptions()}.Key()
+}
 
 // BuildWall 与虚幻 GuiyangMainstreamV1 v2 一致：万、筒、条各一至九，四张一型。
 func (r RuleSet) BuildWall() []Tile {

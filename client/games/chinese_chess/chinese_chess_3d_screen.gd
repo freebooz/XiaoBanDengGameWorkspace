@@ -1,5 +1,6 @@
 extends Control
 signal request_return_to_lobby
+signal session_expired
 ## ChineseChess3DScreen（小板凳象棋三维在线对局界面）
 ## 国风横屏对弈布局：上下玩家侧栏、厚木棋盘、立体棋子与独立操作区。
 ## 红黑双方分别从自己的棋盘一侧观察，黑方相机与红方相差180度。
@@ -56,6 +57,7 @@ enum LayoutMode {
 var product: Dictionary = {}
 var match_context: Dictionary = {}
 var training_mode := false
+var api: XbdApiClient
 var _landscape_texture: Texture2D
 var _portrait_texture: Texture2D
 var _board_surface_texture: Texture2D
@@ -63,6 +65,8 @@ var _wood_grain_texture: Texture2D
 var _golden_nanmu_texture: Texture2D
 
 var _socket := WebSocketPeer.new()
+var _reconnect_timer: Timer
+var _session_check: HTTPRequest
 var _connected := false
 var _joined := false
 var _room_id := DEFAULT_ROOM_ID
@@ -187,11 +191,16 @@ func _ready() -> void:
 		_status_label.text = "双人同机训练 · 红方先走，点击棋子与目标格"
 		set_process(false)
 	else:
+		_reconnect_timer = Timer.new()
+		_reconnect_timer.one_shot = true
+		_reconnect_timer.wait_time = 2.0
+		_reconnect_timer.timeout.connect(_connect_socket)
+		add_child(_reconnect_timer)
 		_connect_socket()
-		set_process(true)
 
 
 func _exit_tree() -> void:
+	_socket.close()
 	DISPLAY.leave(self)
 
 
@@ -215,10 +224,12 @@ func _process(_delta: float) -> void:
 		while _socket.get_available_packet_count() > 0:
 			var packet := _socket.get_packet()
 			_handle_message(packet.get_string_from_utf8())
-	elif state == WebSocketPeer.STATE_CLOSED and _connected:
-		_connected = false
-		_joined = false
-		_status_label.text = "状态：连接已断开，可重新启动客户端恢复测试。"
+	elif state == WebSocketPeer.STATE_CLOSED:
+		if XbdApiClient.socket_session_expired(_socket):
+			_expire_socket_session()
+		else:
+			_wait_for_socket_retry()
+		return
 
 	_update_time_ui()
 
@@ -1010,12 +1021,13 @@ func _layout_modal_panels(w: float, h: float) -> void:
 	var pad := 24.0 * ui_scale
 	var row_h := maxf(44.0, 52.0 * ui_scale)
 	var gap := 12.0 * ui_scale
-	_menu_panel.size = Vector2(minf(560.0 * ui_scale, w - pad * 2.0), minf(500.0 * ui_scale, h - pad * 2.0))
+	var first_row := 148.0 * ui_scale
+	var menu_height := maxf(500.0 * ui_scale, first_row + row_h * 4.0 + gap * 3.0 + pad)
+	_menu_panel.size = Vector2(minf(560.0 * ui_scale, w - pad * 2.0), minf(menu_height, h - pad * 2.0))
 	_menu_panel.position = (size - _menu_panel.size) * 0.5
 	_menu_label.position = Vector2(20.0, 20.0) * ui_scale
 	_menu_label.size = Vector2(_menu_panel.size.x - 40.0 * ui_scale, 108.0 * ui_scale)
 	_menu_label.add_theme_font_size_override("font_size", roundi(maxf(18.0, 23.0 * ui_scale)))
-	var first_row := 148.0 * ui_scale
 	_bgm_toggle_button.position = Vector2(pad, first_row)
 	_bgm_toggle_button.size = Vector2(_menu_panel.size.x - pad * 2.0, row_h)
 	_sfx_toggle_button.position = Vector2(pad, first_row + row_h + gap)
@@ -1110,11 +1122,40 @@ func _on_action_pressed(action: String) -> void:
 
 
 func _connect_socket() -> void:
-	var api_script = load("res://modules/foundation/network/api_client.gd")
-	var api = api_script.new()
+	if api == null or api.authorization_headers().is_empty():
+		_status_label.text = "状态：请重新登录后进入对局。"
+		set_process(false)
+		return
+	_socket = WebSocketPeer.new()
+	_socket.handshake_headers = api.authorization_headers()
 	var error := _socket.connect_to_url(api.websocket_url())
 	if error != OK:
-		_status_label.text = "状态：连接服务端失败，错误码=%s" % str(error)
+		_wait_for_socket_retry()
+	else:
+		set_process(true)
+
+
+func _wait_for_socket_retry() -> void:
+	_connected = false
+	_joined = false
+	_room_status = "waiting"
+	_selected = INVALID_POS
+	_update_hud()
+	_status_label.text = "状态：连接已中断，正在重连……"
+	set_process(false)
+	if not is_instance_valid(_session_check):
+		_session_check = api.check_session(self, _expire_socket_session)
+	_reconnect_timer.start()
+
+
+func _expire_socket_session() -> void:
+	if is_queued_for_deletion(): return
+	_connected = false
+	_joined = false
+	_reconnect_timer.stop()
+	set_process(false)
+	_socket.close()
+	session_expired.emit()
 
 
 func _send_join() -> void:
@@ -1148,6 +1189,8 @@ func _handle_message(text: String) -> void:
 		"connected":
 			_status_label.text = "状态：服务端已连接。"
 		"chess_joined":
+			if str(message.get("room_id", "")) != _room_id:
+				return
 			_joined = true
 			_your_color = str(message.get("your_color", ""))
 			print("CHESS_JOINED color=%s room=%s" % [_your_color, _room_id])
@@ -1155,6 +1198,8 @@ func _handle_message(text: String) -> void:
 			_status_label.text = "状态：%s" % str(message.get("message", "已加入房间"))
 			_update_hud()
 		"chess_state":
+			if str(message.get("room_id", "")) != _room_id:
+				return
 			_apply_state(message)
 		"chess_error":
 			_selected = INVALID_POS
@@ -1741,6 +1786,9 @@ func _on_board_pressed(pos: Vector2i) -> void:
 		return
 	if _winner != "" or _end_reason != "" or _room_status == "finished":
 		_status_label.text = "状态：本局已经结束。"
+		return
+	if _room_status != "playing":
+		_status_label.text = "状态：等待双方就绪后才能走棋。"
 		return
 	if not training_mode and _turn != _your_color:
 		_status_label.text = "状态：当前不是你的回合。"

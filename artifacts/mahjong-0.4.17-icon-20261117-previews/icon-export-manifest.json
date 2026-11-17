@@ -1,0 +1,37 @@
+{
+  "original_sha256": "BF6EEFFC61406DFDBA71D0BB081D5FFDA34D6711A8F7B9D7D3BC6EC812AEF0B4",
+  "original_width": 1254,
+  "original_height": 1254,
+  "png_sizes": [
+    16,
+    24,
+    32,
+    48,
+    64,
+    128,
+    192,
+    256,
+    512,
+    1024
+  ],
+  "ico_sizes": [
+    16,
+    24,
+    32,
+    48,
+    64,
+    128,
+    256
+  ],
+  "windows_icon_decoder_128px_verified": true,
+  "adaptive_canvas_px": 432,
+  "adaptive_artwork_px": 208,
+  "adaptive_safe_diameter_px": 264,
+  "adaptive_foreground_radius_px": 128.018,
+  "legacy_artwork_px": 188,
+  "rgb_processing": "Proportional bicubic resize. Remove the exterior dark matte from the Android variants.",
+  "adaptive_background": "Opaque cream #F5EFE1",
+  "android_documentation": "https://developer.android.com/develop/ui/views/launch/icon_design_adaptive",
+  "native_desktop_install_verified": false,
+  "android_install_verified": false
+}

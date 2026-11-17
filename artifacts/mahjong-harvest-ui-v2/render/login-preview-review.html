@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>小板凳乡村麻将 · 登录首页</title>
+<style>
+:root {
+  font-family:"Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  color:#4b2613;
+  background:#93632f;
+}
+* { box-sizing:border-box }
+html,body { margin:0; width:100%; height:100%; overflow:hidden }
+main {
+  width:100%; height:100%; position:relative; isolation:isolate;
+  background:url("assets/login-background.png") center/cover no-repeat;
+}
+.brand {
+  position:absolute; left:3.5%; top:2.1%; display:block; width:42.5%; height:auto;
+  filter:drop-shadow(0 1px 3px #30160745);
+}
+.login-panel {
+  position:absolute; left:50%; top:28%; transform:translateX(-50%); width:85.5%;
+  background:#f8e2bd url("assets/paper.png") 50% 50% / auto;
+  border:14px solid transparent; border-radius:27px;
+  border-image:url("assets/frame.png") 33 34 34 34 stretch;
+  box-shadow:0 14px 25px #3b231357,0 4px 8px #46281142;
+}
+.controls { display:block; width:100%; height:auto }
+.entry {
+  position:absolute; padding:0; border:0; appearance:none; background:none;
+}
+.entry:focus-visible { outline:4px solid #fff7cf; outline-offset:1px; border-radius:999px }
+.guest { inset:5.25% 5.15% 66.25% 3.2% }
+.account { inset:41.3% 5.5% 35.6% 4% }
+.phone { inset:73.8% 3.9% 7.05% 50.7% }
+.wechat {
+  inset:73.8% 52.65% 7.05% 2.85%;
+  display:flex; align-items:center; justify-content:center; gap:1.8vw;
+  padding-inline:1.5vw; border-radius:999px; border:2px solid #6c7a32;
+  background:linear-gradient(#ecf0cf 0%,#c5d793 20%,#9cb96f 61%,#76924b);
+  box-shadow:inset 0 2px 1px #ffffffdb,inset 0 -2px 3px #384d273d,0 4px 8px #624a3755;
+  color:#263f20; font:800 3.85vw/1 "Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  white-space:nowrap; text-shadow:0 1px 0 #e1f0a59c;
+}
+.wechat img { display:block; width:6.3vw; height:6.3vw; flex:none }
+.copyright {
+  position:absolute; bottom:1.65%; left:50%; transform:translateX(-50%);
+  padding:.45em 1.2em .53em; margin:0; border-radius:999px;
+  white-space:nowrap; color:#fff2d7; background:#452710c9; border:1px solid #f7d4a180;
+  font-size:2.4vw; font-weight:650; letter-spacing:.025em;
+  box-shadow:0 1px 3px #30170652;
+}
+</style>
+</head>
+<body>
+<main data-screen="01">
+  <img class="brand" src="assets/village-logo-cutout.png" alt="小板凳乡村麻将">
+  <div class="login-panel" role="group" aria-label="登录">
+    <img class="controls" src="assets/login-controls-reference.png" alt="" width="509" height="341">
+    <button class="entry guest" aria-label="游客登录"></button>
+    <button class="entry account" aria-label="账号登录"></button>
+    <button class="entry wechat"><img src="assets/login/icon_wechat.svg" alt="">微信登录</button>
+    <button class="entry phone" disabled aria-label="手机号登录"></button>
+  </div>
+  <footer class="copyright">© Freeboozstudio 工作室 版权所有</footer>
+</main>
+</body>
+</html>

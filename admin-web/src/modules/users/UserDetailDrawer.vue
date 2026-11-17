@@ -31,7 +31,7 @@ function accountTypeLabel(value?: string): string {
           <span>AccountId（统一账号标识）</span>
           <strong>{{ user.account_id }}</strong>
         </div>
-        <DevelopmentBadge v-if="dataSource === 'development'" />
+        <DevelopmentBadge v-if="dataSource === 'development'" label="开发数据" />
       </div>
 
       <el-tabs>
@@ -61,7 +61,7 @@ function accountTypeLabel(value?: string): string {
 </template>
 
 <style scoped>
-.drawer-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding: 13px 14px; border: 1px solid var(--xbd-border); border-radius: 10px; background: #faf7f3; }
+.drawer-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding: 13px 14px; border: 1px solid var(--xbd-border); border-radius: 10px; background: var(--xbd-surface-inset); }
 .drawer-summary span, .drawer-summary strong { display: block; }
 .drawer-summary span { color: var(--xbd-text-secondary); font-size: 10px; }
 .drawer-summary strong { margin-top: 5px; font-size: 12px; word-break: break-all; }

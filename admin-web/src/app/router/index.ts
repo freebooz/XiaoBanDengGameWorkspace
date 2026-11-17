@@ -6,14 +6,13 @@ import {
   type RouteRecordRaw,
   type Router,
 } from "vue-router";
-import { useAuthStore } from "../store/auth";
+import { MAHJONG_REVIEW, PLATFORM_READ, WALLET_GRANT_EGGS, useAuthStore } from "../store/auth";
 
-const TemporaryPage = defineComponent({
-  name: "TemporaryPage",
-  setup: () => () => h("div", { class: "route-placeholder" }, "模块初始化中"),
+const AccessPage = defineComponent({
+  setup: () => () => h("section", { class: "route-placeholder", role: "status" }, "当前账号没有可用的后台权限"),
 });
 
-/** routeRecords（路由表）固定一期核心 URL，页面模块将在后续任务逐项替换。 */
+/** routeRecords（路由表）固定一期核心 URL。 */
 export const routeRecords: RouteRecordRaw[] = [
   {
     path: "/login",
@@ -28,10 +27,22 @@ export const routeRecords: RouteRecordRaw[] = [
     children: [
       { path: "", redirect: "/dashboard" },
       {
+        path: "access",
+        name: "access",
+        component: AccessPage,
+        meta: { title: "权限", requiresAuth: true },
+      },
+      {
         path: "dashboard",
         name: "dashboard",
         component: () => import("../../modules/dashboard/DashboardPage.vue"),
         meta: { title: "综合工作台", description: "平台运行状态与一期产品总览", requiresAuth: true },
+      },
+      {
+        path: "monitor",
+        name: "monitor",
+        component: () => import("../../modules/monitor/MonitorPage.vue"),
+        meta: { title: "实时监视", description: "服务器健康、游戏大厅、房间与玩家", requiresAuth: true, capability: PLATFORM_READ },
       },
       {
         path: "users",
@@ -42,20 +53,34 @@ export const routeRecords: RouteRecordRaw[] = [
       {
         path: "games/products",
         name: "games-products",
-        component: TemporaryPage,
+        component: () => import("../../modules/games/GameProductsPage.vue"),
         meta: { title: "游戏中心", description: "产品、游戏、规则集与规则版本", requiresAuth: true },
       },
       {
         path: "rooms",
         name: "rooms",
-        component: TemporaryPage,
-        meta: { title: "房间中心", description: "实时房间与生命周期状态", requiresAuth: true },
+        component: () => import("../../modules/monitor/MonitorPage.vue"),
+        props: { roomsOnly: true },
+        meta: { title: "房间中心", description: "实时房间、牌局阶段及玩家连接状态", requiresAuth: true, capability: PLATFORM_READ },
       },
       {
         path: "matches",
         name: "matches",
-        component: TemporaryPage,
-        meta: { title: "对局中心", description: "战绩、事件、快照与回放", requiresAuth: true },
+        component: () => import("../../modules/monitor/MonitorPage.vue"),
+        props: { roomsOnly: true, matchesOnly: true },
+        meta: { title: "对局中心", description: "实时对局阶段、在线席位及结算状态", requiresAuth: true, capability: PLATFORM_READ },
+      },
+      {
+        path: "mahjong/reports",
+        name: "mahjong-reports",
+        component: () => import("../../modules/reports/MahjongReportsPage.vue"),
+        meta: { title: "麻将举报", description: "核查牌桌举报与处理记录", requiresAuth: true, capability: MAHJONG_REVIEW },
+      },
+      {
+        path: "wallet/eggs",
+        name: "wallet-eggs",
+        component: () => import("../../modules/wallet/EggGrantPage.vue"),
+        meta: { title: "鸡蛋管理", description: "核对玩家账号与余额，发放鸡蛋", requiresAuth: true, capability: WALLET_GRANT_EGGS },
       },
     ],
   },
@@ -75,7 +100,11 @@ export function createAppRouter(memoryHistory = false): Router {
       return { path: "/login", query: { redirect: to.fullPath } };
     }
     if (to.path === "/login" && auth.isAuthenticated) {
-      return "/dashboard";
+      return auth.landingPath;
+    }
+    if (to.meta.requiresAuth && to.name !== "access") {
+      const capability = String(to.meta.capability ?? PLATFORM_READ);
+      if (!auth.can(capability)) return auth.landingPath;
     }
     return true;
   });

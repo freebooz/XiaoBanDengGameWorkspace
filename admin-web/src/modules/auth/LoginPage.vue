@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import BrandLogo from "../../components/BrandLogo.vue";
 import DevelopmentBadge from "../../components/DevelopmentBadge.vue";
@@ -9,10 +10,27 @@ const router = useRouter();
 const auth = useAuthStore();
 const isDevelopment = import.meta.env.DEV;
 
-function loginDevelopment(): void {
-  auth.loginDevelopment();
-  const redirect = typeof route.query.redirect === "string" ? route.query.redirect : "/dashboard";
-  void router.push(redirect);
+const input = ref("");
+const pending = ref(false);
+const errorMessage = ref("");
+
+async function login(): Promise<void> {
+  if (pending.value) return;
+  pending.value = true;
+  errorMessage.value = "";
+  const candidate = input.value;
+  input.value = "";
+  try {
+    if (!await auth.login(candidate)) return;
+    const redirect = route.query.redirect;
+    const path = typeof redirect === "string" && redirect.startsWith("/") && !redirect.startsWith("//") &&
+      !redirect.includes("\\") && router.resolve(redirect).meta.requiresAuth ? redirect : auth.landingPath;
+    await router.replace(path);
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "管理员登录失败";
+  } finally {
+    pending.value = false;
+  }
 }
 </script>
 
@@ -48,28 +66,21 @@ function loginDevelopment(): void {
 
         <el-alert
           v-if="isDevelopment"
-          title="当前为开发环境，仅用于本地联调与人工验收。"
+          title="开发环境仍需使用服务端颁发的管理员凭据。"
           type="warning"
           :closable="false"
           show-icon
         />
 
-        <el-button
-          v-if="isDevelopment"
-          data-testid="development-login"
-          class="development-login"
-          type="primary"
-          size="large"
-          @click="loginDevelopment"
-        >
-          开发管理员登录
-        </el-button>
-
-        <el-empty
-          v-else
-          :image-size="64"
-          description="正式管理员认证服务待接入"
-        />
+        <form class="credential-form" @submit.prevent="login">
+          <label for="admin-credential">管理员凭据</label>
+          <el-input id="admin-credential" v-model="input" type="password" autocomplete="off"
+            :disabled="pending" required placeholder="输入服务端颁发的凭据" />
+          <p v-if="errorMessage" role="alert" class="login-error">{{ errorMessage }}</p>
+          <el-button native-type="submit" class="credential-submit" type="primary" size="large" :loading="pending">
+            登录
+          </el-button>
+        </form>
 
         <div class="login-card__footer">
           <span>小板凳统一运营后台</span>
@@ -83,7 +94,8 @@ function loginDevelopment(): void {
 <style scoped>
 .login-page {
   width: 100%;
-  min-height: 100vh;
+  height: 100%;
+  overflow: auto;
   display: grid;
   grid-template-columns: minmax(520px, 1.18fr) minmax(480px, .82fr);
   background: var(--xbd-page-bg);
@@ -94,11 +106,11 @@ function loginDevelopment(): void {
   display: flex;
   align-items: center;
   padding: 72px clamp(52px, 7vw, 112px);
-  color: #fff9f2;
+  color: var(--xbd-text-primary);
   background:
-    radial-gradient(circle at 26% 22%, rgba(240,180,90,.22), transparent 32%),
-    radial-gradient(circle at 72% 76%, rgba(212,138,58,.14), transparent 28%),
-    linear-gradient(145deg, #181411 0%, #231b16 58%, #312219 100%);
+    radial-gradient(ellipse at 16% 8%, #DDA95028, transparent 54%),
+    var(--xbd-felt-surface);
+  border-right: 1px solid var(--xbd-border);
 }
 .login-visual::after {
   position: absolute;
@@ -106,31 +118,42 @@ function loginDevelopment(): void {
   bottom: -140px;
   width: 430px;
   height: 430px;
-  border: 1px solid rgba(240,180,90,.14);
+  border: 1px solid #FFD58A21;
   border-radius: 50%;
-  box-shadow: 0 0 0 56px rgba(240,180,90,.025), 0 0 0 116px rgba(240,180,90,.018);
+  box-shadow: 0 0 0 56px #FFD58A07, 0 0 0 116px #FFD58A04;
   content: "";
 }
 .login-visual__inner { position: relative; z-index: 1; max-width: 620px; }
-.login-kicker { margin-top: 72px; color: #c6ad94; font-size: 12px; letter-spacing: .12em; }
+.login-kicker { margin-top: 72px; color: var(--xbd-warning); font-size: 12px; letter-spacing: .12em; }
 .login-visual h1 { margin: 18px 0 20px; font-size: clamp(42px, 4vw, 64px); line-height: 1.18; font-weight: 700; letter-spacing: -.02em; }
-.login-visual p { max-width: 540px; margin: 0; color: #bcae9f; font-size: 15px; line-height: 1.85; }
+.login-visual p { max-width: 540px; margin: 0; color: var(--xbd-text-secondary); font-size: 15px; line-height: 1.85; }
 .login-feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 46px; }
-.login-feature-grid div { padding: 18px; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; background: rgba(255,255,255,.035); backdrop-filter: blur(8px); }
+.login-feature-grid div { padding: 18px; border: 1px solid var(--xbd-border); border-radius: 14px; background: var(--xbd-panel-surface); }
 .login-feature-grid strong, .login-feature-grid span { display: block; }
 .login-feature-grid strong { color: var(--xbd-brand-highlight); font-size: 18px; }
-.login-feature-grid span { margin-top: 6px; color: #a9998a; font-size: 11px; }
-.login-form-zone { display: grid; place-items: center; padding: 50px; background: #f8f5f1; }
-.login-card { width: min(430px, 100%); padding: 30px; border: 1px solid var(--xbd-border); border-radius: 20px; background: rgba(255,253,252,.96); box-shadow: 0 24px 70px rgba(75,49,28,.10); }
+.login-feature-grid span { margin-top: 6px; color: var(--xbd-text-secondary); font-size: 11px; }
+.login-form-zone { display: grid; place-items: center; padding: 50px; background: var(--xbd-walnut-surface); }
+.login-card {
+  width: min(430px, 100%); padding: 30px; border: 1px solid var(--xbd-border-control);
+  border-radius: 20px; background: var(--xbd-panel-surface); box-shadow: var(--xbd-shadow-card);
+}
 .login-card__top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .login-card__heading { margin: 46px 0 24px; }
 .login-card__heading h2 { margin: 0; font-size: 25px; font-weight: 700; }
 .login-card__heading p { margin: 8px 0 0; color: var(--xbd-text-secondary); font-size: 12px; }
-.development-login { width: 100%; height: 44px; margin-top: 18px; font-weight: 650; letter-spacing: .04em; }
-.login-card__footer { display: flex; justify-content: space-between; margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--xbd-border); color: #9a9087; font-size: 10px; }
+.credential-form { display: grid; gap: 10px; margin-top: 18px; }
+.credential-form label { font-weight: 650; }
+.credential-submit { width: 100%; height: 44px; font-weight: 650; letter-spacing: .04em; }
+.login-error { color: var(--el-color-danger); margin: 0; }
+.login-card__footer { display: flex; justify-content: space-between; margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--xbd-border); color: var(--xbd-text-muted); font-size: 10px; }
 @media (max-width: 1180px) {
   .login-page { grid-template-columns: 1fr 480px; }
   .login-visual { padding: 56px; }
   .login-feature-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 820px) {
+  .login-page { grid-template-columns: minmax(0, 1fr); }
+  .login-visual { display: none; }
+  .login-form-zone { padding: 24px; }
 }
 </style>

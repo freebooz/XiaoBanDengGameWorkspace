@@ -1,0 +1,22 @@
+services:
+  api:
+    environment:
+      XBD_ADMIN_CREDENTIAL_FILE: /run/secrets/xbd_admin_credentials
+    secrets: [xbd_admin_credentials]
+
+  admin:
+    build:
+      context: ../../admin-web
+    ports:
+      - '127.0.0.1:${XBD_MAHJONG_ADMIN_PORT:-0}:443'
+    volumes:
+      - ./admin.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${XBD_MAHJONG_TLS_DIR:?Set a directory with server.crt and server.key}:/etc/nginx/mahjong-tls:ro
+    networks: [data, edge]
+    depends_on:
+      api:
+        condition: service_healthy
+
+secrets:
+  xbd_admin_credentials:
+    file: ${XBD_MAHJONG_ADMIN_CREDENTIALS:?Select the admin digest file}

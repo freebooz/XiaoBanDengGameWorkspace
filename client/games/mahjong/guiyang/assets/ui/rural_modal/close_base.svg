@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="74" viewBox="0 0 72 74">
+  <defs>
+    <linearGradient id="edge" x2="0" y2="1"><stop stop-color="#fff5bd"/><stop offset=".23" stop-color="#f0ae63"/><stop offset=".58" stop-color="#9b5729"/><stop offset="1" stop-color="#e6a757"/></linearGradient>
+    <linearGradient id="wood" x2="0" y2="1"><stop stop-color="#b7773e"/><stop offset=".35" stop-color="#975625"/><stop offset=".72" stop-color="#673012"/><stop offset="1" stop-color="#83431d"/></linearGradient>
+    <radialGradient id="glint" cx=".34" cy=".06" r=".76"><stop stop-color="#ffdb9d" stop-opacity=".37"/><stop offset="1" stop-color="#ffdb9d" stop-opacity="0"/></radialGradient>
+  </defs>
+  <circle cx="36" cy="39" r="34.2" fill="#35180a" opacity=".39"/>
+  <circle cx="36" cy="36" r="33.5" fill="url(#edge)" stroke="#7b411c" stroke-width="1.1"/>
+  <circle cx="36" cy="36" r="30.25" fill="url(#wood)" stroke="#814219" stroke-width="1.35"/>
+  <circle cx="36" cy="36" r="28.2" fill="url(#glint)" stroke="#f7ba73" stroke-opacity=".65" stroke-width="1.45"/>
+  <path d="M16 23c10-13 31-17 43 0M16 54c12 9 28 10 40 1" fill="none" stroke="#ffda9a" stroke-opacity=".62" stroke-linecap="round"/>
+</svg>

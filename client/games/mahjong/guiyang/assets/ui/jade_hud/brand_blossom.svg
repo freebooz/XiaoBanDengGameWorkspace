@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="248" height="164" viewBox="0 0 248 164">
+  <defs>
+    <linearGradient id="bark" x1="0" y1="0" x2=".7" y2="1">
+      <stop stop-color="#b46a36"/>
+      <stop offset=".48" stop-color="#6c3520"/>
+      <stop offset="1" stop-color="#2b1511"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#c7c874"/>
+      <stop offset=".37" stop-color="#7b9440"/>
+      <stop offset="1" stop-color="#334d27"/>
+    </linearGradient>
+    <linearGradient id="petal" x1="0" y1="0" x2=".48" y2="1">
+      <stop stop-color="#fff0d4"/>
+      <stop offset=".37" stop-color="#f8c4ae"/>
+      <stop offset=".72" stop-color="#e68f83"/>
+      <stop offset="1" stop-color="#b55f5b"/>
+    </linearGradient>
+    <radialGradient id="heart">
+      <stop stop-color="#ffd599"/>
+      <stop offset=".62" stop-color="#e39869"/>
+      <stop offset="1" stop-color="#a95648"/>
+    </radialGradient>
+    <g id="flower">
+      <path d="M0 0C-11-5-15-19-8-23c6-4 10 3 9 8 3-8 10-9 13-4 4 6-2 15-9 19Z" fill="url(#petal)"/>
+      <path d="M0 0C2-12 13-22 20-17c5 4 2 10-4 13 6-2 12 3 11 8-1 7-16 10-26 0Z" fill="url(#petal)" transform="rotate(8)"/>
+      <path d="M0 0C5-5 17-3 21 6c3 6-4 10-8 6 4 5 0 11-6 10-8-2-11-13-9-21Z" fill="url(#petal)" transform="rotate(9)"/>
+      <path d="M0 0C8 9 3 22-3 24c-7 2-10-5-7-10-4 5-10 4-13-1-4-7 9-14 20-14Z" fill="url(#petal)" transform="rotate(7)"/>
+      <path d="M0 0C-10 8-23 5-27-3c-3-6 3-11 9-7-4-6-1-11 5-11 7 1 13 10 15 19Z" fill="url(#petal)"/>
+      <path d="M-4-2-15-7m12 7-7 7m11-6 7 8M2-2l9-3M0-4l-2-9" fill="none" stroke="#be695d" stroke-opacity=".46" stroke-width=".65" stroke-linecap="round"/>
+      <circle r="4.7" fill="url(#heart)"/>
+      <path d="M0 0-4-4M0 0l2-5M0 0l5-1M0 0l2 4M0 0l-5 2" stroke="#f8e1a5" stroke-width="1.15" stroke-linecap="round"/>
+      <path d="M-4-4h.15m5.85-1h.15m2.85 4h.15m-3.15 5h.15m-7.15-2h.15" stroke="#ffe9b9" stroke-width="1.8" stroke-linecap="round"/>
+    </g>
+    <g id="foliage">
+      <path d="M0 0C9-11 20-14 32-11 23-7 18 2 0 0Z" fill="url(#leaf)"/>
+      <path d="M0 0Q16-7 28-10" fill="none" stroke="#e0cb83" stroke-opacity=".57" stroke-width=".8"/>
+    </g>
+    <g id="bud">
+      <path d="M-2 0C-7-5-4-11 0-11 4-10 7-5 3-1Z" fill="url(#petal)"/>
+      <path d="M-3-2 0 3 4-2" fill="#587035"/>
+    </g>
+  </defs>
+  <path d="M-9 156C9 140 30 112 55 99 79 86 110 72 128 60 151 45 169 26 184 5" fill="none" stroke="#24130f" stroke-opacity=".65" stroke-width="9" stroke-linecap="round"/>
+  <path d="M-9 151C9 137 30 108 55 98 79 85 110 70 128 59 151 44 169 24 184 4" fill="none" stroke="url(#bark)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M-3 147C11 131 33 110 53 102 78 89 114 71 135 57 153 45 175 22 183 6" fill="none" stroke="#f7a352" stroke-opacity=".47" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M19 125C18 112 15 101 8 89L1 73m53 27c14 2 26 10 43 19l27 5M46 103c4-14 3-25-6-39L29 48m48 42c8-15 8-34 4-44l-2-22m31 45c18 1 34 8 50 9l35-4m-65-16c3-15-1-28-9-41m33 22c14 0 27-4 41-15l13-12" fill="none" stroke="url(#bark)" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M8 88C14 86 20 82 25 78m63 31c5 0 13 0 18-4m-24-60c6-4 11-7 16-10m76 40c7 5 14 6 23 7m-45-37c8 5 14 7 21 6" fill="none" stroke="#935431" stroke-width="1.25" stroke-linecap="round"/>
+  <use href="#foliage" transform="translate(11 92) rotate(-142) scale(.62)"/>
+  <use href="#foliage" transform="translate(22 124) rotate(29) scale(.83)"/>
+  <use href="#foliage" transform="translate(42 85) rotate(207) scale(.74)"/>
+  <use href="#foliage" transform="translate(64 96) rotate(25) scale(.91)"/>
+  <use href="#foliage" transform="translate(98 116) rotate(-22) scale(.79)"/>
+  <use href="#foliage" transform="translate(82 70) rotate(183) scale(.72)"/>
+  <use href="#foliage" transform="translate(114 67) rotate(-94) scale(.64)"/>
+  <use href="#foliage" transform="translate(143 76) rotate(21) scale(.89)"/>
+  <use href="#foliage" transform="translate(174 76) rotate(-35) scale(.64)"/>
+  <use href="#foliage" transform="translate(177 24) rotate(8) scale(.61)"/>
+  <use href="#foliage" transform="translate(205 17) rotate(-29) scale(.55)"/>
+  <use href="#bud" transform="translate(2 75) rotate(-32) scale(.86)"/>
+  <use href="#bud" transform="translate(25 78) rotate(45) scale(.71)"/>
+  <use href="#bud" transform="translate(79 23) rotate(-24) scale(.74)"/>
+  <use href="#bud" transform="translate(120 17) rotate(-19) scale(.86)"/>
+  <use href="#bud" transform="translate(125 123) rotate(73) scale(.75)"/>
+  <use href="#bud" transform="translate(194 81) rotate(74) scale(.82)"/>
+  <use href="#bud" transform="translate(209 11) rotate(38) scale(.63)"/>
+  <use href="#flower" transform="translate(13 113) rotate(15) scale(.87)"/>
+  <use href="#flower" transform="translate(31 51) rotate(-17) scale(.57)"/>
+  <use href="#flower" transform="translate(50 85) rotate(2)"/>
+  <use href="#flower" transform="translate(93 115) rotate(-14) scale(.68)"/>
+  <use href="#flower" transform="translate(87 51) rotate(25) scale(.54)"/>
+  <use href="#flower" transform="translate(137 56) rotate(8) scale(.66)"/>
+  <use href="#flower" transform="translate(162 78) rotate(19) scale(.42)"/>
+  <use href="#flower" transform="translate(177 21) rotate(-12) scale(.43)"/>
+</svg>

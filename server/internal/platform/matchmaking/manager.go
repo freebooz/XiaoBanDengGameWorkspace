@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/domain"
+	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/game/mahjong/guiyang"
 	"github.com/freebooz-studio/xiaobandeng-game-platform/server/internal/platform/room"
 )
 
@@ -61,21 +63,29 @@ type assignment struct {
 }
 
 type Manager struct {
-	mu            sync.Mutex
-	rooms         *room.Manager
-	waitingByKey  map[string]string
-	assignments   map[string]assignment
-	playersByRoom map[string][]string
-	readyByRoom   map[string]map[string]bool
+	mu              sync.Mutex
+	rooms           *room.Manager
+	waitingByKey    map[string]string
+	assignments     map[string]assignment
+	playersByRoom   map[string][]string
+	readyByRoom     map[string]map[string]bool
+	mahjongKinds    map[string]string
+	mahjongRounds   map[string]mahjongRoundHistory
+	mahjongRules    map[string]guiyang.RuleDescriptor
+	mahjongSettings map[string]MahjongRoomSettings
 }
 
 func NewManager(rooms *room.Manager) *Manager {
 	return &Manager{
-		rooms:         rooms,
-		waitingByKey:  map[string]string{},
-		assignments:   map[string]assignment{},
-		playersByRoom: map[string][]string{},
-		readyByRoom:   map[string]map[string]bool{},
+		rooms:           rooms,
+		waitingByKey:    map[string]string{},
+		assignments:     map[string]assignment{},
+		playersByRoom:   map[string][]string{},
+		readyByRoom:     map[string]map[string]bool{},
+		mahjongKinds:    map[string]string{},
+		mahjongRounds:   map[string]mahjongRoundHistory{},
+		mahjongRules:    map[string]guiyang.RuleDescriptor{},
+		mahjongSettings: map[string]MahjongRoomSettings{},
 	}
 }
 
@@ -85,6 +95,12 @@ func (m *Manager) QuickMatch(req QuickMatchRequest) (QuickMatchResult, error) {
 	if err := validateRequest(req); err != nil {
 		return QuickMatchResult{}, err
 	}
+	if req.GameID == string(domain.GameMahjong) {
+		rule, _ := guiyang.FindRuleDescriptor(req.RuleSetID, req.RuleVersion)
+		if !rule.AllowsQuickMatch() {
+			return QuickMatchResult{}, errors.New("该玩法可在好友房或训练中体验")
+		}
+	}
 	key := queueKey(req)
 
 	m.mu.Lock()
@@ -92,12 +108,15 @@ func (m *Manager) QuickMatch(req QuickMatchRequest) (QuickMatchResult, error) {
 
 	if current, ok := m.assignments[req.AccountID]; ok {
 		if _, exists := m.rooms.Get(current.RoomID); exists {
+			if current.Key != key {
+				return QuickMatchResult{}, errors.New("请先退出当前房间")
+			}
 			return m.resultLocked(current.RoomID, req.AccountID), nil
 		}
 		delete(m.assignments, req.AccountID)
 	}
 
-	if roomID, ok := m.waitingByKey[key]; ok {
+	if roomID := m.waitingRoomLocked(req, key); roomID != "" {
 		players := m.playersByRoom[roomID]
 		capacity := capacityFor(req.GameID)
 		if len(players) < capacity && !containsPlayer(players, req.AccountID) {
@@ -130,7 +149,23 @@ func (m *Manager) QuickMatch(req QuickMatchRequest) (QuickMatchResult, error) {
 	return m.resultLocked(created.RoomID, req.AccountID), nil
 }
 
-// Ready（准备进入对局）是幂等操作；只有两个正式座位都准备后才把房间置为playing。
+func (m *Manager) waitingRoomLocked(req QuickMatchRequest, key string) string {
+	if roomID := m.waitingByKey[key]; roomID != "" || req.GameID != string(domain.GameMahjong) {
+		return roomID
+	}
+	// A full table can lose a player after another waiting table has opened.
+	for roomID, players := range m.playersByRoom {
+		if len(players) > 0 && len(players) < capacityFor(req.GameID) && m.assignments[players[0]].Key == key {
+			if item, exists := m.rooms.Get(roomID); exists && item.State == "waiting" {
+				m.waitingByKey[key] = roomID
+				return roomID
+			}
+		}
+	}
+	return ""
+}
+
+// Ready records a player's preparation. A room starts once every seat is occupied and ready.
 func (m *Manager) Ready(req RoomReadyRequest) (RoomReadyResult, error) {
 	if strings.TrimSpace(req.AccountID) == "" || strings.TrimSpace(req.RoomID) == "" {
 		return RoomReadyResult{}, errors.New("account_id/room_id不能为空")
@@ -149,7 +184,8 @@ func (m *Manager) Ready(req RoomReadyRequest) (RoomReadyResult, error) {
 		return RoomReadyResult{}, errors.New("匹配房间已失效")
 	}
 	capacity := capacityFor(item.GameID)
-	if len(players) < capacity {
+	waitingFriend := item.State == "waiting" && m.mahjongKinds[req.RoomID] == MahjongFriend
+	if len(players) < capacity && !waitingFriend {
 		return RoomReadyResult{}, errors.New("玩家尚未满座")
 	}
 	if m.readyByRoom[req.RoomID] == nil {
@@ -157,7 +193,7 @@ func (m *Manager) Ready(req RoomReadyRequest) (RoomReadyResult, error) {
 	}
 	m.readyByRoom[req.RoomID][req.AccountID] = true
 	readyPlayers := m.readyCountLocked(req.RoomID)
-	start := readyPlayers >= capacity
+	start := len(players) == capacity && readyPlayers == capacity
 	if start {
 		if !m.rooms.SetState(req.RoomID, "playing") {
 			return RoomReadyResult{}, errors.New("房间已失效")
@@ -176,7 +212,10 @@ func (m *Manager) Cancel(accountID string) error {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.cancelLocked(accountID)
+}
 
+func (m *Manager) cancelLocked(accountID string) error {
 	current, ok := m.assignments[accountID]
 	if !ok {
 		return nil
@@ -197,18 +236,14 @@ func (m *Manager) Cancel(accountID string) error {
 	delete(m.readyByRoom, current.RoomID)
 
 	if len(remaining) == 0 {
-		if waitingRoom, ok := m.waitingByKey[current.Key]; ok && waitingRoom == current.RoomID {
-			delete(m.waitingByKey, current.Key)
-		}
-		delete(m.playersByRoom, current.RoomID)
-		if exists {
-			m.rooms.SetState(current.RoomID, "closed")
-		}
+		m.finishRoomLocked(current.RoomID)
 		return nil
 	}
 
 	m.playersByRoom[current.RoomID] = remaining
-	m.waitingByKey[current.Key] = current.RoomID
+	if current.Key != "" && (item.GameID != string(domain.GameMahjong) || m.waitingByKey[current.Key] == "") {
+		m.waitingByKey[current.Key] = current.RoomID
+	}
 	m.readyByRoom[current.RoomID] = map[string]bool{}
 	if exists {
 		m.rooms.SetState(current.RoomID, "waiting")
@@ -226,9 +261,14 @@ func (m *Manager) FinishRoom(roomID string) {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.finishRoomLocked(roomID)
+}
 
+func (m *Manager) finishRoomLocked(roomID string) {
 	for _, accountID := range m.playersByRoom[roomID] {
-		delete(m.assignments, accountID)
+		if m.assignments[accountID].RoomID == roomID {
+			delete(m.assignments, accountID)
+		}
 	}
 	for key, waitingRoomID := range m.waitingByKey {
 		if waitingRoomID == roomID {
@@ -237,6 +277,10 @@ func (m *Manager) FinishRoom(roomID string) {
 	}
 	delete(m.playersByRoom, roomID)
 	delete(m.readyByRoom, roomID)
+	delete(m.mahjongKinds, roomID)
+	delete(m.mahjongRounds, roomID)
+	delete(m.mahjongRules, roomID)
+	delete(m.mahjongSettings, roomID)
 	m.rooms.Close(roomID)
 }
 
@@ -325,6 +369,17 @@ func (m *Manager) MahjongPlayersFor(roomID string) ([4]string, bool) {
 	return seats, true
 }
 
+// RuleVersionFor returns server-held rules metadata without changing matchmaking.
+func (m *Manager) RuleVersionFor(roomID string) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	item, ok := m.rooms.Get(roomID)
+	if !ok {
+		return "", false
+	}
+	return item.RuleVersion, true
+}
+
 // LandlordPlayersFor 返回已经满座且完成准备的三人斗地主座位。
 func (m *Manager) LandlordPlayersFor(roomID string) ([3]string, bool) {
 	m.mu.Lock()
@@ -374,19 +429,27 @@ func containsPlayer(players []string, accountID string) bool {
 	return false
 }
 
-// SeatFor（查询权威座位）供实时对局层校验红/黑身份，禁止客户端自行声明阵营。
-func (m *Manager) SeatFor(roomID string, accountID string) (string, bool) {
+// PlayingChessSeat returns the authoritative seat after both chess players are ready.
+func (m *Manager) PlayingChessSeat(roomID string, accountID string) (string, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	item, exists := m.rooms.Get(roomID)
+	if !exists || item.GameID != string(domain.GameChineseChess) || item.ProductID != string(domain.ProductChineseChess) ||
+		item.RuleSetID != string(domain.RuleChineseChessStandard) || item.RuleVersion != "1.0.0" || item.State != "playing" {
+		return "", false
+	}
 	current, ok := m.assignments[accountID]
 	if !ok || current.RoomID != roomID {
 		return "", false
 	}
 	players := m.playersByRoom[roomID]
-	if len(players) > 0 && players[0] == accountID {
+	if len(players) != 2 || m.readyCountLocked(roomID) != 2 {
+		return "", false
+	}
+	if players[0] == accountID {
 		return "red", true
 	}
-	if len(players) > 1 && players[1] == accountID {
+	if players[1] == accountID {
 		return "black", true
 	}
 	return "", false
@@ -409,9 +472,24 @@ func validateRequest(req QuickMatchRequest) error {
 	if req.ProductID == "" || req.GameID == "" || req.RuleSetID == "" || req.RuleVersion == "" {
 		return errors.New("product_id/game_id/rule_set_id/rule_version均不能为空")
 	}
+	if req.GameID == string(domain.GameMahjong) || req.ProductID == string(domain.ProductMahjong) {
+		return ValidateMahjongRule(req.ProductID, req.GameID, req.RuleSetID, req.RuleVersion)
+	}
+	return nil
+}
+
+func ValidateMahjongRule(productID, gameID, ruleID, version string) error {
+	if _, known := guiyang.FindRuleDescriptor(ruleID, version); !known || productID != string(domain.ProductMahjong) || gameID != string(domain.GameMahjong) {
+		return errors.New("未知的麻将玩法或版本")
+	}
 	return nil
 }
 
 func queueKey(req QuickMatchRequest) string {
+	if req.GameID == string(domain.GameMahjong) {
+		if rule, found := guiyang.FindRuleDescriptor(req.RuleSetID, req.RuleVersion); found {
+			return strings.Join([]string{req.ProductID, req.GameID, rule.Key()}, "|")
+		}
+	}
 	return strings.Join([]string{req.ProductID, req.GameID, req.RuleSetID, req.RuleVersion}, "|")
 }

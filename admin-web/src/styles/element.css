@@ -1,11 +1,69 @@
 @import "./tokens.css";
 
 /* Element Plus（Element Plus 组件库）统一品牌化覆盖。 */
+html.dark {
+  --el-bg-color: var(--xbd-card-bg);
+  --el-bg-color-page: var(--xbd-page-bg);
+  --el-bg-color-overlay: var(--xbd-surface-raised);
+  --el-fill-color: var(--xbd-surface-raised);
+  --el-fill-color-light: var(--xbd-surface-hover);
+  --el-fill-color-lighter: var(--xbd-surface-raised);
+  --el-fill-color-extra-light: var(--xbd-surface-inset);
+  --el-fill-color-dark: var(--xbd-surface-hover);
+  --el-fill-color-darker: var(--xbd-surface-hover);
+  --el-fill-color-blank: var(--xbd-card-bg);
+  --el-border-color: var(--xbd-border-control);
+  --el-border-color-light: var(--xbd-border);
+  --el-border-color-lighter: var(--xbd-border);
+  --el-border-color-extra-light: var(--xbd-border);
+  --el-border-color-dark: var(--xbd-border-control);
+  --el-border-color-darker: var(--xbd-border-control);
+  --el-text-color-primary: var(--xbd-text-primary);
+  --el-text-color-regular: var(--xbd-text-primary);
+  --el-text-color-secondary: var(--xbd-text-secondary);
+  --el-text-color-placeholder: var(--xbd-text-muted);
+  --el-color-primary: var(--xbd-brand-highlight);
+  --el-color-primary-light-3: var(--xbd-warning);
+  --el-color-primary-light-5: var(--xbd-border-control);
+  --el-color-primary-light-7: var(--xbd-brand-tint);
+  --el-color-primary-light-8: var(--xbd-brand-tint);
+  --el-color-primary-light-9: var(--xbd-brand-tint);
+  --el-color-primary-dark-2: var(--xbd-brand-primary);
+  --el-color-success: var(--xbd-success);
+  --el-color-success-light-8: var(--xbd-success-bg);
+  --el-color-success-light-9: var(--xbd-success-bg);
+  --el-color-warning: var(--xbd-warning);
+  --el-color-warning-light-8: var(--xbd-warning-bg);
+  --el-color-warning-light-9: var(--xbd-warning-bg);
+  --el-color-danger: var(--xbd-danger);
+  --el-color-danger-light-8: var(--xbd-danger-bg);
+  --el-color-danger-light-9: var(--xbd-danger-bg);
+  --el-color-error: var(--xbd-danger);
+  --el-color-error-light-8: var(--xbd-danger-bg);
+  --el-color-error-light-9: var(--xbd-danger-bg);
+  --el-color-info: var(--xbd-text-secondary);
+  --el-color-info-light-8: var(--xbd-surface-hover);
+  --el-color-info-light-9: var(--xbd-surface-raised);
+  --el-mask-color: #131B16CC;
+  --el-mask-color-extra-light: #131B168C;
+}
 .el-button--primary {
   --el-button-bg-color: var(--xbd-brand-primary);
   --el-button-border-color: var(--xbd-brand-primary);
+  --el-button-text-color: var(--xbd-text-on-brand);
   --el-button-hover-bg-color: var(--xbd-brand-highlight);
   --el-button-hover-border-color: var(--xbd-brand-highlight);
+  --el-button-hover-text-color: var(--xbd-text-on-brand);
+  --el-button-active-bg-color: var(--xbd-brand-primary);
+  --el-button-active-border-color: var(--xbd-brand-primary);
+  --el-button-active-text-color: var(--xbd-text-on-brand);
+}
+.el-button--primary:not(.is-disabled, .is-plain) {
+  background: var(--xbd-action-surface);
+  box-shadow: inset 0 1px #FFF2DD65, 0 1px 3px #0C110D60;
+}
+.el-button--primary:not(.is-disabled, .is-plain):is(:hover, :focus-visible) {
+  background: var(--xbd-brand-highlight);
 }
 .el-card {
   --el-card-border-color: var(--xbd-border);
@@ -16,13 +74,13 @@
 .el-card__header { padding: 14px 16px; color: var(--xbd-text-primary); font-size: 13px; font-weight: 650; }
 .el-card__body { padding: 16px; }
 .el-table {
-  --el-table-border-color: #eee7df;
-  --el-table-header-bg-color: #faf7f2;
-  --el-table-row-hover-bg-color: #fff8ef;
+  --el-table-border-color: var(--xbd-border);
+  --el-table-header-bg-color: var(--xbd-surface-raised);
+  --el-table-row-hover-bg-color: var(--xbd-surface-hover);
   color: var(--xbd-text-primary);
   font-size: 11px;
 }
-.el-table__header { color: #5f554c; font-size: 12px; font-weight: 650; }
+.el-table__header { color: var(--xbd-text-secondary); font-size: 12px; font-weight: 650; }
 .el-table .cell { line-height: 18px; white-space: nowrap; }
 .el-table th.el-table__cell, .el-table td.el-table__cell { padding: 7px 0; }
 .el-input__wrapper, .el-select__wrapper { border-radius: var(--xbd-radius-sm); }

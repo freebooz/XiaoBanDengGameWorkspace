@@ -1,6 +1,11 @@
 extends SceneTree
 ## Validate the actual four-seat screen, duplicate cards, picking and quality levels.
 
+class RenderFixture:
+	extends "res://modules/games/guandan/guandan_3d_screen.gd"
+	func _actions_ready() -> bool:
+		return true
+
 func _initialize() -> void:
 	call_deferred("_run")
 
@@ -9,7 +14,7 @@ func _run() -> void:
 	if script == null:
 		quit(1)
 		return
-	var screen = script.new()
+	var screen = RenderFixture.new()
 	screen.training_mode = true
 	screen.match_context = {"room_id":"训练", "account_id":"smoke", "seat_index":0}
 	root.add_child(screen)
@@ -66,6 +71,24 @@ func _run() -> void:
 		quit(7)
 		return
 	screen._clear_selection()
+	# Dispatch through the real GUI path: a touch also generates an emulated mouse.
+	var emulate := Input.emulate_mouse_from_touch
+	Input.emulate_mouse_from_touch = true
+	var dispatched := InputEventScreenTouch.new()
+	dispatched.pressed = true
+	var local_point: Vector2 = screen._camera.unproject_position(screen._hand_nodes[0].global_position) / Vector2(screen._viewport.size) * screen._board_view.size
+	dispatched.position = screen._board_view.get_viewport_transform() * screen._board_view.get_global_transform() * local_point
+	Input.parse_input_event(dispatched)
+	await process_frame
+	if screen._selected.size() != 1 or not screen._selected.has(0):
+		push_error("Real GUI touch must toggle a card exactly once")
+		quit(10)
+		return
+	dispatched.pressed = false
+	Input.parse_input_event(dispatched)
+	await process_frame
+	Input.emulate_mouse_from_touch = emulate
+	screen._clear_selection()
 	for action in screen._action_layer.get_children():
 		if action is Button and not Rect2(Vector2.ZERO, screen.size).encloses(action.get_global_rect()):
 			push_error("Guandan action extends outside the landscape screen")
@@ -77,5 +100,5 @@ func _run() -> void:
 			if root.get_texture().get_image().save_png(arg.trim_prefix("--screen-out=")) != OK:
 				quit(6)
 				return
-	print("GUANDAN_3D_SMOKE_OK hand=27 unique_ids=27 shared_duplicate_mesh_material=true mouse=true touch=true quality=3 landscape=true aspect=true actions_visible=true")
+	print("GUANDAN_3D_SMOKE_OK hand=27 unique_ids=27 shared_duplicate_mesh_material=true mouse=true touch=true gui_touch_once=true quality=3 landscape=true aspect=true actions_visible=true")
 	quit()

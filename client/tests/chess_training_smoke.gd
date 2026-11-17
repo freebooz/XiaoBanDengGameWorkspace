@@ -45,5 +45,8 @@ func _run() -> void:
 		push_error("非法斜走车未被拒绝")
 		quit(1)
 		return
+	screen.queue_free()
+	await process_frame
+	await create_timer(0.5).timeout
 	print("CHESS_TRAINING_SMOKE_OK pieces=32 red_and_black_moves=2")
 	quit(0)

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="154" height="62" viewBox="0 0 154 62">
+  <defs>
+    <linearGradient id="brim" x2="0" y2="1"><stop stop-color="#fff7cf"/><stop offset=".22" stop-color="#ffcb70"/><stop offset=".58" stop-color="#b9773a"/><stop offset="1" stop-color="#d99a47"/></linearGradient>
+    <linearGradient id="honey" x2="0" y2="1"><stop stop-color="#ffe7a0"/><stop offset=".48" stop-color="#ffcb60"/><stop offset="1" stop-color="#e8a42e"/></linearGradient>
+  </defs>
+  <rect x="1" y="4" width="152" height="57" rx="12.5" fill="#703619" opacity=".34"/>
+  <rect x="1.5" y="1.5" width="151" height="56.5" rx="11" fill="url(#brim)" stroke="#9b642b"/>
+  <rect x="4.5" y="4.5" width="145" height="50.5" rx="8" fill="url(#honey)" stroke="#d38c29"/>
+  <path d="M12 7.5h129M12 52h129" stroke="#fff8db" stroke-opacity=".73" stroke-width=".8" stroke-linecap="round"/>
+</svg>
