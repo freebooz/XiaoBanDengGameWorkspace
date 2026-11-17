@@ -523,8 +523,7 @@ func _layout_ui() -> void:
 	_brand_logo.size = Vector2(270,121)*factor
 	_header.position = Vector2(_safe.x + (usable_width-bar_width)*0.5, top + 12*factor)
 	_header.size = Vector2(bar_width, minf(tool_height, maxf(44.0 * factor, icon_extent * 0.67)))
-	_header.set_meta("room_heading_max_width", usable_width - 2.0 * (toolbar_width + 18*factor))
-	BATTLE_ART.fit_room_heading(_header, roundi(28*factor), 2, 3)
+	BATTLE_ART.fit_room_heading(_header, roundi(28*factor), 2)
 	_toolbar.position = Vector2(width-_safe.z-toolbar_width-15*factor,top + 12*factor)
 	_toolbar.size = Vector2(toolbar_width,tool_height)
 	for index in range(_toolbar.get_child_count()):

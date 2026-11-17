@@ -391,6 +391,14 @@ func _verify_discard_dock(screen) -> void:
 	screen._state.options = [{"type": "play"}]
 	screen._render()
 	await process_frame
+	var heading: Label = screen._header
+	_check(heading.get_theme_stylebox("normal") is StyleBoxEmpty, "The live room heading must have no background artwork")
+	var reference := heading.duplicate(0) as Label
+	reference.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	screen.BATTLE_ART.fit_room_heading(reference, int(heading.get_meta("room_heading_preferred_size")))
+	_check(heading.get_theme_font_size("font_size") == maxi(10, reference.get_theme_font_size("font_size") - 2),
+		"The live room heading must be two font sizes below the fitted base")
+	reference.free()
 	var discard: Button = screen._play_button
 	_check(discard.is_visible_in_tree(), "A discard turn must show the discard button")
 	_check(discard.size.is_equal_approx(Vector2(125.0, 56.0)), "Discard button must retain the 125 × 56 reference size")
