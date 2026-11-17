@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, reactive, ref } from "vue";
+import DevelopmentBadge from "../../components/DevelopmentBadge.vue";
 import FilterBar from "../../components/FilterBar.vue";
 import StatusTag from "../../components/StatusTag.vue";
 import UserDetailDrawer from "./UserDetailDrawer.vue";
@@ -71,7 +72,7 @@ onUnmounted(() => { requestRevision++; });
         <h2>用户中心</h2>
         <p>统一查看 AccountId（统一账号标识）、账号类型与基础状态；未持久化信息明确标记待接入。</p>
       </div>
-      <el-tag v-if="result.data_source === 'development'" type="warning" effect="light">开发数据</el-tag>
+      <DevelopmentBadge v-if="result.data_source === 'development'" label="开发数据" />
     </div>
 
     <FilterBar>
