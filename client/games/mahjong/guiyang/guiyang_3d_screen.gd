@@ -41,6 +41,10 @@ const CHAT_TEXTS := ["大家好，很高兴一起玩！", "快点吧，我等到
 const EMOTE_IDS := ["smile", "laugh", "thumbs_up", "cry", "angry"]
 const EMOTE_TEXTS := ["微笑", "大笑", "点赞", "流泪", "生气"]
 const RESPONSE_KINDS := ["chi", "peng", "gang", "hu", "pass"]
+const ACTION_BUTTON_SIZE := Vector2(125.0, 56.0)
+const ACTION_BUTTON_GAP := 8.0
+const ACTION_HAND_GAP := 8.0
+const ACTION_FONT_SIZE := 24
 const DINGQUE_SUITS := {"wan":"万", "tong":"筒", "tiao":"条"}
 const TABLE_SCALE := 0.90 # 1.50 m GLB, 1.35 m at runtime.
 const TABLE_BOUNDS := AABB(Vector3(-0.753, -0.060, -0.753), Vector3(1.506, 0.076, 1.506))
@@ -456,12 +460,10 @@ func _build_static_ui() -> void:
 	_actions_root.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	_actions_root.hide()
 	add_child(_actions_root)
-	_play_button = _button(_actions_root,"打出",0,0,125,56,_on_play)
+	_play_button = _action_button("打出", _on_play, "play")
 	_play_button.name = "MahjongPlaySelectedTile"
-	BATTLE_ART.lacquer(_play_button, "play")
-	_play_button.add_theme_font_size_override("font_size",24)
 	if training_mode:
-		_training_restart = _button(_actions_root, "再练一局", 0, 0, 153, 56, _start_training, true)
+		_training_restart = _action_button("再练一局", _start_training)
 		_training_restart.name = "MahjongPracticeRestartButton"
 		_training_restart.hide()
 	_social_root = Control.new()
@@ -610,8 +612,7 @@ func _own_hand_top() -> float:
 
 func _layout_hand_controls() -> void:
 	if _exiting or not is_instance_valid(_camera) or not _camera.is_inside_tree(): return
-	var factor := minf(size.x/1440.0,size.y/810.0)
-	_layout_response_actions(factor)
+	_layout_response_actions()
 	_layout_own_mic()
 	_layout_compass()
 	_layout_coach()
@@ -711,99 +712,105 @@ func _apply_coach_auto_selection(source_key: Array, results: Dictionary) -> void
 	_render_hand_only()
 
 
-func _layout_response_actions(factor: float) -> void:
+func _layout_response_actions() -> void:
 	var buttons: Array[Button] = []
 	for kind in RESPONSE_KINDS:
 		var button: Button = _response_buttons.get(kind)
-		if is_instance_valid(button) and button.visible: buttons.append(button)
+		if is_instance_valid(button) and button.visible:
+			buttons.append(button)
 	for button in _dingque_buttons.values():
-		if button.visible: buttons.append(button)
-	if _play_button.visible: buttons.append(_play_button)
-	if is_instance_valid(_training_restart) and _training_restart.visible: buttons.append(_training_restart)
+		if button.visible:
+			buttons.append(button)
+	if _play_button.visible:
+		buttons.append(_play_button)
+	if is_instance_valid(_training_restart) and _training_restart.visible:
+		buttons.append(_training_restart)
 	_actions_root.visible = not buttons.is_empty()
-	if buttons.is_empty(): return
+	if buttons.is_empty():
+		return
 
-	var touch := maxf(48.0 * _modal_pixel_scale(), RURAL.touch_extent(self))
-	var gap := maxf(4.0, 9.0 * factor)
-	var bounds := _usable_modal_area().grow(-gap)
-	if not bounds.has_area(): return
-	var floor_y := minf(bounds.end.y, _own_hand_top() - gap)
-	var ceiling_y := maxf(bounds.position.y, _header.get_rect().end.y + gap)
-	var area := Rect2(Vector2(bounds.position.x, ceiling_y), Vector2(bounds.size.x, maxf(1.0, floor_y - ceiling_y)))
-	var button_height := maxf(53.0 * factor, touch)
-	var minimum_width := maxf(65.0 * factor, touch)
-	for button in buttons:
-		var font_size := maxf(16.0, (24.0 if button == _response_buttons.get("pass") else 31.0) * factor)
-		button.add_theme_font_size_override("font_size", roundi(font_size))
-		var minimum := button.get_combined_minimum_size()
-		minimum_width = maxf(minimum_width, minimum.x)
-		button_height = maxf(button_height, minimum.y)
-
+	# Build a dock from the projected hand envelope, keeping tile selections
+	# from moving it. Reserve the closest clear row when discards reach that edge.
+	var step := ACTION_BUTTON_SIZE + Vector2.ONE * ACTION_BUTTON_GAP
+	var area := _usable_modal_area().grow(-ACTION_BUTTON_GAP)
+	area.position.y = maxf(area.position.y, _header.get_rect().end.y + ACTION_BUTTON_GAP)
+	area.end.y = _own_hand_top() - ACTION_HAND_GAP
+	var preferred_x := _board_view.get_rect().get_center().x
+	if not _hand_models.is_empty():
+		var hand_x := (_hand_models[0].position.x + _hand_models[-1].position.x) * 0.5
+		var hand_anchor := _pieces_root.to_global(Vector3(hand_x, OWN_HAND_BASE_Y, OWN_HAND_DEPTH))
+		preferred_x = _board_view.position.x + _project_to_board(hand_anchor).x
 	var obstacles: Array[Rect2] = [_remaining_panel.get_rect(), _side_tools.get_rect(), _own_mic.get_global_rect()]
 	for panel in _seat_panels:
 		obstacles.append(panel.get_rect())
 	for model in _pieces_root.get_children():
-		if model.is_queued_for_deletion() or _hand_models.has(model): continue
-		var tile := _projected_tile_rect(model, &"TileBody")
+		if model.is_queued_for_deletion() or _hand_models.has(model):
+			continue
+		var tile := _projected_tile_rect(model)
 		tile.position += _board_view.position
-		if tile.has_area() and tile.intersects(area): obstacles.append(tile.grow(2.0 * factor))
+		if tile.intersects(area):
+			obstacles.append(tile.grow(1.0))
+	obstacles.sort_custom(func(a: Rect2, b: Rect2) -> bool: return a.position.x < b.position.x)
 
-	var columns := buttons.size()
+	var max_columns := clampi(floori((area.size.x + ACTION_BUTTON_GAP) / step.x), 1, buttons.size())
 	var lane := Rect2()
-	# Keep every row on the same center line above the hand. Prefer the lowest
-	# complete group; compact it or add centered rows instead of moving sideways.
-	for candidate_columns in range(buttons.size(), 0, -1):
-		var rows := ceili(float(buttons.size()) / candidate_columns)
-		var height := rows * (button_height + gap) - gap
-		var min_width := candidate_columns * (minimum_width + gap) - gap
-		var width := minf(area.size.x, candidate_columns * (maxf(minimum_width, 153.0 * factor) + gap) - gap)
-		var candidate := _find_action_lane(area, width, min_width, height, obstacles)
+	var columns := max_columns
+	for count in range(max_columns, 0, -1):
+		var rows := ceili(float(buttons.size()) / count)
+		var extent := Vector2(count, rows) * step - Vector2.ONE * ACTION_BUTTON_GAP
+		var candidate := _find_action_lane(area, extent, preferred_x, obstacles)
 		if candidate.has_area() and (not lane.has_area() or candidate.end.y > lane.end.y + 0.1):
+			columns = count
 			lane = candidate
-			columns = candidate_columns
+			if is_equal_approx(lane.end.y, area.end.y):
+				break
 	if not lane.has_area():
-		# Even at unusually small window sizes, preserve the centered group and
-		# account for every row's height so no lower row spills into the hand.
-		columns = clampi(floori((area.size.x + gap) / (minimum_width + gap)), 1, buttons.size())
+		# Even an unusually constrained window must keep every legal action available.
 		var rows := ceili(float(buttons.size()) / columns)
-		var width := columns * (minimum_width + gap) - gap
-		var height := rows * (button_height + gap) - gap
-		lane = Rect2(Vector2(area.get_center().x - width * 0.5, floor_y - height), Vector2(width, height))
+		var extent := Vector2(columns, rows) * step - Vector2.ONE * ACTION_BUTTON_GAP
+		var left := clampf(preferred_x - extent.x * 0.5, area.position.x, maxf(area.position.x, area.end.x - extent.x))
+		lane = Rect2(Vector2(left, area.end.y - extent.y), extent)
 
 	_actions_root.position = lane.position
 	_actions_root.size = lane.size
-	var chip_width := (lane.size.x - (columns - 1) * gap) / columns
 	for index in buttons.size():
 		var row := floori(float(index) / columns)
-		var items := mini(columns, buttons.size() - row * columns)
-		var row_width := items * (chip_width + gap) - gap
-		buttons[index].position = Vector2((lane.size.x - row_width) * 0.5 + (index % columns) * (chip_width + gap), row * (button_height + gap))
-		buttons[index].size = Vector2(chip_width, button_height)
+		var count := mini(columns, buttons.size() - row * columns)
+		var width := count * step.x - ACTION_BUTTON_GAP
+		buttons[index].position = Vector2((lane.size.x - width) * 0.5 + (index % columns) * step.x, row * step.y)
 
 
-func _find_action_lane(area: Rect2, ideal_width: float, min_width: float, height: float, obstacles: Array[Rect2]) -> Rect2:
-	if ideal_width < min_width or area.size.y < height: return Rect2()
-	var bottom_row := area.end.y - height
-	var rows: Array[float] = [bottom_row]
+func _find_action_lane(area: Rect2, extent: Vector2, preferred_x: float, obstacles: Array[Rect2]) -> Rect2:
+	if area.size.x < extent.x or area.size.y < extent.y:
+		return Rect2()
+	var edge_top := area.end.y - extent.y
+	var rows: Array[float] = [edge_top]
 	for obstacle in obstacles:
-		var top := obstacle.position.y - height
-		if top >= area.position.y and top < bottom_row and not rows.has(top):
+		var top := obstacle.position.y - extent.y
+		if area.position.y <= top and top < edge_top and not rows.has(top):
 			rows.append(top)
 	rows.sort()
 	rows.reverse()
-	var center_x := area.get_center().x
+
+	var desired_left := preferred_x - extent.x * 0.5
 	for top in rows:
-		var half_width := area.size.x * 0.5
+		var closest := INF
+		var left := area.position.x
 		for obstacle in obstacles:
-			if obstacle.position.y >= top + height or obstacle.end.y <= top: continue
-			if obstacle.position.x < center_x and obstacle.end.x > center_x:
-				half_width = 0.0
-				break
-			var clearance := center_x - obstacle.end.x if obstacle.end.x <= center_x else obstacle.position.x - center_x
-			half_width = minf(half_width, maxf(0.0, clearance))
-		var width := minf(ideal_width, half_width * 2.0)
-		if width >= min_width:
-			return Rect2(Vector2(center_x - width * 0.5, top), Vector2(width, height))
+			if obstacle.end.y <= top or obstacle.position.y >= top + extent.y:
+				continue
+			var right := minf(area.end.x, obstacle.position.x)
+			if right - left >= extent.x:
+				var position_x := clampf(desired_left, left, right - extent.x)
+				if absf(position_x - desired_left) < absf(closest - desired_left):
+					closest = position_x
+			left = maxf(left, obstacle.end.x)
+		if area.end.x - left >= extent.x:
+			var position_x := clampf(desired_left, left, area.end.x - extent.x)
+			if absf(position_x - desired_left) < absf(closest - desired_left):
+				closest = position_x
+		if is_finite(closest):
+			return Rect2(Vector2(closest, top), extent)
 	return Rect2()
 
 
@@ -1792,17 +1799,26 @@ func _options() -> Array:
 	return _array("options")
 
 
+func _action_button(caption: String, action: Callable, style: String = "") -> Button:
+	var button := _button(_actions_root, caption, 0, 0, ACTION_BUTTON_SIZE.x, ACTION_BUTTON_SIZE.y, action, style.is_empty())
+	if not style.is_empty():
+		BATTLE_ART.lacquer(button, style)
+	button.add_theme_font_size_override("font_size", ACTION_FONT_SIZE)
+	button.custom_minimum_size = ACTION_BUTTON_SIZE
+	button.size = ACTION_BUTTON_SIZE
+	return button
+
+
 func _render_actions() -> void:
 	for index in range(RESPONSE_KINDS.size()):
 		var kind: String = RESPONSE_KINDS[index]
-		var button := _button(_actions_root, ["吃", "碰", "杠", "胡", "过"][index], 0, 0, 108, 76, _on_response.bind(kind))
+		var button := _action_button(["吃", "碰", "杠", "胡", "过"][index], _on_response.bind(kind), kind)
 		button.name = "MahjongAction_" + kind
-		BATTLE_ART.lacquer(button, kind)
 		if kind == "pass": button.tooltip_text = "放弃对他人这次出牌或补杠的响应"
 		_response_buttons[kind] = button
 	for suit in DINGQUE_SUITS:
-		var button := _button(_actions_root, "缺" + DINGQUE_SUITS[suit], 0, 0, 108, 76,
-			_send_action.bind("dingque", 0, [], suit), true)
+		var button := _action_button("缺" + DINGQUE_SUITS[suit],
+			_send_action.bind("dingque", 0, [], suit))
 		button.name = "MahjongDingque_" + suit
 		button.tooltip_text = "选择定缺" + DINGQUE_SUITS[suit]
 		_dingque_buttons[suit] = button
@@ -2232,6 +2248,7 @@ func _apply_camera_impact(progress: float, strength: float) -> void:
 	var step := delta - _camera_displacement
 	_camera_displacement = delta
 	_board_view.position += step
+	_actions_root.position += step
 	_coach_overlay.shift_badges(step)
 	_layout_compass()
 	_layout_selection()
@@ -2369,6 +2386,7 @@ func _tool_panel(title: String, height: float) -> VBoxContainer:
 	title_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title_slot)
 	_tool_title = MODAL.village_title(title_slot, title, _tool_surface)
+	_tool_title.get_parent().name = "MahjongToolTitlePlate"
 	_tool_title.clip_text = true
 	_tool_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_tool_title.add_theme_font_size_override("font_size", 27)
@@ -2403,11 +2421,13 @@ func _fit_tool_panel() -> void:
 	var height := minf(float(_tool_surface.get_meta("preferred_height")), bounds.size.y - 16.0)
 	_tool_title.get_parent().custom_minimum_size.x = clampf(width - 190.0, 96.0, 345.0)
 	_tool_surface.scale = Vector2.ONE * pixel
-	var tool_header := _tool_title.get_parent().get_parent()
-	var close := tool_header.get_child(-1) as Button
+	var close := _tool_surface.find_child("MahjongToolClose", true, false) as Button
+	var tool_header := close.get_parent()
 	(tool_header.get_child(0) as Control).custom_minimum_size.x = MODAL.size_icon_button(close, close)
 	_tool_surface.size = Vector2(width, height)
-	_tool_surface.position = area.get_center() - (_tool_surface.size - Vector2(0, 12)) * pixel * 0.5
+	var plate := _tool_title.get_parent() as Control
+	var headroom := maxf(0.0, plate.get_combined_minimum_size().y * 0.5 - float(_tool_surface.get_meta("title_border_offset", 0)))
+	_tool_surface.position = area.get_center() - (_tool_surface.size - Vector2(0, headroom)) * pixel * 0.5
 
 
 func _tool_action(body: VBoxContainer, title: String, action: Callable, primary := false) -> Button:
@@ -2965,8 +2985,8 @@ func _fit_leave_panel(panel: Control) -> void:
 		action.custom_minimum_size = Vector2(128 if compact else 230, maxf(RURAL.touch_extent(self) / pixel, 48 if compact else 62))
 		action.add_theme_font_size_override("font_size", 21 if compact else 30)
 	panel.scale = Vector2.ONE * pixel
-	var header := plate.get_parent()
-	var close := header.get_child(-1) as Button
+	var close := panel.find_child("MahjongLeaveCloseButton", true, false) as Button
+	var header := close.get_parent()
 	(header.get_child(0) as Control).custom_minimum_size.x = MODAL.size_icon_button(close, close)
 	panel.size = Vector2(width, height)
 	var headroom := maxf(0.0, plate.custom_minimum_size.y * 0.5 - float(panel.get_meta("title_border_offset", 0)))

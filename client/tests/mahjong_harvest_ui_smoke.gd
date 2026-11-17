@@ -387,6 +387,7 @@ func _run() -> void:
 	_app.session_store_path = "user://harvest-ui-smoke-%d" % OS.get_process_id()
 	_app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(_app)
+	_app._audio.preference_file = "user://harvest-ui-smoke-%d.cfg" % OS.get_process_id()
 	await _frames()
 	await _press("MahjongGuestLoginButton")
 	_app._http.request_completed.emit(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(),

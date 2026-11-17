@@ -226,9 +226,8 @@ func _run() -> void:
 		await _push(screen,packet)
 		var seat_positions: Array = screen._seat_panels.map(func(panel): return panel.get_global_rect())
 		var action_row: Rect2 = screen._actions_root.get_global_rect()
-		var board_center: float = screen._board_view.get_global_rect().get_center().x
-		# The tile-safe lane can shift by a few logical pixels to preserve clearance.
-		_check(absf(action_row.get_center().x - board_center) <= 4.0, "Response row must stay visually centered at %s" % [dimensions])
+		_check(screen._usable_modal_area().encloses(action_row) and action_row.end.y <= screen._own_hand_top(),
+			"Response dock must fit the safe area above the hand at %s" % [dimensions])
 		var previous := Rect2()
 		for kind in ["peng", "gang", "pass"]:
 			var button: Button = screen._response_buttons[kind]
@@ -256,8 +255,8 @@ func _run() -> void:
 		var discard_rect: Rect2 = screen._play_button.get_global_rect()
 		_check(screen._play_button.is_visible_in_tree() and not screen._play_button.disabled and discard_rect.end.y < top,
 			"Discard button must be above the raised tile body and available at %s" % [dimensions])
-		_check(is_equal_approx(discard_rect.get_center().x, board_center) and is_equal_approx(discard_rect.end.y, action_row.end.y),
-			"Single discard control and multiple reactions must share a stable center and baseline at %s" % [dimensions])
+		_check(discard_rect.size == Vector2(125.0, 56.0) and is_equal_approx(discard_rect.end.y, screen._own_hand_top() - 8.0),
+			"An unobstructed discard action must keep the fixed size and touch the hand dock at %s" % [dimensions])
 		_check(seat_positions == screen._seat_panels.map(func(panel): return panel.get_global_rect()),
 			"Turn changes and raised tiles cannot move the player cards at %s" % [dimensions])
 		await _tap(screen._play_button)

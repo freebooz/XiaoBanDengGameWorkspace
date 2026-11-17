@@ -231,7 +231,8 @@ func _run() -> void:
 		if panels.size() == 1:
 			var panel: Control = panels[0]
 			var visual_bounds := panel.get_global_rect()
-			var title := panel.find_child("MahjongLeaveTitlePlate", true, false) as Control
+			var title_name := "MahjongLeaveTitlePlate" if tool == "leave" else "MahjongToolTitlePlate"
+			var title := panel.find_child(title_name, true, false) as Control
 			if title != null:
 				visual_bounds = visual_bounds.merge(title.get_global_rect())
 			_check(visual_bounds.get_center().distance_to(usable.get_center()) <= 1.0, "弹窗与标题整体没有在安全区双轴居中：%s visual=%s safe=%s panel=%s title=%s minimum=%s" % [tool, visual_bounds, usable, panel.get_global_rect(), title.get_global_rect() if title != null else Rect2(), title.get_combined_minimum_size() if title != null else Vector2.ZERO])
