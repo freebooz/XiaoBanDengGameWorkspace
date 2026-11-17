@@ -4,6 +4,7 @@ extends Node3D
 const TIMBER := preload("res://modules/games/mahjong/guiyang/assets/ui/series/battle_wood.png")
 const WINDS := ["东", "南", "西", "北"]
 const TIMER_SURFACE_Y := 0.031
+const CIRCLE_SEGMENTS := 96
 
 var _viewer := 0
 var _dealer := -1
@@ -44,17 +45,17 @@ func _build() -> void:
 	_dealer_gold.emission_energy_multiplier = 0.29
 	var plate_base := _material(Color("#b66d34"), 0.49)
 
-	_build_octagon("WoodenBody", [
+	_build_circle("WoodenBody", [
 		Vector2(0.133, 0.001), Vector2(0.145, 0.006), Vector2(0.147, 0.011),
 		Vector2(0.147, 0.017), Vector2(0.141, 0.024), Vector2(0.135, 0.026),
 		Vector2(0.080, 0.026), Vector2(0.074, 0.020), Vector2(0.071, 0.014)
 	], wood, false, true)
-	_build_octagon("OuterBrassEdge", [
+	_build_circle("OuterBrassEdge", [
 		Vector2(0.1448, 0.020), Vector2(0.1430, 0.0242), Vector2(0.1405, 0.0268),
 		Vector2(0.1373, 0.0275), Vector2(0.1346, 0.0256)
 	], brass)
-	_build_octagon("TimerWell", [Vector2(0.0709, 0.0139), Vector2(0.0709, 0.0146)], well, true, true)
-	_build_octagon("InnerBrassEdge", [
+	_build_circle("TimerWell", [Vector2(0.0709, 0.0139), Vector2(0.0709, 0.0146)], well, true, true)
+	_build_circle("InnerBrassEdge", [
 		Vector2(0.0830, 0.0257), Vector2(0.0815, 0.0289), Vector2(0.0780, 0.0301),
 		Vector2(0.0746, 0.0282), Vector2(0.0724, 0.0240), Vector2(0.0716, 0.0162)
 	], brass)
@@ -92,7 +93,6 @@ func _build() -> void:
 		glyph.position = socket + Vector3(0.0, 0.0356, 0.0)
 		add_child(glyph)
 		_winds.append(glyph)
-	_build_leaf_relief()
 
 
 func _apply_winds() -> void:
@@ -102,12 +102,40 @@ func _apply_winds() -> void:
 		_plates[relative].material_override = _dealer_gold if _dealer == seat else _ivory
 
 
-func _build_octagon(node_name: String, profile: Array[Vector2], material: Material, cap_top := false, cap_bottom := false) -> void:
-	var octagon := PackedVector2Array([
-		Vector2(-0.58, -1.0), Vector2(0.58, -1.0), Vector2(1.0, -0.58), Vector2(1.0, 0.58),
-		Vector2(0.58, 1.0), Vector2(-0.58, 1.0), Vector2(-1.0, 0.58), Vector2(-1.0, -0.58)
-	])
-	_loft(node_name, _profile(octagon, profile), material, cap_top, cap_bottom)
+func _build_circle(node_name: String, profile: Array[Vector2], material: Material, cap_top := false, cap_bottom := false) -> void:
+	var outline := PackedVector2Array()
+	for segment in range(CIRCLE_SEGMENTS):
+		var angle := TAU * float(segment) / float(CIRCLE_SEGMENTS)
+		outline.append(Vector2(cos(angle), sin(angle)))
+	var sections := _profile(outline, profile)
+	# Share normals around the circumference and across the bevel profile.
+	# Caps keep their own flat normals so they do not round the bottom or timer well.
+	var profile_normals: Array[Vector2] = []
+	for level in range(profile.size()):
+		var tangent := Vector2.ZERO
+		if level > 0: tangent += (profile[level] - profile[level - 1]).normalized()
+		if level + 1 < profile.size(): tangent += (profile[level + 1] - profile[level]).normalized()
+		profile_normals.append(Vector2(tangent.y, -tangent.x).normalized())
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for level in range(sections.size() - 1):
+		for corner in range(CIRCLE_SEGMENTS):
+			var next := (corner + 1) % CIRCLE_SEGMENTS
+			var lower: PackedVector3Array = sections[level]
+			var upper: PackedVector3Array = sections[level + 1]
+			var lower_a := _circle_normal(outline[corner], profile_normals[level])
+			var lower_b := _circle_normal(outline[next], profile_normals[level])
+			var upper_a := _circle_normal(outline[corner], profile_normals[level + 1])
+			var upper_b := _circle_normal(outline[next], profile_normals[level + 1])
+			_triangle(surface, lower[corner], lower[next], upper[corner], [lower_a, lower_b, upper_a])
+			_triangle(surface, lower[next], upper[next], upper[corner], [lower_b, upper_b, upper_a])
+	if cap_top: _cap(surface, sections.back(), false)
+	if cap_bottom: _cap(surface, sections.front(), true)
+	_finish_mesh(node_name, surface, material)
+
+
+func _circle_normal(radial: Vector2, profile_normal: Vector2) -> Vector3:
+	return Vector3(radial.x * profile_normal.x, profile_normal.y, radial.y * profile_normal.x)
 
 
 func _profile(outline: PackedVector2Array, levels: Array[Vector2]) -> Array[PackedVector3Array]:
@@ -146,10 +174,12 @@ func _cap(surface: SurfaceTool, perimeter: PackedVector3Array, reverse: bool) ->
 		_triangle(surface, center, b if reverse else a, a if reverse else b)
 
 
-func _triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
+func _triangle(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, normals: Array[Vector3] = []) -> void:
 	var normal := (c - a).cross(b - a).normalized()
-	for vertex in [a, b, c]:
-		surface.set_normal(normal)
+	var vertices := [a, b, c]
+	for index in range(vertices.size()):
+		var vertex: Vector3 = vertices[index]
+		surface.set_normal(normal if normals.is_empty() else normals[index])
 		surface.set_uv(Vector2(vertex.x * 3.37 + 0.5, (vertex.z - vertex.y) * 3.37 + 0.5))
 		surface.add_vertex(vertex)
 
@@ -162,25 +192,6 @@ func _finish_mesh(node_name: String, surface: SurfaceTool, material: Material) -
 	instance.material_override = material
 	add_child(instance)
 	return instance
-
-
-func _build_leaf_relief() -> void:
-	var surface := SurfaceTool.new()
-	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for quarter in range(4):
-		for offset in [-1.0, 1.0]:
-			var turn := float(quarter) * PI * 0.5
-			var root_point := Vector3(0.070 + offset * 0.006, 0.0262, 0.071 - offset * 0.006).rotated(Vector3.UP, turn)
-			var direction := Vector3(0, 0, 1).rotated(Vector3.UP, turn + PI * 0.25 + offset * 0.46)
-			var side := Vector3.UP.cross(direction) * 0.0052
-			var middle := root_point + direction * 0.0105
-			var spine := middle + Vector3.UP * 0.0033
-			var point := root_point + direction * 0.024
-			_triangle(surface, root_point, middle + side, spine)
-			_triangle(surface, middle + side, point, spine)
-			_triangle(surface, point, middle - side, spine)
-			_triangle(surface, middle - side, root_point, spine)
-	_finish_mesh("LeafInlays", surface, _material(Color("#608432"), 0.53))
 
 
 func _material(color: Color, roughness: float, metallic := 0.0) -> StandardMaterial3D:

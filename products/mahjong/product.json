@@ -11,7 +11,6 @@
   "windows_icon": "res://modules/games/mahjong/guiyang/assets/ui/series/xbd_mahjong_app_icon.ico",
   "android_adaptive_icon": "res://modules/games/mahjong/guiyang/assets/ui/series/xbd_mahjong_app_icon_adaptive.png",
   "android_icon": "res://modules/games/mahjong/guiyang/assets/ui/series/xbd_mahjong_app_icon_192.png",
-  "android_adaptive_background": "res://modules/games/mahjong/guiyang/assets/ui/series/xbd_mahjong_app_icon_adaptive_background.png",
   "modules": [
     "foundation",
     "game_framework/tabletop3d",

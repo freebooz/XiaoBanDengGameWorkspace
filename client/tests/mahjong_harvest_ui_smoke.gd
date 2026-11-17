@@ -2,12 +2,15 @@ extends SceneTree
 ## Drives the production Mahjong views with isolated account and room snapshots.
 
 const APP := preload("res://scripts/main.gd")
+const RURAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_theme.gd")
 const REFERENCE_SIZE := Vector2i(941, 1672)
+const TABLET_SIZES := [Vector2i(1024, 768), Vector2i(1280, 800), Vector2i(1440, 900),
+	Vector2i(2024, 1620), Vector2i(2048, 1536), Vector2i(2560, 1600)]
 const WINDOW_SIZES := [
 	REFERENCE_SIZE, Vector2i(390, 844), Vector2i(1280, 720), Vector2i(1600, 720),
-	Vector2i(1024, 768), Vector2i(1280, 800), Vector2i(1440, 900), Vector2i(2024, 1620),
-]
-const PREVIEW_SIZES := [REFERENCE_SIZE, Vector2i(390, 844), Vector2i(1600, 720), Vector2i(2024, 1620)]
+] + TABLET_SIZES
+const REFERENCE_HEIGHT_SIZES := [REFERENCE_SIZE, Vector2i(390, 844), Vector2i(1600, 720), Vector2i(2024, 1620)]
+const PREVIEW_SIZES := REFERENCE_HEIGHT_SIZES + [Vector2i(1024, 768), Vector2i(1280, 800)]
 
 class AppFixture extends APP:
 	var lobby_entries := 0
@@ -113,8 +116,9 @@ func _header(back_id: String) -> void:
 		return
 	var header := back.get_parent()
 	_expect(header.name == "MahjongVillageHeader", "Back uses common header: " + back_id)
-	var logo := header.get_child(0) as TextureRect
-	_expect(logo != null and logo.is_visible_in_tree() and logo.texture != null, "Shared header has a brand texture")
+	var guest := back_id == "MahjongGuestIdentityBackButton"
+	var logo := (header.get_child(0) if guest else _node("MahjongViewportBrand")) as TextureRect
+	_expect(logo != null and logo.is_visible_in_tree() and logo.texture != null, "Page displays the shared brand texture")
 	if logo != null:
 		if _brand == null:
 			_brand = logo.texture
@@ -122,6 +126,10 @@ func _header(back_id: String) -> void:
 		_expect(logo.get_global_rect().end.x <= back.get_global_rect().position.x, "Brand is left of the back button")
 		_expect(_app._screen.get_global_rect().grow(1.0).encloses(logo.get_global_rect()),
 			"Brand fits the window at %s: %s" % [root.size, back_id])
+		if not guest:
+			var safe := RURAL.safe_insets(_app._screen)
+			_expect(logo.position.x == 0.0 and logo.global_position.distance_to(Vector2(safe.x + 8, safe.y + 6)) <= 1.0,
+				"Lobby brand starts at the top-left safe corner: " + back_id)
 	_expect(_inside_clipped_area(back, back.get_global_rect().get_center()),
 		"Back is reachable at %s: %s" % [root.size, back_id])
 
@@ -129,6 +137,8 @@ func _header(back_id: String) -> void:
 func _check_layouts(page: String, back_id: String, action_id: String) -> void:
 	for dimensions in WINDOW_SIZES:
 		root.size = dimensions
+		if is_instance_valid(_app._lobby_view):
+			_app._lobby_view._scroll.scroll_vertical = 0
 		await _frames()
 		_expect(root.size == dimensions, "Window reached the requested dimensions at %s on %s" % [dimensions, page])
 		_header(back_id)
@@ -139,6 +149,8 @@ func _check_layouts(page: String, back_id: String, action_id: String) -> void:
 		_check_room_control_heights(page, dimensions)
 		if page == "01_guest":
 			_check_guest_proportions(dimensions)
+		if dimensions in TABLET_SIZES:
+			_check_tablet_panel(page, dimensions)
 		var action := _node(action_id)
 		_expect(action != null and action.is_visible_in_tree(), "Visible primary control on " + page)
 		if action != null:
@@ -165,12 +177,56 @@ func _check_layouts(page: String, back_id: String, action_id: String) -> void:
 			await _reveal(action)
 			_expect(_inside_clipped_area(action, action.get_global_rect().get_center()),
 				"Primary control is reachable at %s on %s" % [dimensions, page])
+		if page == "04_join":
+			var watch := _node("MahjongWatchRoomButton")
+			_expect(watch != null and watch.is_visible_in_tree(), "Spectator route is visible at " + str(dimensions))
+			if watch != null:
+				await _reveal(watch)
+				_expect(_inside_clipped_area(watch, watch.get_global_rect().get_center()),
+					"Spectator action is reachable at " + str(dimensions))
 		var back := _node(back_id)
 		if back != null:
 			await _reveal(back)
 	root.size = REFERENCE_SIZE
 	await _frames()
 	_check_room_control_heights(page, REFERENCE_SIZE)
+
+
+func _safe_width() -> float:
+	var safe := RURAL.safe_insets(_app._screen)
+	return _app._screen.size.x - safe.x - safe.z
+
+
+func _check_tablet_width(panel: Control, context: String) -> void:
+	var safe_width := _safe_width()
+	_expect(panel != null and panel.is_visible_in_tree(), "Missing main panel: " + context)
+	if panel == null:
+		return
+	var panel_width := panel.get_global_rect().size.x
+	_expect(panel_width >= safe_width * 0.5 - 1.0 and panel_width <= safe_width + 1.0,
+		"Main panel occupies at least half of the safe width on %s: %.0f / %.0f" % [context, panel_width, safe_width])
+	print("MAHJONG_HARVEST_PANEL %s width=%.0f safe_width=%.0f percent=%.1f" %
+		[context, panel_width, safe_width, 100.0 * panel_width / safe_width])
+
+
+func _check_tablet_panel(page: String, dimensions: Vector2i) -> void:
+	var panel: Control
+	var lobby: Control = _app._lobby_view
+	match page:
+		"01_guest": panel = _app._guest_identity_view._panel
+		"02_lobby": panel = lobby._lobby
+		"03_create", "04_join", "05_directory": panel = lobby._room_pages._frame
+		"06_quick": panel = _node("MahjongQuickMatchPanel")
+		"07_friend":
+			panel = _node("MahjongRoomBoard")
+			var info := _node("MahjongRoomInfo")
+			var seats := _node("MahjongRoomSeats")
+			_expect(not lobby._room_layout.vertical and absf(info.size.x - seats.size.x) <= 1.0
+				and info.get_global_rect().end.x < seats.get_global_rect().position.x,
+				"Friend-room operations and seating share equal tablet columns at %s: %s, %s" %
+				[dimensions, info.get_global_rect(), seats.get_global_rect()])
+			print("MAHJONG_HARVEST_FRIEND %s operations=%.0f seats=%.0f" % [dimensions, info.size.x, seats.size.x])
+	_check_tablet_width(panel, "%s %s" % [page, dimensions])
 
 
 func _check_guest_proportions(dimensions: Vector2i) -> void:
@@ -196,7 +252,10 @@ func _check_room_control_heights(page: String, dimensions: Vector2i) -> void:
 		return
 	var rooms: Control = _app._lobby_view._room_pages
 	var panel: Control = rooms._frame
-	_expect(panel.size.x <= (910.0 if page == "05_directory" else 1080.0) + 1.0,
+	var width_limit := 910.0 if page == "05_directory" else 1080.0
+	if dimensions in TABLET_SIZES:
+		width_limit = maxf(width_limit, ceilf(_safe_width() * 0.5))
+	_expect(panel.size.x <= width_limit + 1.0,
 		"Room panel keeps its designed width at " + str(dimensions))
 	_expect(absf(panel.get_global_rect().get_center().x - rooms.get_global_rect().get_center().x) <= 1.0,
 		"Room panel remains centered in its scrollable content at " + str(dimensions))
@@ -204,7 +263,7 @@ func _check_room_control_heights(page: String, dimensions: Vector2i) -> void:
 		var submit: Button = rooms._create_submit if page == "03_create" else rooms._join_submit
 		_expect(submit.size.aspect() >= 2.8 and submit.size.aspect() <= 5.25,
 			"Room action keeps button proportions at %s: %s" % [dimensions, submit.size])
-	if dimensions not in PREVIEW_SIZES or OS.has_feature("mobile"):
+	if dimensions not in REFERENCE_HEIGHT_SIZES or OS.has_feature("mobile"):
 		return
 	var large_portrait := dimensions == REFERENCE_SIZE or dimensions == Vector2i(2024, 1620)
 	var field_height := 91.0 if large_portrait else 49.0
@@ -259,6 +318,8 @@ func _check_settings() -> void:
 	for dimensions in WINDOW_SIZES:
 		root.size = dimensions
 		await _frames()
+		if dimensions in TABLET_SIZES:
+			_check_tablet_width(panel, "settings %s" % dimensions)
 		for index in pages.size():
 			var id := "MahjongSettingsTab%d" % index
 			await _press(id)
@@ -346,6 +407,15 @@ func _run() -> void:
 	await _check_layouts("02_lobby", "MahjongLobbyBackButton", "MahjongQuickButton")
 	await _check_settings()
 	await _press("MahjongCreateButton")
+	_expect(not _visible("MahjongAllowSpectators"), "Legacy servers do not expose the spectator switch")
+	_app._on_lobby_packet(JSON.stringify({
+		"type": "mahjong_lobby_state", "state": {"status": "idle"}, "presets": rules,
+		"room_directory": true, "spectator_supported": true,
+	}))
+	await _frames()
+	var allow := _node("MahjongAllowSpectators") as CheckButton
+	_expect(allow != null and allow.is_visible_in_tree() and not allow.button_pressed,
+		"Friend rooms require an explicit opt-in to spectating")
 	_expect(_visible("MahjongCreateRuleSelector") and not _visible("MahjongCreateRuleCards"),
 		"Room creation shows a compact rule selector first")
 	await _press("MahjongCreateRuleSelector")
@@ -359,6 +429,7 @@ func _run() -> void:
 	var create := _last_command("create")
 	_expect(create.get("round_limit") == 16 and str(create.get("room_id", "")).length() == 4,
 		"Create forwards the chosen round limit and a real four-digit room code")
+	_expect(create.get("allow_spectators") == false, "Create submits the room-level spectator switch")
 	await _reject("create", "该房号已被使用", "room_conflict")
 	_expect(_visible("MahjongCreateRuleSelector"), "Create remains on its form after a server error")
 	await _press("MahjongCustomRulesBackButton")
@@ -382,6 +453,16 @@ func _run() -> void:
 		await _press("MahjongJoinButton")
 		_expect(_last_command("join").get("password") == "1379", "Retry sends the password with the same room code")
 		await _reject("join", "房间密码错误", "room_password_invalid")
+		code.text_changed.emit(code.text)
+		await _press("MahjongWatchRoomButton")
+		await _reject("watch", "房间需要密码", "room_password_required")
+		password.text = "1379"
+		password.text_changed.emit(password.text)
+		password.text_submitted.emit(password.text)
+		var watch := _last_command("watch")
+		_expect(watch.get("password") == "1379" and watch.get("room_id") == "4826" and watch.get("watch_seat") == 0,
+			"Submitting a requested password retries watching the same seat")
+		await _reject("watch", "房间密码错误", "room_password_invalid")
 	await _press("MahjongCloseJoinButton")
 	await _press("MahjongRoomListButton")
 	_expect(_app.commands.any(func(item): return item.get("type") == "mahjong_room_directory" and item.get("open")),
@@ -427,6 +508,11 @@ func _run() -> void:
 	await _frames()
 	var leave := _last_command("leave")
 	_expect(leave.get("room_id") == "1238", "System back uses the same quick-room leave route")
+	_app._on_lobby_result(str(leave.get("command_id", "")), true, "", "", {"status":"idle"})
+	_app._on_lobby_state({"status":"waiting", "kind":"friend", "room_id":"4380", "rule_set_id":"guiyang",
+		"rule_version":"2.0.0", "capacity":4, "player_account_ids":["harvest-self", "peer-b"]}, rules)
+	await _frames()
+	await _check_layouts("07_friend", "MahjongLeaveButton", "MahjongReadyButton")
 	for failure in _failures:
 		push_error(failure)
 	if _failures.is_empty():

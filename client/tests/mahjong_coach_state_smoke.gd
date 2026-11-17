@@ -63,6 +63,9 @@ func _run() -> void:
 	if not _check_snapshot_guards(state, bridge):
 		quit(1)
 		return
+	if not _check_effective_rule(waiting, bridge) or not _check_dingque(state, bridge):
+		quit(1)
+		return
 	state.discards.append({"seat":1,"claimed":false,"tile":_tile(26,"tiao",4)})
 	state.discards.append({"seat":2,"claimed":false,"tile":_tile(27,"tiao",4)})
 	if not COACH.analyze(state,bridge).is_empty():
@@ -95,6 +98,11 @@ func _check_snapshot_guards(state: Dictionary, bridge: Object) -> bool:
 	if not COACH.analyze(snapshot, bridge).is_empty():
 		push_error("Unknown rule version should hide the analysis")
 		return false
+	snapshot["rule_set_id"] = "guiyang"
+	snapshot["rule_version"] = "3.0.0"
+	if COACH.analyze(snapshot, bridge).get(7, {}).get("ukeireCount") != 2:
+		push_error("Guiyang local rules retain the same structural 108-tile efficiency contract")
+		return false
 	snapshot["rule_version"] = "1.0.0"
 	snapshot["rule_set_id"] = "unknown"
 	if not COACH.analyze(snapshot, bridge).is_empty():
@@ -109,5 +117,53 @@ func _check_snapshot_guards(state: Dictionary, bridge: Object) -> bool:
 	snapshot.melds[1][0].tiles[2] = _tile(23,"tiao",3)
 	if not COACH.analyze(snapshot, bridge).is_empty():
 		push_error("A mixed-kind peng unexpectedly passed validation")
+		return false
+	return true
+
+
+func _check_effective_rule(state: Dictionary, bridge: Object) -> bool:
+	var snapshot := state.duplicate(true)
+	snapshot["rule_set_id"] = "basic_108"
+	snapshot["rule_version"] = "1.0.0"
+	snapshot["rule"] = {"rule_set_id":"basic_108", "rule_version":"1.0.0",
+		"options":{"version":"1.0.0", "requires_kong_to_claim":true}}
+	var blocked: Dictionary = COACH.analyze(snapshot, bridge).get(1, {})
+	if blocked.get("ukeireCount") != 2 or blocked.get("claimUkeireCount") != 0:
+		push_error("A custom room's effective kong gate must block only claiming structural waits")
+		return false
+	snapshot.rule.options.requires_kong_to_claim = false
+	var open: Dictionary = COACH.analyze(snapshot, bridge).get(1, {})
+	if open.get("claimUkeireCount") != 2:
+		push_error("The same whole hand must allow claiming both unseen tiles when the effective gate is disabled")
+		return false
+	snapshot.rule.options.version = "999.0.0"
+	var unavailable: Dictionary = COACH.analyze(snapshot, bridge).get(1, {})
+	if unavailable.get("ukeireCount") != 2 or unavailable.get("claimUkeireCount") != -1:
+		push_error("Unknown rule options must leave structural efficiency available and claim eligibility unknown")
+		return false
+	return true
+
+
+func _check_dingque(state: Dictionary, bridge: Object) -> bool:
+	var snapshot := state.duplicate(true)
+	snapshot["rule_set_id"] = "zunyi_dingque"
+	snapshot["rule_version"] = "1.0.0"
+	snapshot["rule"] = {"rule_set_id":"zunyi_dingque", "rule_version":"1.0.0",
+		"dingque":true, "requires_kong_to_claim":false, "options":{"version":"2.0.0", "chicken":true, "rob_kong":true}}
+	snapshot["options"] = [{"type":"play", "tile_id":8}]
+	snapshot["phase"] = "dingque"
+	if not COACH.analyze(snapshot, bridge).is_empty():
+		push_error("Selection phase must suppress recommendations even if stale play options are present")
+		return false
+	snapshot.phase = "turn"
+	snapshot["turn"] = 0
+	snapshot["missing_suits"] = ["tong", "wan", "", "tiao"]
+	if not COACH.analyze(snapshot, bridge).is_empty():
+		push_error("A partly published dingque list must not be used to guess the missing suit")
+		return false
+	snapshot.missing_suits[2] = "tong"
+	var analyzed := COACH.analyze(snapshot, bridge)
+	if analyzed.keys() != [8] or analyzed[8].get("ownMissingSuit") != 1:
+		push_error("Published dingque must be sent to native analysis without overriding the server's physical play restriction")
 		return false
 	return true

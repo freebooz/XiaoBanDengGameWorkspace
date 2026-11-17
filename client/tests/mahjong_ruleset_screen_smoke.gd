@@ -66,8 +66,9 @@ func _run() -> void:
 	snapshot["options"]=[]
 	game._handle_packet(JSON.stringify(snapshot))
 	_expect(not game._pending_action and game._selected_id==0, "收到实际新状态仍未释放确认或清空已打出的牌")
+	var confirmed_efficiency: Dictionary = game._coach_results.duplicate(true)
 	game._handle_packet(JSON.stringify(earlier))
-	_expect(game._state.epoch == 2 and game._hand_models.size() == 13 and game._coach_results.is_empty(), "旧快照恢复了已经失效的手牌或牌效")
+	_expect(game._state.epoch == 2 and game._hand_models.size() == 13 and game._coach_results == confirmed_efficiency, "旧快照覆盖了已确认的手牌或牌效")
 	snapshot.epoch = 3
 	snapshot.turn = 0
 	snapshot.options = [{"type": "play", "tile_id": 3}]

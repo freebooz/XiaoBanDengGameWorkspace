@@ -8,6 +8,7 @@ extends StyleBox
 @export var modulate_color := Color.WHITE
 @export var draw_center := true
 @export var preserve_aspect := false
+@export var aspect_max_extent := 0.0
 ## Panels specify a border scale independently of the height of their contents.
 @export var corner_scale := 0.0
 @export var tile_edges := false
@@ -19,7 +20,8 @@ func patch_layout(rect: Rect2) -> Array[Dictionary]:
 		return patches
 	var source := region_rect if region_rect.has_area() else Rect2(Vector2.ZERO, texture.get_size())
 	if preserve_aspect:
-		var fitted := source.size * minf(rect.size.x / source.size.x, rect.size.y / source.size.y)
+		var available := rect.size.min(Vector2.ONE * aspect_max_extent) if aspect_max_extent > 0.0 else rect.size
+		var fitted := source.size * minf(available.x / source.size.x, available.y / source.size.y)
 		rect = Rect2(rect.get_center() - fitted * 0.5, fitted)
 	var left := clampf(source_margins.x, 1.0, source.size.x * 0.49)
 	var right := clampf(source_margins.z, 1.0, source.size.x * 0.49)

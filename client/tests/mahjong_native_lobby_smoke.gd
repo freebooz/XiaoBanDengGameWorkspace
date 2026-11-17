@@ -18,13 +18,18 @@ func _until(condition: Callable, message: String) -> bool:
 func _button(app: Node, name: String) -> Button:
 	return app.find_child(name,true,false) as Button
 
-func _press(app: Node, name: String) -> bool:
+func _press(app: Control, name: String) -> bool:
 	var button := _button(app,name)
 	if not is_instance_valid(button) or button.disabled:
 		push_error("原生按钮不可用: " + name)
 		return false
-	button.pressed.emit()
-	return true
+	var was_visible := app.visible
+	app.show()
+	var available := button.is_visible_in_tree()
+	if available: button.pressed.emit()
+	app.visible = was_visible
+	if not available: push_error("原生按钮不可见: " + name)
+	return available
 
 func _table(app: Node) -> Variant:
 	for node in app._screen.get_children():
@@ -50,7 +55,9 @@ func _cleanup() -> void:
 	await create_timer(0.15).timeout
 
 func _run() -> void:
-	for arg in OS.get_cmdline_user_args():
+	var user_args := OS.get_cmdline_user_args()
+	var spectators := user_args.has("--spectators")
+	for arg in user_args:
 		if arg.begins_with("--server-url="):
 			ProjectSettings.set_setting("xiaobandeng/network/default_server_url", arg.trim_prefix("--server-url="))
 		if arg.begins_with("--preview-dir="): preview_dir=arg.trim_prefix("--preview-dir=")
@@ -62,29 +69,41 @@ func _run() -> void:
 		return
 	stop_at=Time.get_ticks_msec()+85000
 	var script = load("res://scripts/main.gd")
-	for index in range(4):
+	for index in range(5 if spectators else 4):
 		var app = script.new()
 		app.session_store_path = "user://fixtures/native-%d-%d" % [Time.get_ticks_usec(), index]
 		app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		root.add_child(app)
 		app.visible=index==0
 		apps.append(app)
-	if not await _exercise():
+		app._http.request_completed.connect(func(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
+			if result != HTTPRequest.RESULT_SUCCESS or code >= 400:
+				print("MAHJONG_NATIVE_HTTP result=", result, " code=", code))
+	var passed := false
+	if await _enter_lobbies():
+		passed = await _exercise_spectators() if spectators else await _exercise()
+	if not passed:
 		await _cleanup()
 		quit(1)
 		return
 	await _cleanup()
-	print("MAHJONG_NATIVE_LOBBY_OK four_clients=true quick_cancel=true rule_lock=true invite=true readiness=true resume=true settlement=true history=true training_bots=true abandon=true")
+	if spectators:
+		print("MAHJONG_NATIVE_SPECTATORS_OK guests=5 seat_permission=true directory=true waiting=true discard=true read_only=true revoke=true")
+	else:
+		print("MAHJONG_NATIVE_LOBBY_OK four_clients=true quick_cancel=true rule_lock=true invite=true readiness=true resume=true settlement=true history=true training_bots=true abandon=true")
 	quit(0)
 
-func _exercise() -> bool:
+func _enter_lobbies() -> bool:
 	if not await _until(func(): return apps.all(func(app): return app._state=="login" and not app._guest_button.disabled),"游客入口未就绪"): return false
 	for app in apps:
 		if not _press(app, "MahjongGuestLoginButton"): return false
 	if not await _until(func(): return apps.all(func(app): return app._state=="guest_identity" and not app._lobby_socket.is_processing()),"游客身份确认页未就绪"): return false
 	for app in apps:
 		if not _press(app, "MahjongGuestEnterLobbyButton"): return false
-	if not await _until(func(): return apps.all(func(app): return app._state=="lobby" and app._lobby_synced),"四个大厅没有收到真实初始事件"): return false
+	return await _until(func(): return apps.all(func(app): return app._state=="lobby" and app._lobby_synced),"大厅没有收到真实初始事件")
+
+
+func _exercise() -> bool:
 	var host = apps[0]
 	var lobby_scale := root.content_scale_size
 	await _capture("lobby.png")
@@ -92,7 +111,7 @@ func _exercise() -> bool:
 	if not await _until(func(): return host._state=="room" and host._match.get("kind","")=="quick","快速开局没有进入实际队列"): return false
 	if not _press(host,"MahjongLeaveButton"): return false
 	if not await _until(func(): return host._state=="lobby" and host._match.get("status","")=="idle","取消匹配仍占用房间"): return false
-	if not _press(host,"MahjongCreateButton") or not _press(host,"MahjongCreateRuleCard_basic_108_1_0_0"): return false
+	if not _press(host,"MahjongCreateButton") or not _press(host,"MahjongCreateRuleSelector") or not _press(host,"MahjongCreateRuleCard_basic_108_1_0_0"): return false
 	await _capture("create_rules.png")
 	if not _press(host,"MahjongCustomRulesCreateButton"): return false
 	if not await _until(func(): return host._state=="room" and str(host._match.get("kind",""))=="friend","未创建实际好友房"): return false
@@ -162,6 +181,89 @@ func _exercise() -> bool:
 	if not _leave_board(training): return false
 	if not await _until(func(): return host._state=="lobby" and host._match.get("status","")=="idle","退出训练仍占用房间"): return false
 	return host._recent.size()==1
+
+func _exercise_spectators() -> bool:
+	var host = apps[0]
+	var viewer = apps[4]
+	if not _press(host, "MahjongCreateButton"): return false
+	var allow := _button(host, "MahjongAllowSpectators")
+	if allow == null or not allow.is_visible_in_tree() or allow.button_pressed: return false
+	allow.button_pressed = true
+	await _capture("spectator_create.png")
+	if not _press(host, "MahjongCustomRulesCreateButton"): return false
+	if not await _until(func(): return host._state == "room" and host._match.get("allow_spectators", false),
+			"创建房间的观战开关未生效"): return false
+	var room_id := str(host._match.room_id)
+	var consent := _button(host, "MahjongSeatWatchPermission")
+	if consent == null or host._match.get("spectator_allowed", false): return false
+	if not _press(host, "MahjongSeatWatchPermission"): return false
+	if not await _until(func(): return host._match.get("spectator_allowed", false), "未收到座位同意通知"): return false
+	await _capture("spectator_seat_permission.png")
+	host.hide()
+	viewer.show()
+	if not _press(viewer, "MahjongRoomListButton"): return false
+	var directory_watch := "MahjongDirectoryWatch" + room_id
+	if not await _until(func(): return _button(viewer, directory_watch) != null, "房间列表未显示可观战入口"): return false
+	await _capture("spectator_directory.png")
+	if not _press(viewer, directory_watch): return false
+	var field := viewer.find_child("MahjongJoinCode", true, false) as LineEdit
+	var seat := viewer.find_child("MahjongWatchSeat", true, false) as OptionButton
+	if field == null or field.text != room_id or seat == null or seat.get_selected_id() != 0: return false
+	await _capture("spectator_join.png")
+	if not _press(viewer, "MahjongWatchRoomButton"): return false
+	if not await _until(func():
+		var board = _table(viewer)
+		return is_instance_valid(board) and board._snapshot_ready and board._state.get("status") == "waiting",
+		"观战者未收到等候快照"): return false
+	var watching = _table(viewer)
+	if viewer._subscribe_lobby() != OK: return false
+	if not await _until(func(): return host._match.get("spectator_occupied", false), "座位未收到观战人数"): return false
+	for index in range(1, 4):
+		var app = apps[index]
+		if not _press(app, "MahjongOpenJoinButton"): return false
+		var code := app.find_child("MahjongJoinCode", true, false) as LineEdit
+		if code == null: return false
+		code.text = room_id
+		code.text_changed.emit(room_id)
+		if not _press(app, "MahjongJoinButton"): return false
+	if not await _until(func(): return apps.slice(0, 4).all(func(app): return app._state == "room" and app._match.get("player_account_ids", []).size() == 4),
+			"观战连接占用或影响了四个玩家座位"): return false
+	for app in apps.slice(0, 4):
+		if not _press(app, "MahjongReadyButton"): return false
+	if not await _until(func():
+		return _table(viewer) == watching and watching._state.get("status") == "playing" and apps.slice(0, 4).all(
+			func(app): return is_instance_valid(_table(app)) and _table(app)._actions_ready()),
+		"观战者未跟随四位玩家开局"): return false
+	if watching._actions_ready() or watching._play_button.visible or watching._own_mic.visible or not watching._hand_ids.is_empty():
+		push_error("观战错误显示了出牌、语音或暗手牌")
+		return false
+	if not watching._remaining_number.text.is_valid_int():
+		push_error("观战未显示服务端回合同步的倒计时")
+		return false
+	for relative in range(4):
+		if watching._pieces_root.get_node_or_null("MahjongConcealedHand%d_0" % relative) == null:
+			push_error("观战视角未保留第 %d 席扣着的牌" % relative)
+			return false
+	var dealer = _table(apps[int(watching._state.dealer)])
+	var hand: Array = dealer._array("hand")
+	if hand.is_empty(): return false
+	var tile := int(hand[0].id)
+	dealer._select_tile(tile)
+	dealer._on_play()
+	if not await _until(func():
+		return watching._array("discards").any(func(discard: Dictionary): return int(discard.get("tile", {}).get("id", -1)) == tile),
+		"观战者未收到首张公开弃牌"): return false
+	await _capture("spectator_board.png")
+	var host_board = _table(host)
+	host_board._open_tool("settings")
+	var toggle := _button(host_board, "MahjongTableSpectatorPermission")
+	if toggle == null or not toggle.button_pressed or toggle.disabled: return false
+	toggle.button_pressed = false
+	if not await _until(func():
+		return viewer._state == "lobby" and not host_board._state.get("spectator_allowed", true) and not host_board._state.get("spectator_occupied", true),
+		"关闭观战后客户端未结束观战或未刷新座位人数"): return false
+	return viewer._recent.is_empty() and viewer._match.get("status") == "idle"
+
 
 func _drive_friend_round() -> bool:
 	var finished := 0

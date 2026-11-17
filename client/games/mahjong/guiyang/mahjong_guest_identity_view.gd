@@ -142,21 +142,21 @@ func navigate_back() -> bool:
 
 func _fit() -> void:
 	var safe := RURAL.safe_insets(self)
-	var wide := size.x >= size.y * 1.5
+	var available := size - Vector2(safe.x + safe.z, safe.y + safe.w)
+	var wide := available.x >= available.y * 1.5
 	var edge := roundi(clampf(size.x * 0.024, 10.0, 32.0))
 	_shell.add_theme_constant_override("margin_left", safe.x + edge)
 	_shell.add_theme_constant_override("margin_right", safe.z + edge)
 	_shell.add_theme_constant_override("margin_top", safe.y + edge)
 	_shell.add_theme_constant_override("margin_bottom", safe.w + edge)
-	var available := size - Vector2(safe.x + safe.z, safe.y + safe.w)
 	var width := maxf(0, available.x - edge * 2)
 	var touch := RURAL.touch_extent(self)
-	MODAL.fit_village_header(_header, width, size.y, touch)
+	MODAL.fit_village_header(_header, width, size.y)
 	_background.texture = MODAL.VILLAGE_LANDSCAPE if available.x >= available.y * 0.85 else MODAL.LOGIN_BACKDROP
-	# A centered composition follows the 941 x 1672 approved portrait. Extra
-	# window area belongs to the scenery, not to taller or wider form controls.
-	var content_width := minf(width - 12.0, 1180.0 if wide else minf(900.0, maxf(360.0, available.y * 900.0 / 1672.0)))
-	var unit := clampf(content_width / 884.0, 0.40, 1.0)
+	# Keep the reference scale for artwork and control heights as the panel widens.
+	var design_width := minf(width - 12.0, 1180.0 if wide else minf(900.0, maxf(360.0, available.y * 900.0 / 1672.0)))
+	var content_width := minf(width - 12.0, maxf(design_width, RURAL.tablet_panel_min_width(available)))
+	var unit := clampf(design_width / 884.0, 0.40, 1.0)
 	if wide: unit = clampf(available.y / 941.0, 0.48, 1.0)
 	_body.custom_minimum_size.x = maxf(0, content_width)
 	_sections.vertical = not wide
@@ -180,8 +180,10 @@ func _fit() -> void:
 		feature.get_child(1).add_theme_font_override("font", MODAL.village_font())
 		feature.get_child(1).add_theme_font_size_override("font_size", roundi(maxf(14.0, 32.0 * unit)))
 		feature.get_child(1).custom_minimum_size.y = maxf(40.0, 48.0 * unit)
-	var action_width := (_body.custom_minimum_size.x - 96.0) / 1.8 if wide else _body.custom_minimum_size.x - 64.0
-	var action_unit := minf(unit, action_width / 740.0)
+	var action_inset := 96.0 if wide else 64.0
+	var action_ratio := 1.8 if wide else 1.0
+	var action_width := (content_width - action_inset) / action_ratio
+	var action_unit := minf(unit, (design_width - action_inset) / (740.0 * action_ratio))
 	_features.get_child(2).get_child(1).text = "体验\n全部玩法" if action_width < 350 else "体验全部玩法"
 	enter_button.custom_minimum_size.y = maxf(touch, maxf(56.0, 156.0 * action_unit))
 	enter_button.add_theme_font_size_override("font_size", roundi(maxf(24.0, 60.0 * action_unit)))

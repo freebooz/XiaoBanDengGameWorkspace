@@ -99,7 +99,9 @@ var _lobby: VBoxContainer
 var _lobby_village_header: HBoxContainer
 var _lobby_scene_gap: Control
 var _header_shell: PanelContainer
-var _header_brand: TextureRect
+var _header_brand_slot: Control
+var _viewport_brand_frame: Control
+var _viewport_brand: TextureRect
 var _header_content: VBoxContainer
 var _header_toolbar: HBoxContainer
 var _profile_toolbar: HBoxContainer
@@ -116,6 +118,7 @@ var _room: VBoxContainer
 var _training_hall: VBoxContainer
 var _training_hall_button: Button
 var _training_rule: Label
+var _training_rule_select: MenuButton
 var _training_grid: GridContainer
 var _training_open := false
 var _guided_view: Control
@@ -140,6 +143,7 @@ var _lobby_exit: Button
 var _lobby_resume: Button
 var _room_list_button: Button
 var _wide_layout := false
+var _short_lobby := false
 var _training: Button
 var _practice: Button
 var _history_open_button: Button
@@ -156,12 +160,13 @@ var _quick_title: Label
 var _room_board: VBoxContainer
 var _room_summary: HBoxContainer
 var _room_info: VBoxContainer
-var _room_code_row: HBoxContainer
+var _room_code_row: BoxContainer
 var _seats_title: HBoxContainer
 var _seat_grid: GridContainer
 var _quick_footer: VBoxContainer
 var _quick_room := false
 var _room_title: Label
+var _room_wallet: Label
 var _room_mode: Label
 var _room_code: Label
 var _room_copy: Button
@@ -182,6 +187,7 @@ var _room_note: Label
 var _room_controls: VBoxContainer
 var _room_layout: BoxContainer
 var _ready_button: Button
+var _watch_permission: Button
 var _leave_button: Button
 var _resume: Button
 var _village: Texture2D
@@ -254,10 +260,19 @@ func _build() -> void:
 
 	_scroll = ScrollContainer.new()
 	_scroll.name = "MahjongLobbyScroll"
-	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# Keep the page's minimum width from widening the viewport during a resize.
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	_scroll.follow_focus = true
 	_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(_scroll)
+	_viewport_brand_frame = Control.new()
+	_viewport_brand_frame.clip_contents = true
+	_viewport_brand_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_viewport_brand_frame)
+	_viewport_brand = _picture(MODAL.VILLAGE_BRAND, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+	_viewport_brand.name = "MahjongViewportBrand"
+	_viewport_brand_frame.add_child(_viewport_brand)
+	_scroll.get_v_scroll_bar().value_changed.connect(_scroll_brand)
 	var center := CenterContainer.new()
 	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(center)
@@ -269,7 +284,7 @@ func _build() -> void:
 
 
 	_lobby_village_header = MODAL.village_header(_content, "MahjongLobbyBackButton", func() -> void:
-		action_requested.emit("lobby_back", {}), "MahjongLobbyBrandMark")
+		action_requested.emit("lobby_back", {}), "MahjongLobbyBrandSpace", false)
 	_lobby_back = _lobby_village_header.get_child(-1) as Button
 	_lobby_exit = _command_button(_lobby_village_header, "MahjongLobbyExitButton", "", "exit_game", false, 44, 18)
 	_lobby_exit.tooltip_text = "退出游戏"
@@ -278,7 +293,6 @@ func _build() -> void:
 	_lobby_exit.icon = EXIT_ICON
 	_lobby_exit.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_lobby_exit.expand_icon = true
-	_lobby_exit.add_theme_constant_override("icon_max_width", 21)
 	_lobby_exit.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	_lobby_village_header.move_child(_lobby_exit, _lobby_back.get_index())
 
@@ -287,25 +301,12 @@ func _build() -> void:
 	_content.add_child(_header_shell)
 	_header_content = _column(_header_shell, 7)
 	_header_toolbar = _row(_header_content, 10)
-	_header_brand = _picture(RURAL.MAHJONG_BRAND, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
-	_header_brand.custom_minimum_size = Vector2(174, 82)
-	_header_toolbar.add_child(_header_brand)
+	_header_brand_slot = Control.new()
+	_header_brand_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_header_toolbar.add_child(_header_brand_slot)
 	_build_profile_card(_header_toolbar)
 	_settings_button = _command_button(_profile_toolbar, "MahjongSettingsButton", "设置", "settings", false, 52, 22)
-	_settings_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	MODAL.village_button(_settings_button)
-	for state in ["normal", "hover", "pressed", "hover_pressed"]:
-		var wood := MODAL.wood_plaque()
-		wood.set_content_margin(SIDE_LEFT, 7)
-		wood.set_content_margin(SIDE_RIGHT, 7)
-		if state == "hover": wood.modulate_color = Color(1.12, 1.06, 1.0)
-		elif state == "pressed" or state == "hover_pressed": wood.modulate_color = Color("#d7b08c")
-		_settings_button.add_theme_stylebox_override(state, wood)
-	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
-		_settings_button.add_theme_color_override(state, CREAM)
-	_settings_button.icon = MODAL.icon("settings")
-	_settings_button.expand_icon = true
-	_settings_button.add_theme_constant_override("icon_max_width", 24)
+	MODAL.icon_button(_settings_button, MODAL.icon("settings"), "设置")
 	_lobby_resume = _command_button(_header_content, "MahjongLobbyResumeButton", "返回牌桌", "resume", true, 54, 21)
 	MODAL.village_button(_lobby_resume, true)
 
@@ -425,14 +426,19 @@ func _fit_content() -> void:
 	var vertical_margin := 13 if is_lobby else 24 if tablet else 18
 	var viewport_margin := Vector2i(horizontal_margin, vertical_margin)
 	var safe := RURAL.safe_insets(self)
+	var safe_size := viewport_size - Vector2(safe.x + safe.z, safe.y + safe.w)
+	var short_landscape := safe_size.y <= 480.0 and safe_size.x >= safe_size.y * 1.55
+	var minimum_panel_width := RURAL.tablet_panel_min_width(safe_size)
 	_inset.add_theme_constant_override("margin_left", viewport_margin.x + safe.x)
 	_inset.add_theme_constant_override("margin_top", viewport_margin.y + safe.y)
 	_inset.add_theme_constant_override("margin_right", viewport_margin.x + safe.z)
 	_inset.add_theme_constant_override("margin_bottom", viewport_margin.y + safe.w + 6)
-	var usable_width := viewport_size.x - 2.0 * horizontal_margin - safe.x - safe.z
-	var lobby_height := viewport_size.y - 2.0 * vertical_margin - safe.y - safe.w - 6.0
+	var usable_width := safe_size.x - 2.0 * horizontal_margin
+	var lobby_height := safe_size.y - 2.0 * vertical_margin - 6.0
 	var max_width := minf(1370.0, lobby_height * 1.96)
-	if wide:
+	var wide_friend_room := is_room and not _quick_room and usable_width >= 880.0 and safe_size.x >= safe_size.y * 1.30
+	var wide_training := _page == "training" and usable_width >= 1080.0 and safe_size.x >= safe_size.y * 1.30
+	if wide or wide_friend_room or wide_training:
 		if is_lobby or (is_room and _quick_room):
 			max_width = minf(1260.0, lobby_height * 1.82)
 	else:
@@ -443,10 +449,18 @@ func _fit_content() -> void:
 			max_width = 910.0
 		elif is_training or is_room:
 			max_width = 925.0 if is_room and _quick_room else 880.0
-	var lobby_width := clampf(usable_width, 0.0, maxf(0.0, max_width))
+	var lobby_width := clampf(usable_width, 0.0, maxf(minimum_panel_width, max_width))
 	_content.custom_minimum_size.x = lobby_width
-	_room_layout.vertical = _quick_room or not wide or lobby_width < 880.0
+	var brand_width := clampf(minf(safe_size.x * 0.34, safe_size.y * 0.32), 88.0, 174.0)
+	_viewport_brand_frame.position = Vector2(safe.x + 8, safe.y + 6)
+	_viewport_brand_frame.size = Vector2(brand_width, brand_width / MODAL.VILLAGE_BRAND.get_size().aspect())
+	_viewport_brand.size = _viewport_brand_frame.size
+	_scroll_brand(_scroll.scroll_vertical)
+	var content_left := horizontal_margin + maxf(0.0, (usable_width - lobby_width) * 0.5)
+	_header_brand_slot.custom_minimum_size = Vector2(maxf(0.0, 8.0 + brand_width - content_left), 44 if is_record and _page == "account" and short_landscape else 82)
+	_room_layout.vertical = _quick_room or safe_size.x < safe_size.y or lobby_width < 880.0
 	_room_layout.add_theme_constant_override("separation", 30 if not _room_layout.vertical else 20)
+	_room_code_row.vertical = lobby_width < 420.0
 	for index in range(_content_layouts.size()):
 		var layout := _content_layouts[index]
 		var banner := _content_banners[index]
@@ -460,17 +474,21 @@ func _fit_content() -> void:
 	for target in _touch_sizes:
 		target.custom_minimum_size.y = maxf(_touch_sizes[target], maxf(touch, 70.0 if wide else 56.0))
 	if _training_grid != null and _page == "training":
-		_fit_training(lobby_width, viewport_size.y, wide, touch)
-	_fit_lobby(lobby_width, lobby_height, wide, touch, is_lobby)
+		_fit_training(lobby_width, viewport_size.y, wide or wide_training, touch)
+	_fit_lobby(lobby_width, lobby_height, wide, touch, is_lobby, short_landscape)
 	if is_room:
-		MODAL.fit_village_header(_room_village_header, lobby_width, lobby_height, touch)
+		MODAL.fit_village_header(_room_village_header, lobby_width, lobby_height)
 		_fit_quick_room(lobby_width, lobby_height, wide, touch)
 	if is_instance_valid(_room_pages):
-		_room_pages.set_page(_room_page if is_room_menu else "", wide, lobby_width, _room_page_parent == "directory")
+		_room_pages.set_page(_room_page if is_room_menu else "", wide, lobby_width,
+			_room_page_parent == "directory", minimum_panel_width)
 
 
+func _scroll_brand(offset: float) -> void:
+	_viewport_brand.position.y = -offset
 
-func _fit_lobby(width: float, height: float, wide: bool, touch: float, active: bool) -> void:
+
+func _fit_lobby(width: float, height: float, wide: bool, touch: float, active: bool, short_landscape: bool) -> void:
 	var settings_parent: Control = _profile_toolbar if active else _header_toolbar
 	if _page == "room" and not _quick_room:
 		settings_parent = _room_village_header
@@ -481,35 +499,36 @@ func _fit_lobby(width: float, height: float, wide: bool, touch: float, active: b
 			_room_village_header.move_child(_settings_button, _leave_button.get_index())
 		if was_focused: _settings_button.grab_focus.call_deferred()
 	_profile_card.custom_minimum_size.x = 0.0
-	var avatar_extent := clampf(width * (0.10 if wide else 0.145), 45.0, 112.0)
+	_short_lobby = short_landscape and active
+	var short_account := short_landscape and _page == "account"
+	var compact_header := _short_lobby or short_account
+	var avatar_extent := 56.0 if _short_lobby else clampf(width * (0.10 if wide else 0.145), 45.0, 112.0)
 	_profile_avatar_button.custom_minimum_size = Vector2.ONE * maxf(touch, avatar_extent)
-	var compact_profile := wide or width < 500.0
-	var profile_action_height := maxf(touch, clampf(width * 0.086, 44.0, 58.0 if compact_profile else 75.0))
+	var compact_profile := wide or width < 500.0 or compact_header
+	var profile_action_height := maxf(touch, 48.0 if compact_header else clampf(width * 0.086, 44.0, 58.0 if compact_profile else 75.0))
 	_egg_wallet.custom_minimum_size = Vector2(clampf(width * (0.26 if compact_profile else 0.307), 82.0, 280.0), profile_action_height)
-	_egg_wallet.add_theme_font_size_override("font_size", roundi(clampf(width * 0.039, 14.0, 34.0)))
-	_settings_button.custom_minimum_size = Vector2(clampf(width * (0.17 if compact_profile else 0.211), 48.0, 190.0), profile_action_height)
-	_settings_button.add_theme_font_size_override("font_size", roundi(clampf(width * 0.039, 14.0, 34.0)))
-	_settings_button.add_theme_constant_override("icon_max_width", 0 if width < 400.0 else roundi(clampf(profile_action_height * 0.52, 24.0, 40.0)))
-	_settings_button.icon = null if width < 400.0 else MODAL.icon("settings")
-	_identity.add_theme_font_size_override("font_size", roundi(clampf(width * 0.037, 13.0, 38.0)))
-	_connection.add_theme_font_size_override("font_size", roundi(clampf(width * 0.025, 13.0, 22.0)))
+	var action_font := 20 if compact_header else roundi(clampf(width * 0.039, 14.0, 34.0))
+	_egg_wallet.add_theme_font_size_override("font_size", action_font)
+	MODAL.size_icon_button(_settings_button, self)
+	_identity.add_theme_font_size_override("font_size", 20 if compact_header else roundi(clampf(width * 0.037, 13.0, 38.0)))
+	_connection.add_theme_font_size_override("font_size", 14 if compact_header else roundi(clampf(width * 0.025, 13.0, 22.0)))
 	if not active: return
-	MODAL.fit_village_header(_lobby_village_header, width, height, touch)
-	_lobby_village_header.custom_minimum_size.y = 0.0 if wide else clampf(width * 0.268, 98.0, 224.0)
-	_lobby_exit.custom_minimum_size = Vector2.ONE * maxf(touch, clampf(width * 0.07, 41.0, 61.0))
+	MODAL.fit_village_header(_lobby_village_header, width, height)
+	_lobby_village_header.custom_minimum_size.y = 0.0 if wide or _short_lobby else clampf(width * 0.268, 98.0, 224.0)
+	MODAL.size_icon_button(_lobby_exit, self)
 	_featured_actions.vertical = width < 330.0
 	var compact := wide or height < 670.0
 	var card_height := maxf(touch, clampf(minf(width * (0.10 if wide else 0.188), height * 0.13), 56.0, 165.0))
-	var side_gap := clampi(roundi(width * 0.02), 7, 20)
+	var side_gap := 8 if _short_lobby else clampi(roundi(width * 0.02), 7, 20)
 	_secondary_actions.add_theme_constant_override("separation", side_gap)
 	_featured_actions.add_theme_constant_override("separation", side_gap)
 	for button in [_create, _open_join, _room_list_button]:
 		button.custom_minimum_size.y = card_height
 	_quick.custom_minimum_size.y = card_height * (1.75 if _featured_actions.vertical else 3.0) + side_gap * 2.0
 	var scene_gap := height * 0.075 if compact else minf(width * 0.392, height * 0.225)
-	_lobby_scene_gap.custom_minimum_size.y = clampf(scene_gap, 10.0, 365.0)
-	_lobby.add_theme_constant_override("separation", 13 if compact else clampi(roundi(width * 0.027), 14, 26))
-	_content.add_theme_constant_override("separation", 8 if compact else 13)
+	_lobby_scene_gap.custom_minimum_size.y = 0.0 if _short_lobby else clampf(scene_gap, 10.0, 365.0)
+	_lobby.add_theme_constant_override("separation", 8 if _short_lobby else 13 if compact else clampi(roundi(width * 0.027), 14, 26))
+	_content.add_theme_constant_override("separation", 6 if _short_lobby else 8 if compact else 13)
 	var nav_height := maxf(touch, clampf(minf(width * (0.083 if wide else 0.172), height * 0.105), 56.0, 149.0))
 	for button in [_training_hall_button, _history_open_button, _account_open_button, _custom_rules]:
 		button.custom_minimum_size.y = nav_height
@@ -661,7 +680,12 @@ func _feature_art(button: Button, tooltip: String, artwork: Texture2D, primary :
 		var scale_hint := 0.164 if primary else 0.158 if vertical else 0.133
 		var font_size := clampf(button.size.x * scale_hint, 11.0, 64.0 if primary else 43.0)
 		var caption_width := maxf(1.0, (button.size.x - 10.0) * (0.90 if vertical else 0.62))
-		heading.add_theme_font_size_override("font_size", mini(roundi(font_size), floori(caption_width / button.text.length())))
+		var caption_size := mini(roundi(font_size), floori(caption_width / button.text.length()))
+		if _short_lobby:
+			var caption_height := (button.size.y - 8.0) * (heading.anchor_bottom - heading.anchor_top)
+			var line_height := heading.get_theme_font("font").get_height(roundi(font_size))
+			caption_size = maxi(11, mini(caption_size, floori(font_size * caption_height / line_height)))
+		heading.add_theme_font_size_override("font_size", caption_size)
 	)
 
 
@@ -689,6 +713,9 @@ func _on_room_page_action(action: String, payload: Dictionary) -> void:
 			_open_room_page("create")
 		"open_join":
 			_open_room_page("join")
+		"open_watch":
+			_open_room_page("join")
+			_room_pages.prefill_watch(str(payload.room_id), int(payload.watch_seat))
 		_:
 			action_requested.emit(action, payload)
 
@@ -750,6 +777,14 @@ func _build_training_hall() -> void:
 	_label_centered(bots, "与三位电脑牌友完成一局", 19, MUTED)
 	_training_rule = _label(bots, "", 18, MUTED, true)
 	_training_rule.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_training_rule_select = MenuButton.new()
+	_training_rule_select.name = "MahjongTrainingRuleSelect"
+	_training_rule_select.text = "切换玩法"
+	_training_rule_select.custom_minimum_size.y = RURAL.touch_extent(self)
+	_training_rule_select.about_to_popup.connect(_training_rule_menu)
+	_training_rule_select.get_popup().id_pressed.connect(_select_training_rule)
+	MODAL.button(_training_rule_select, "secondary")
+	bots.add_child(_training_rule_select)
 	_add_flexible_gap(bots)
 	_training = _command_button(bots, "MahjongTrainingButton", "开始训练", "training", true, 57, 25)
 	MODAL.button(_training, "primary")
@@ -812,7 +847,7 @@ func _set_training_open(opened: bool) -> void:
 
 
 func _build_room() -> void:
-	_room_village_header = MODAL.village_header(_room, "MahjongLeaveButton", _back_from_room)
+	_room_village_header = MODAL.village_header(_room, "MahjongLeaveButton", _back_from_room, "MahjongRoomBrandSpace", false)
 	_leave_button = _room_village_header.get_child(-1) as Button
 	_quick_header_gap = Control.new()
 	_quick_header_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -839,9 +874,10 @@ func _build_room() -> void:
 	_room_info = _column(_room_layout, 14)
 	_room_info.name = "MahjongRoomInfo"
 	_room_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_room_info.size_flags_stretch_ratio = 0.82
-	_room_code_row = _row(_room_info, 13)
+	_room_code_row = BoxContainer.new()
 	_room_code_row.name = "MahjongRoomCodePlaque"
+	_room_code_row.add_theme_constant_override("separation", 13)
+	_room_info.add_child(_room_code_row)
 	var code_shell := PanelContainer.new()
 	var plaque := _surface(DARK_WOOD, HONEY, 19, 6)
 	plaque.set_border_width_all(2)
@@ -866,6 +902,7 @@ func _build_room() -> void:
 	_room_code.add_theme_constant_override("outline_size", 2)
 	_room_code.add_theme_color_override("font_outline_color", Color("#57351f"))
 	_room_copy = _button(_room_code_row, "MahjongCopyButton", "复制房号", false, 54)
+	_room_copy.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_room_copy.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_room_copy.pressed.connect(func() -> void:
 		action_requested.emit("copy", {"room_id": str(_state.get("room_id", ""))}))
@@ -876,13 +913,21 @@ func _build_room() -> void:
 	_room_rule_details.name = "MahjongRoomRuleDetails"
 	_room_controls = _column(_room_info, 9)
 	_ready_button = _button(_room_controls, "MahjongReadyButton", "准备", true, 81, 34)
+	_watch_permission = _button(_room_controls, "MahjongSeatWatchPermission", "", false, 56, 22)
+	_watch_permission.hide()
+	_watch_permission.pressed.connect(func() -> void:
+		action_requested.emit("set_spectator_permission", {"enabled": not bool(_state.get("spectator_allowed", false))}))
 
 	_seating = _column(_room_layout, 12)
 	_seating.name = "MahjongRoomSeats"
 	_seating.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_seating.size_flags_stretch_ratio = 1.18
 	_seats_title = _row(_seating, 12)
 	_label(_seats_title, "房间座位", 22, INK)
+	_room_wallet = _label(_seats_title, "", 18, OLIVE)
+	_room_wallet.name = "MahjongRoomEggBalance"
+	_room_wallet.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_room_wallet.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_room_wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_seat_count = _label(_seats_title, "", 18, MUTED)
 	_seat_count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_seat_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -1093,8 +1138,8 @@ func _render() -> void:
 	_lobby.visible = page == "lobby"
 	_lobby_village_header.visible = page == "lobby"
 	var showing_room_menu := not _room_page.is_empty() and page == _room_page
-	_header_shell.visible = not showing_room_menu and page != "room"
-	_header_brand.visible = page != "lobby"
+	_header_shell.visible = not showing_room_menu and page not in ["room", "guided"]
+	_header_brand_slot.visible = page != "lobby"
 	_profile_avatar_button.visible = page == "lobby"
 	if page_changed or not _header_shell.has_theme_stylebox_override("panel"):
 		var header_style: StyleBox = StyleBoxEmpty.new() if page == "lobby" else _surface(Color("#322117ed"), Color("#895d3e"), 21, 9)
@@ -1109,8 +1154,8 @@ func _render() -> void:
 	_guided_view.visible = page == "guided"
 	_personal_history.visible = page == "history"
 	_account_view.visible = page == "account"
-	if _account_view.visible:
-		_account_view.apply(privacy)
+	if _account_view.visible and _account_view.apply(privacy):
+		_scroll.set_deferred("scroll_vertical", 0)
 	if _personal_history.visible:
 		var showing_detail := not str(history.get("match_id", "")).is_empty()
 		if showing_detail != _history_detail_open:
@@ -1150,7 +1195,7 @@ func _render() -> void:
 	_message.visible = not _message.text.is_empty() and not showing_room_menu
 	_retry.visible = not online and not connecting
 	_retry.disabled = pending
-	_feedback.visible = page != "account" and (_message.visible or _retry.visible)
+	_feedback.visible = page not in ["account", "guided"] and (_message.visible or _retry.visible)
 	_feedback_shell.visible = _feedback.visible
 	if page == "lobby" and compact_feedback != (_feedback.visible and _lobby_resume.visible):
 		_fit_content()
@@ -1169,7 +1214,9 @@ func _render_lobby(online: bool, pending: bool) -> void:
 	var selected: Dictionary = _data.get("selected", {})
 	var index := _rule_index(selected)
 	var can_start := idle and online and not pending and index >= 0
-	_quick.disabled = not can_start
+	var friend_and_training_only: bool = index >= 0 and _presets[index].get("quick_match", true) == false
+	_quick.disabled = not can_start or friend_and_training_only
+	_quick.tooltip_text = "当前玩法开放好友房与人机训练，可在训练场切换玩法" if friend_and_training_only else "与其他玩家匹配"
 	_create.disabled = not idle or not online or pending or _presets.is_empty()
 	_open_join.disabled = pending or not online or not idle
 	_room_list_button.disabled = pending or not online or not idle
@@ -1182,15 +1229,33 @@ func _render_lobby(online: bool, pending: bool) -> void:
 	_practice.disabled = pending or not idle
 	_guided_button.disabled = pending or not idle
 	_training_rule.text = "当前玩法 · %s" % _rule_name(_presets[index]) if index >= 0 else "暂无可用训练玩法"
+	_training_rule_select.visible = _presets.size() > 1
+	_training_rule_select.disabled = pending or not idle
 	for entry in _feature_contents:
 		_feature_contents[entry].modulate.a = 0.66 if entry.disabled else 1.0
+
+
+func _training_rule_menu() -> void:
+	var menu := _training_rule_select.get_popup()
+	menu.clear()
+	var selected := _rule_index(_data.get("selected", {}))
+	for index in range(_presets.size()):
+		menu.add_radio_check_item(_rule_name(_presets[index]), index)
+		menu.set_item_checked(index, index == selected)
+
+
+func _select_training_rule(index: int) -> void:
+	if index < 0 or index >= _presets.size(): return
+	var rule: Dictionary = _presets[index]
+	action_requested.emit("select", {"rule_set_id":rule.rule_set_id, "rule_version":rule.rule_version})
 
 
 func _render_room(status: String, online: bool, pending: bool) -> void:
 	var playing := status == "playing"
 	var next_hand := int(_state.get("completed_rounds", 0)) > 0 or not str(_state.get("previous_match_id", "")).is_empty()
-	_room_title.text = "牌局进行中" if playing else "下一局准备" if next_hand else "开局准备" if status == "matched" else "等待牌友入座"
 	var kind := str(_state.get("kind", ""))
+	var admission_paused := kind == "friend" and not playing and bool(_state.get("admission_paused", false))
+	_room_title.text = "牌局进行中" if playing else "暂停入座" if admission_paused else "下一局准备" if next_hand else "开局准备" if status == "matched" else "等待牌友入座"
 	_room_mode.text = str(ROOM_MODES.get(kind, "麻将房间"))
 	var room_id := str(_state.get("room_id", ""))
 	_room_code.text = room_id if not room_id.is_empty() else "— — — —"
@@ -1210,10 +1275,19 @@ func _render_room(status: String, online: bool, pending: bool) -> void:
 	_room_details.tooltip_text = _room_details.text
 	_room_rule_details.text = "暂无玩法说明" if locked_rule.is_empty() else _room_rule_text(locked_rule)
 	_room_rule_details.visible = not playing and not _quick_room
+	var eggs := int(_data.get("egg_balance", -1))
+	_room_wallet.text = "鸡蛋 %d" % eggs if eggs >= 0 else "鸡蛋 —"
+	_room_wallet.tooltip_text = _room_wallet.text
+	_room_wallet.visible = bool(_data.get("wallet_available", false))
 	_seating.visible = not playing
 	_ready_count.visible = not playing
 	_quick_footer.visible = _quick_room and not playing
 	_room_controls.visible = not playing
+	_watch_permission.visible = not playing and kind == "friend" and bool(_state.get("allow_spectators", false))
+	_watch_permission.disabled = not online or pending
+	var open_to_watch := bool(_state.get("spectator_allowed", false))
+	_watch_permission.text = "关闭本座观战" if open_to_watch else "开放本座观战"
+	if bool(_state.get("spectator_occupied", false)): _watch_permission.text += " · 1人"
 	_resume.visible = playing
 	_resume.disabled = not online or pending
 	_leave_button.tooltip_text = "回到大厅，稍后可返回牌桌" if playing else "离开房间并返回上一页"
@@ -1240,6 +1314,8 @@ func _render_room(status: String, online: bool, pending: bool) -> void:
 	_room_note.text = "已准备，等待其他牌友" if own_ready else "全部准备后开始下一局" if next_hand else "全部准备后开局"
 	if not room_full:
 		_room_note.text = "满四位且全部准备后开局" if waiting_friend else "等待其他牌友入座"
+	if admission_paused:
+		_room_note.text = "已准备，等待恢复入座" if own_ready else "已入座的牌友可继续准备"
 	_ready_button.text = "取消准备" if own_ready else "准备"
 	_ready_button.disabled = not online or pending or own_id not in players or not (waiting_friend or (status == "matched" and room_full))
 
@@ -1299,7 +1375,13 @@ func _rule_description(preset: Dictionary) -> String:
 
 func _room_rule_text(rule: Dictionary) -> String:
 	var summary := _rule_description(rule)
-	if str(rule.get("options", {}).get("version", "")) != "1.0.0":
+	var version := str(rule.get("options", {}).get("version", ""))
+	if version == "2.0.0" and rule.get("dingque") == true:
+		var options: Dictionary = rule.options
+		var chicken := "计鸡分" if options.get("chicken") == true else "不计鸡分"
+		var rob := "可抢补杠胡" if options.get("rob_kong") == true else "关闭抢杠胡"
+		return summary + "\n定缺 · 无需先杠 · %s · %s" % [chicken, rob]
+	if version != "1.0.0":
 		return summary
 	var options: Dictionary = rule["options"]
 	var settings := PackedStringArray()

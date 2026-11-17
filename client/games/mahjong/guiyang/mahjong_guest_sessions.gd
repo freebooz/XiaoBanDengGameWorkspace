@@ -2,6 +2,7 @@ extends RefCounted
 ## Per-server guest credentials in the application's private user data directory.
 
 const DIRECTORY := "user://mahjong_guest_sessions"
+const API_CLIENT := preload("res://modules/foundation/network/api_client.gd")
 
 var directory: String
 
@@ -11,12 +12,7 @@ func _init(path: String = DIRECTORY) -> void:
 
 
 static func valid_token(token: String) -> bool:
-	if token.length() != 43: return false
-	for index in range(token.length()):
-		var c := token.unicode_at(index)
-		if not (c == 45 or c == 95 or (c >= 48 and c <= 57) or (c >= 65 and c <= 90) or (c >= 97 and c <= 122)):
-			return false
-	return true
+	return API_CLIENT.valid_session_token(token)
 
 
 func _path(server: String) -> String:

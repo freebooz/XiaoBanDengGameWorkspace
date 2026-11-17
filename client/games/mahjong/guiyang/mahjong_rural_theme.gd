@@ -19,6 +19,18 @@ static func form_control_height(base_height: float, touch_height := 0.0) -> floa
 	return maxf(base_height, touch_height)
 
 
+static func tablet_panel_min_width(safe_size: Vector2) -> float:
+	var short_edge := minf(safe_size.x, safe_size.y)
+	var long_edge := maxf(safe_size.x, safe_size.y)
+	if short_edge < 600.0 or long_edge > short_edge * 1.65:
+		return 0.0
+	return ceilf(safe_size.x * 0.5)
+
+
+static func compact_entry_landscape(safe_size: Vector2) -> bool:
+	return safe_size.x >= 560.0 and safe_size.y < 600.0 and safe_size.x >= safe_size.y * 1.4
+
+
 static func safe_insets(root: Control) -> Vector4i:
 	if not OS.has_feature("mobile"): return Vector4i.ZERO
 	var window := root.get_window()

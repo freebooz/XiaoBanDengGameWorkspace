@@ -22,57 +22,96 @@ Add-Type -AssemblyName System.Drawing
 $source = [Drawing.Bitmap]::FromFile($originalPath)
 if ($source.Width -ne $source.Height) { $source.Dispose(); throw 'Approved Mahjong icon must be square.' }
 
-function New-ScaledBitmap([int]$Size, [int]$ArtworkSize = 0, [bool]$Opaque = $false) {
+function New-ScaledBitmap([int]$Size, [int]$ArtworkSize = 0, [Drawing.Bitmap]$Artwork = $source) {
     if ($ArtworkSize -le 0) { $ArtworkSize = $Size }
     $bitmap = [Drawing.Bitmap]::new($Size, $Size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
     try {
-        $graphics.Clear($(if ($Opaque) { [Drawing.Color]::Black } else { [Drawing.Color]::Transparent }))
+        $graphics.Clear([Drawing.Color]::Transparent)
         $graphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighQuality
         $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
         $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
         $offset = [int](($Size - $ArtworkSize) / 2)
-        $graphics.DrawImage($source, [Drawing.Rectangle]::new($offset, $offset, $ArtworkSize, $ArtworkSize),
-            0, 0, $source.Width, $source.Height, [Drawing.GraphicsUnit]::Pixel)
+        $graphics.DrawImage($Artwork, [Drawing.Rectangle]::new($offset, $offset, $ArtworkSize, $ArtworkSize),
+            0, 0, $Artwork.Width, $Artwork.Height, [Drawing.GraphicsUnit]::Pixel)
     } finally { $graphics.Dispose() }
     return $bitmap
+}
+
+function New-AndroidArtwork([Drawing.Bitmap]$Artwork, [int]$TrimOffset) {
+    $width = $Artwork.Width
+    $height = $Artwork.Height
+    $leftEdge = [int[]]::new($height)
+    $rightEdge = [int[]]::new($height)
+    # Trace the gold rim from both sides of each row without inspecting the artwork inside it.
+    for ($y = 0; $y -lt $height; $y++) {
+        foreach ($side in @(1, -1)) {
+            $x = if ($side -eq 1) { 0 } else { $width - 1 }
+            while ($x -ge 0 -and $x -lt $width) {
+                $pixel = $Artwork.GetPixel($x, $y)
+                if ($pixel.A -gt 0 -and $pixel.R -ge 112 -and $pixel.G -ge 58 -and $pixel.R + 16 -ge $pixel.B) { break }
+                $x += $side
+            }
+            if ($x -lt 0 -or $x -ge $width) { throw "No golden rim in source row $y." }
+            if ($side -eq 1) { $leftEdge[$y] = $x } else { $rightEdge[$y] = $x }
+        }
+    }
+
+    $isolated = [Drawing.Bitmap]::new($width + 2 * $TrimOffset, $height + 2 * $TrimOffset, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    try {
+        $graphics = [Drawing.Graphics]::FromImage($isolated)
+        try {
+            $graphics.CompositingMode = [Drawing.Drawing2D.CompositingMode]::SourceCopy
+            $graphics.Clear([Drawing.Color]::Transparent)
+            $graphics.DrawImageUnscaled($Artwork, $TrimOffset, $TrimOffset)
+        } finally { $graphics.Dispose() }
+
+        for ($y = 0; $y -lt $height; $y++) {
+            $leftTrim = $leftEdge[$y]
+            $rightTrim = $rightEdge[$y]
+            for ($dy = -$TrimOffset; $dy -le $TrimOffset; $dy++) {
+                $row = $y + $dy
+                if ($row -lt 0 -or $row -ge $height) { continue }
+                $dx = [Math]::Floor([Math]::Sqrt($TrimOffset * $TrimOffset - $dy * $dy))
+                $leftTrim = [Math]::Min($leftTrim, $leftEdge[$row] - $dx)
+                $rightTrim = [Math]::Max($rightTrim, $rightEdge[$row] + $dx)
+            }
+            foreach ($side in @(1, -1)) {
+                $start = if ($side -eq 1) { 0 } else { $width - 1 }
+                $edge = if ($side -eq 1) { $leftEdge[$y] } else { $rightEdge[$y] }
+                $gold = $Artwork.GetPixel($edge, $y)
+                for ($x = $start; $x -ne $edge; $x += $side) {
+                    $pixel = $Artwork.GetPixel($x, $y)
+                    $color = [Drawing.Color]::Transparent
+                    if ($x -ge $leftTrim -and $x -le $rightTrim -and $pixel.R -gt 12) {
+                        # Remove the black matte from partially covered gold pixels in the 2px fringe.
+                        $alpha = [Math]::Min(255, [int][Math]::Round($pixel.A * $pixel.R / $gold.R))
+                        $color = [Drawing.Color]::FromArgb($alpha, $gold.R, $gold.G, $gold.B)
+                    }
+                    $isolated.SetPixel($x + $TrimOffset, $y + $TrimOffset, $color)
+                }
+            }
+        }
+        return $isolated
+    } catch {
+        $isolated.Dispose()
+        throw
+    }
 }
 
 function Save-Png([Drawing.Bitmap]$Bitmap, [string]$Path) {
     $Bitmap.Save($Path, [Drawing.Imaging.ImageFormat]::Png)
 }
 
-function Save-MaskPreview([Drawing.Bitmap]$Foreground, [string]$Mask, [int]$VisibleDiameter) {
-    $size = 432
-    $inset = ($size - $VisibleDiameter) / 2
-    $output = [Drawing.Bitmap]::new($size, $size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    $graphics = [Drawing.Graphics]::FromImage($output)
-    $path = [Drawing.Drawing2D.GraphicsPath]::new()
-    try {
-        $graphics.Clear([Drawing.Color]::Transparent)
-        $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
-        if ($Mask -eq 'circle') {
-            $path.AddEllipse($inset, $inset, $VisibleDiameter, $VisibleDiameter)
-        } else {
-            $arc = [int]($VisibleDiameter * 0.32)
-            $far = $inset + $VisibleDiameter - $arc
-            $path.AddArc($inset, $inset, $arc, $arc, 180, 90)
-            $path.AddArc($far, $inset, $arc, $arc, 270, 90)
-            $path.AddArc($far, $far, $arc, $arc, 0, 90)
-            $path.AddArc($inset, $far, $arc, $arc, 90, 90)
-            $path.CloseFigure()
-        }
-        $graphics.SetClip($path)
-        $graphics.FillRectangle([Drawing.Brushes]::Black, 0, 0, $size, $size)
-        $graphics.DrawImageUnscaled($Foreground, 0, 0)
-        Save-Png $output (Join-Path $previewPath ('android-' + $Mask + '-' + $VisibleDiameter + '.png'))
-    } finally { $path.Dispose(); $graphics.Dispose(); $output.Dispose() }
-}
-
+$androidArtwork = $null
 try {
+    $trimOffset = 2
+    $androidArtwork = New-AndroidArtwork $source $trimOffset
+    Save-Png $androidArtwork (Join-Path $previewPath 'android-transparent-source.png')
     $sizes = @(16, 24, 32, 48, 64, 128, 192, 256, 512, 1024)
     foreach ($size in $sizes) {
-        $bitmap = New-ScaledBitmap $size
+        $artwork = if ($size -eq 192) { $androidArtwork } else { $source }
+        $bitmap = New-ScaledBitmap $size -Artwork $artwork
         try {
             Save-Png $bitmap (Join-Path $assetDirectory ('xbd_mahjong_app_icon_' + $size + '.png'))
             if ($size -eq 1024) { Save-Png $bitmap (Join-Path $assetDirectory 'xbd_mahjong_app_icon.png') }
@@ -105,19 +144,13 @@ try {
         foreach ($frame in $frames) { $writer.Write([byte[]]$frame) }
     } finally { $writer.Dispose(); $stream.Dispose() }
 
-    # 108dp canvas at xxxhdpi; original art is centered at 64dp, with no color transform.
-    # Inspect both the conservative 66dp circle and the usual 72dp launcher masks.
-    $foreground = New-ScaledBitmap 432 256
-    $background = [Drawing.Bitmap]::new(432, 432, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    $backgroundGraphics = [Drawing.Graphics]::FromImage($background)
+    $launcherSize = 432
+    $foreground = New-ScaledBitmap $launcherSize -Artwork $androidArtwork
     try {
-        $backgroundGraphics.Clear([Drawing.Color]::Black)
+        # Godot exports this slot at every Android density. The candidate template uses it as a plain bitmap.
         Save-Png $foreground (Join-Path $assetDirectory 'xbd_mahjong_app_icon_adaptive.png')
-        Save-Png $background (Join-Path $assetDirectory 'xbd_mahjong_app_icon_adaptive_background.png')
-        Save-MaskPreview $foreground 'circle' 264
-        Save-MaskPreview $foreground 'circle' 288
-        Save-MaskPreview $foreground 'rounded-square' 288
-    } finally { $foreground.Dispose(); $backgroundGraphics.Dispose(); $background.Dispose() }
+        Save-Png $foreground (Join-Path $previewPath 'android-transparent-432.png')
+    } finally { $foreground.Dispose() }
 
     # Read back every ICO frame header and PNG dimensions instead of assuming export success.
     $icoBytes = [IO.File]::ReadAllBytes($icoPath)
@@ -147,14 +180,17 @@ try {
         png_sizes = $sizes
         ico_sizes = $icoSizes
         windows_icon_decoder_128px_verified = $true
-        adaptive_canvas_px = 432
-        adaptive_artwork_px = 256
-        rgb_processing = 'Proportional bicubic resize only; no tint, gamma compensation, sharpness or recoloring.'
-        adaptive_background = '#000000 (same as original corners)'
-        android_documentation = 'https://developer.android.com/develop/ui/compose/system/icon_design_adaptive'
+        android_source_trim_offset_px = $trimOffset
+        android_transparent_source_px = $androidArtwork.Width
+        android_launcher_bitmap_px = $launcherSize
+        android_launcher_background_alpha = 0
+        rgb_processing = 'Preserve original RGB inside the golden rim. Remove the black matte from the two-pixel exterior fringe.'
         native_desktop_install_verified = $false
         android_install_verified = $false
     }
     $manifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $previewPath 'icon-export-manifest.json') -Encoding utf8
     Write-Output ('MAHJONG_BRAND_ICONS_OK PNG=' + $sizes.Count + ' ICO=' + $icoSizes.Count + ' adaptive=432 original=' + $source.Width)
-} finally { $source.Dispose() }
+} finally {
+    if ($androidArtwork) { $androidArtwork.Dispose() }
+    $source.Dispose()
+}

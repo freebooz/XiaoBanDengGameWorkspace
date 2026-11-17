@@ -23,6 +23,7 @@ class Fixture:
 var _failed := false
 var _output := ""
 var _evidence: Array[Dictionary] = []
+var _own_seat_slot := Rect2()
 
 func _initialize() -> void: call_deferred("_run")
 
@@ -95,9 +96,44 @@ func _polygons_overlap(a: PackedVector2Array, b: PackedVector2Array) -> bool:
 
 func _verify(screen, scenario: String, viewer: int) -> void:
 	_verify_spot_coverage(screen, scenario)
+	var own_seat: Rect2 = screen._seat_panels[0].get_global_rect()
+	var left_seat: Rect2 = screen._seat_panels[3].get_global_rect()
+	if not _own_seat_slot.has_area():
+		_own_seat_slot = own_seat
+	_check(own_seat.is_equal_approx(_own_seat_slot) and is_equal_approx(own_seat.position.x, left_seat.position.x),
+		"Local portrait must stay fixed and left-aligned across snapshots: %s vs %s, left %s" % [own_seat, _own_seat_slot, left_seat])
+	for panel: Control in screen._seat_panels:
+		_check(panel.size.is_equal_approx(own_seat.size), "All seat panels must use the same compact size")
 	var inner_rail: Vector2 = screen._camera.unproject_position(Vector3(0.0,0.0015,0.683)*screen.TABLE_SCALE)*screen._board_view.size/Vector2(screen._board_viewport.size)+screen._board_view.position
-	_check(absf(inner_rail.y-(screen.size.y-screen._safe.w))<=1.0,"Near wooden rail inner edge must align with the safe bottom")
-	_check(is_equal_approx(screen._camera.position.distance_to(screen.CAMERA_TARGET),2.4),"Camera must retain the requested closer distance")
+	var far_tile_top: Vector3 = Vector3(0.0, screen.TILE_SIZE.z * screen.OPPONENT_HAND_SCALE,
+		-0.765 - screen.TILE_SIZE.y * screen.OPPONENT_HAND_SCALE * 0.5) * screen.TILE_WORLD_SCALE
+	var far_edge: Vector2 = screen._camera.unproject_position(far_tile_top) * screen._board_view.size / Vector2(screen._board_viewport.size) + screen._board_view.position
+	var view: Rect2 = screen._board_view.get_rect()
+	var usable_aspect: float = view.size.x / (screen.size.y - screen._safe.y - screen._safe.w)
+	if usable_aspect >= 2.10 and usable_aspect <= 2.23:
+		var corner: Vector2 = screen._project_to_board(Vector3(0.683, 0.0015, 0.683) * screen.TABLE_SCALE)
+		var width_ratio := absf(corner.x - view.size.x * 0.5) * 2.0 / view.size.x
+		_check(width_ratio >= 0.90, "Wide phones must use the available width for the near felt edge (%.1f%%)" % (width_ratio * 100.0))
+	if viewer == 0 and scenario == "four-seat-melds" and not OS.has_feature("mobile"):
+		for button in [screen._toolbar.get_child(1), screen._side_tools.get_child(1), screen._own_mic]:
+			var scale: Vector2 = button.get_viewport_transform().get_scale()
+			_check((button.size * scale).distance_to(Vector2(50.4, 50.4)) <= 1.0, "Round toolbar and social icons must share the 50.4 px reference extent")
+	var far_seat: Rect2 = screen._seat_panels[2].get_rect()
+	var inset := far_seat.size.y * (8.0 / 76.0)
+	var footer_clearance := inset
+	if screen._board_viewport.size.x < 760:
+		footer_clearance = maxf(footer_clearance, screen._own_mic.size.y * 0.72)
+	var band_top := maxf(view.position.y, far_seat.end.y)
+	var band_center := Vector2(view.get_center().x, (band_top + inset + view.end.y - footer_clearance) * 0.5)
+	_check(band_center.distance_to((far_edge + inner_rail) * 0.5) <= 1.0, "Playable table must stay centered in the available band")
+	_check(far_edge.y >= band_top and inner_rail.y <= view.end.y, "Near rail and far hand must fit the playable viewport")
+	var surface_transform: Transform2D = screen._board_surface.get_viewport_transform() * screen._board_surface.get_global_transform()
+	_check(surface_transform.get_scale().is_equal_approx(Vector2.ONE) and is_equal_approx(screen._board_viewport.scaling_3d_scale, 1.0),
+		"Board must render and present every physical pixel without image upscaling")
+	var camera_distance: float = screen._camera.position.distance_to(screen.CAMERA_TARGET)
+	_check(camera_distance >= 2.024 and camera_distance <= 2.401, "Camera must preserve the verified distance range")
+	if usable_aspect <= 1.78:
+		_check(is_equal_approx(camera_distance, 2.4), "Standard windows must preserve the existing framing")
 	for hand in screen._hand_models:
 		_check(is_equal_approx(hand.position.z,0.765-0.039*2.39),"Own hand must move inward exactly its physical width with no scale reduction")
 		_check(hand.scale.is_equal_approx(Vector3.ONE*2.39),"Own hand presentation scale must remain unchanged")
@@ -107,6 +143,7 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 	var hands: Array[Node3D] = []
 	var smallest_discard := Vector2(INF,INF)
 	var smallest_meld := Vector2(INF,INF)
+	var own_meld_edge := -INF
 	var felt := screen._board_viewport.find_child("Mahjong_Felt_Surface",true,false) as MeshInstance3D
 	var felt_bounds: AABB = felt.global_transform * felt.get_aabb()
 	var physical_bounds: Dictionary = {}
@@ -132,7 +169,14 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 			expected += 1
 			var relative := int(str(tile.name).trim_prefix("MahjongMeld").split("_")[0])
 			var local: Vector3 = tile.position.rotated(Vector3.UP,-float(relative)*PI*.5)
-			_check(absf(local.z-(0.67975 if relative==0 else 0.77215))<0.001,"Meld must stay ahead of its owner's hand and preserve discard clearance")
+			if relative == 0:
+				own_meld_edge = maxf(own_meld_edge, local.x + screen.TILE_SIZE.x * tile.scale.x * 0.5)
+				var row_spacing: float = screen.TILE_SIZE.z * screen.MELD_SCALE + 0.003
+				var row_offset := (0.67975 - local.z) / row_spacing
+				_check(row_offset >= -0.01 and absf(row_offset - roundf(row_offset)) < 0.01,
+					"Own melds must stay in a complete row at the left of the hand")
+			else:
+				_check(absf(local.z - 0.77215) < 0.001, "Opponent meld must preserve its discard clearance")
 			var hand_start: float = screen._concealed_row_start(relative, screen._seat_concealed_count(relative), screen.OWN_HAND_SCALE if relative==0 else screen.OPPONENT_HAND_SCALE)
 			_check(local.x < hand_start,"Meld is not left of its remaining hand")
 			if is_equal_approx(tile.rotation.x, PI):
@@ -156,11 +200,16 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 		if is_meld: smallest_meld = smallest_meld.min(rect.size)
 		else: smallest_discard = smallest_discard.min(rect.size)
 		for panel in screen._seat_panels:
-			_check(not rect.grow(-1).intersects(panel.get_global_rect()), "Seat HUD hides %s"%tile.name)
+			_check(not rect.grow(-1).intersects(panel.get_global_rect()), "Seat HUD hides %s: %s vs %s %s" % [tile.name, rect, panel.name, panel.get_global_rect()])
 		for action in screen._response_buttons.values()+[screen._play_button]:
 			if action.is_visible_in_tree(): _check(not rect.grow(-1).intersects(action.get_global_rect()),"Action hides %s"%tile.name)
 		_check(not rect.grow(-1).intersects(screen._remaining_panel.get_global_rect()),"Clock hides %s"%tile.name)
 		exposed.append(tile)
+	if is_finite(own_meld_edge) and not screen._hand_models.is_empty():
+		var first_hand: Node3D = screen._hand_models.front()
+		var hand_tile_width: float = screen.TILE_SIZE.x * first_hand.scale.x
+		var gap := first_hand.position.x - hand_tile_width * 0.5 - own_meld_edge
+		_check(is_equal_approx(gap, hand_tile_width), "Own hand and displayed melds must have a one-tile gap")
 	for i in exposed.size():
 		var a := exposed[i]
 		for j in range(i+1, exposed.size()):
@@ -184,7 +233,7 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 			var bounds := button.get_global_rect()
 			buttons[kind] = [bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y]
 	var pixel_scale: Vector2 = screen.get_viewport_transform().get_scale()
-	_evidence.append({"scenario":scenario,"camera_distance":screen._camera.position.distance_to(screen.CAMERA_TARGET),"inner_rail_bottom_logical":inner_rail.y,"safe_bottom_logical":screen.size.y-screen._safe.w,"own_hand_inward_world_metres":0.039*2.39*screen.TILE_WORLD_SCALE,"own_hand_scale":2.39})
+	_evidence.append({"scenario":scenario,"camera_distance":screen._camera.position.distance_to(screen.CAMERA_TARGET),"far_hand_top_logical":far_edge.y,"inner_rail_bottom_logical":inner_rail.y,"band_center_logical":str(band_center),"native_render_size":str(screen._board_viewport.size),"own_hand_inward_world_metres":0.039*2.39*screen.TILE_WORLD_SCALE,"own_hand_scale":2.39})
 	_evidence.append({"scenario":scenario,"viewer":viewer,"logical_viewport":[screen.size.x,screen.size.y],"physical_window":[root.size.x,root.size.y],"public_tiles":exposed.size(),"hidden_kongs":concealed_kongs,"base_tile_metres":[0.039,0.028,0.056],"discard_outward_metres":0.056*1.65*screen.TILE_WORLD_SCALE,"four_row_meld_clearance_metres":0.00875*screen.TILE_WORLD_SCALE,"smallest_discard_px":[smallest_discard.x*pixel_scale.x,smallest_discard.y*pixel_scale.y],"smallest_meld_px":[smallest_meld.x*pixel_scale.x,smallest_meld.y*pixel_scale.y] if is_finite(smallest_meld.x) else [],"response_targets_logical":buttons})
 
 func _verify_spot_coverage(screen, scenario: String) -> void:
@@ -199,11 +248,12 @@ func _verify_spot_coverage(screen, scenario: String) -> void:
 
 func _verify_lighting(screen) -> Dictionary:
 	var records: Array[Dictionary] = []
-	var energy_scale := 0.78 if RenderingServer.get_current_rendering_method()=="gl_compatibility" else 1.0
+	var compatibility := RenderingServer.get_current_rendering_method() == "gl_compatibility"
 	var node_ids: Dictionary = {}
 	var sky_ids: Dictionary = {}
 	var panorama_id := 0
 	for quality in [0,1,2,1,0,2,1]:
+		var energy_scale := 0.66 if compatibility else (0.86 if quality == 0 else 1.0)
 		screen._set_quality(quality)
 		for frame in 3: await process_frame
 		var active := 0
@@ -216,17 +266,21 @@ func _verify_lighting(screen) -> Dictionary:
 				if light.shadow_enabled: shadowed+=1
 		_check(active==(2 if quality==0 else 3) and shadowed==1,"Lighting must use exactly one shadow caster and one/two fills")
 		var spot := screen._stage.get_node("OverheadTableLight") as SpotLight3D
-		_check(spot.position.is_equal_approx(Vector3(-0.55,1.15,0.30)) and (-spot.global_basis.z).dot((-spot.global_position).normalized())>0.9999,"Main spotlight must point from northwest toward table center")
-		_check(is_equal_approx(spot.light_energy,1.10*energy_scale) and spot.light_color.is_equal_approx(Color("#fff0dc")),"Main light must use the approved soft warm-white energy")
+		_check(spot.position.is_equal_approx(Vector3(-0.60,1.20,0.42)) and (-spot.global_basis.z).dot((-spot.global_position).normalized())>0.9999,"Main spotlight must point diagonally toward table center")
+		_check(is_equal_approx(spot.light_energy,1.46*energy_scale) and spot.light_color.is_equal_approx(Color("#ffe5cb")),"Main key must use the tuned warm-white light")
 		_check(spot.shadow_enabled and is_zero_approx(spot.light_size) and is_equal_approx(spot.spot_angle,55.0),"Main light must use PCF with the approved cone")
 		for light_name in ["FillLight","NortheastSeatLight"]:
 			var fill := screen._stage.get_node(light_name) as OmniLight3D
-			var expected := 0.16 if light_name=="FillLight" else (0.13 if quality>0 else 0.0)
+			var expected := 0.45 if light_name=="FillLight" else (0.36 if quality>0 else 0.0)
+			var expected_white := Color("#fff7ef") if light_name == "FillLight" else Color("#e6efff")
 			_check(not fill.shadow_enabled and is_equal_approx(fill.light_energy,expected*energy_scale),"Fill must follow quality and never cast shadows")
+			_check(fill.light_color.is_equal_approx(expected_white), "Fill and rim must use their separate white points")
 		var key := screen._stage.get_node("KeyLight") as DirectionalLight3D
 		_check(not key.visible and not key.shadow_enabled and is_zero_approx(key.light_energy),"Old directional light must stay retired")
 		var environment := (screen._stage.get_node("WorldEnvironment") as WorldEnvironment).environment
-		_check(environment.ambient_light_source==Environment.AMBIENT_SOURCE_COLOR and is_equal_approx(environment.ambient_light_energy,0.08 if energy_scale<1.0 else 0.10),"Ambient must remain restrained")
+		_check(environment.ambient_light_source==Environment.AMBIENT_SOURCE_COLOR and is_equal_approx(environment.ambient_light_energy,0.14 if compatibility else 0.17),"Ambient must lift tile shadows without flattening the scene")
+		var tone := Environment.TONE_MAPPER_FILMIC if quality > 0 and not compatibility else Environment.TONE_MAPPER_LINEAR
+		_check(environment.tonemap_mode == tone, "Balanced/high retain filmic highlight rolloff, low uses linear tone mapping")
 		var sky := environment.sky
 		var radiance := 256 if quality==2 else 128
 		_check(environment.reflected_light_source==Environment.REFLECTION_SOURCE_SKY and sky.process_mode==Sky.PROCESS_MODE_QUALITY and sky.sky_material is PanoramaSkyMaterial,"Reflection must use a static panorama sky")
@@ -243,13 +297,12 @@ func _verify_lighting(screen) -> Dictionary:
 		_check(viewport.positional_shadow_atlas_quad_1==0 and viewport.positional_shadow_atlas_quad_2==0 and viewport.positional_shadow_atlas_quad_3==0,"Unused atlas quadrants must be disabled")
 		# Independently derive physical pixels from the native window / root
 		# logical viewport ratio: get_screen_transform omits canvas stretch here.
-		var output_width: float=screen._board_view.get_global_rect().size.x*float(root.size.x)/root.get_visible_rect().size.x
-		var budget: Vector2i=screen.QUALITY_SIZES[quality]
-		_check(viewport.size.x<=roundi(output_width) and viewport.size.x<=budget.x and viewport.size.x*viewport.size.y<=budget.x*budget.y+budget.x,"3D rendering must respect real output pixels and quality budget")
-		var expected_width:=mini(mini(budget.x,roundi(sqrt(float(budget.x*budget.y)*screen._board_view.size.aspect()))),maxi(1,roundi(output_width)))
-		_check(viewport.size.x==expected_width,"Large native outputs must use the available quality budget instead of being capped by design units")
+		var output: Vector2 = screen._board_view.get_global_rect().size * Vector2(root.size) / root.get_visible_rect().size
+		var delta := (Vector2(viewport.size) - output).abs()
+		_check(delta.x <= 1.0 and delta.y <= 1.0 and viewport.scaling_3d_scale == 1.0,
+			"Every quality must render native 3D pixels across both output axes")
 		_verify_spot_coverage(screen,"quality-%d"%quality)
-		records.append({"quality":quality,"active_lights":active,"shadow_casters":shadowed,"main_position":[spot.position.x,spot.position.y,spot.position.z],"main_energy":spot.light_energy,"main_color":spot.light_color.to_html(),"cone_half_angle":spot.spot_angle,"shadow_atlas":viewport.positional_shadow_atlas_size,"msaa":viewport.msaa_3d,"reflection_radiance":radiance,"render_size":[viewport.size.x,viewport.size.y],"physical_output_width":output_width})
+		records.append({"quality":quality,"active_lights":active,"shadow_casters":shadowed,"main_position":[spot.position.x,spot.position.y,spot.position.z],"main_energy":spot.light_energy,"main_color":spot.light_color.to_html(),"cone_half_angle":spot.spot_angle,"shadow_atlas":viewport.positional_shadow_atlas_size,"msaa":viewport.msaa_3d,"reflection_radiance":radiance,"render_size":[viewport.size.x,viewport.size.y],"physical_output_width":output.x})
 	return {"quality_transitions":records,"node_count":node_ids.size(),"all_tile_body_corners_covered":true}
 
 func _tap(point: Vector2) -> void:
@@ -272,6 +325,8 @@ func _verify_touch(screen) -> void:
 		var origin_y: float = screen._hand_models[i].position.y
 		await _tap(screen._board_view.get_viewport_transform()*screen._board_view.get_global_transform()*screen._projected_tile_rect(screen._hand_models[i]).get_center())
 		_check(screen._selected_id == id,"Projected touch missed hand %d"%id)
+		_check(screen._seat_panels[0].get_global_rect().is_equal_approx(_own_seat_slot),
+			"Selecting a tile must not move the local portrait")
 		_check(screen.sent_actions.is_empty(),"First touch must only select the tile")
 		for action in screen._response_buttons.values()+[screen._play_button]:
 			if not action.is_visible_in_tree(): continue
@@ -288,8 +343,16 @@ func _verify_touch(screen) -> void:
 		screen.sent_actions.clear()
 		for frame in 2: await process_frame
 		var button := screen._response_buttons[kind] as Button
-		await _tap(button.get_viewport_transform()*button.get_global_transform()*(button.size*.5))
-		_check(screen.sent_actions == ["ming_gang" if kind=="gang" else kind], "Response target did not dispatch %s"%kind)
+		var point := button.get_viewport_transform() * button.get_global_transform() * (button.size * 0.5)
+		await _tap(point)
+		if screen.sent_actions != ["ming_gang" if kind == "gang" else kind]:
+			var motion := InputEventMouseMotion.new()
+			motion.position = point
+			Input.parse_input_event(motion)
+			Input.flush_buffered_events()
+			await process_frame
+			_check(false, "Response target did not dispatch %s at %s (seat %s, disabled %s, hovered %s, sent %s)" %
+				[kind, point, screen._state.get("your_seat"), button.disabled, root.gui_get_hovered_control(), screen.sent_actions])
 	screen._clear_pending_command()
 	screen._refresh_connection_actions(false)
 
@@ -342,7 +405,7 @@ func _run() -> void:
 	var lights: Dictionary = await _verify_lighting(screen)
 	var felt := screen._board_viewport.find_child("Mahjong_Felt_Surface",true,false) as MeshInstance3D
 	var felt_color: Color = felt.material_override.get_shader_parameter("felt_color")
-	_check(felt_color.is_equal_approx(Color("#203d25")),"Felt must retain the approved deeper green material tint")
+	_check(felt_color.is_equal_approx(Color("#192f1e")),"Felt must use the deeper green material tint")
 	lights["felt_color"] = felt_color.to_html()
 	if not _output.is_empty():
 		var file := FileAccess.open(_output.path_join("geometry.json"),FileAccess.WRITE)

@@ -2,15 +2,16 @@ extends Control
 ## The badge buttons inspect analysis without selecting or playing a 3D tile.
 
 const BADGE := preload("res://modules/games/mahjong/guiyang/tile_efficiency_badge.gd")
-const THEME := preload("res://modules/games/mahjong/guiyang/mahjong_rural_theme.gd")
+const DETAIL := preload("res://modules/games/mahjong/guiyang/mahjong_efficiency_detail.gd")
 const NUMERALS := ["一", "二", "三", "四", "五", "六", "七", "八", "九"]
 const SUITS := ["万", "筒", "条"]
-const HONORS := ["东", "南", "西", "北", "中", "发", "白"]
+const SUIT_IDS := ["wan", "tong", "tiao"]
 const LABEL_HEIGHT := 32.0
 const LABEL_GAP := 4.0
 
+var tile_materials: RefCounted
 var _badges: Dictionary = {}
-var _detail: RichTextLabel
+var _detail: Control
 var _inspected_id := 0
 var _detail_results: Dictionary = {}
 var _detail_area := Rect2()
@@ -21,20 +22,11 @@ var _snapshot_note := ""
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	focus_mode = Control.FOCUS_NONE
-	_detail = RichTextLabel.new()
-	_detail.name = "MahjongEfficiencyDetail"
-	_detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_detail.focus_mode = Control.FOCUS_NONE
-	_detail.scroll_active = false
-	_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_detail.add_theme_color_override("default_color", Color("#fff5e4"))
-	_detail.add_theme_font_size_override("normal_font_size", 15)
-	var surface := THEME.frame(Color("#252019f5"), Color("#99744b"), 9, 1)
-	for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]:
-		surface.set_content_margin(side, 8.0)
-	_detail.add_theme_stylebox_override("normal", surface)
+	_detail = DETAIL.new()
+	_detail.tile_materials = tile_materials
 	add_child(_detail)
-	_detail.hide()
+	_detail.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_detail.dismissed.connect(close_detail)
 
 
 func clear() -> void:
@@ -42,10 +34,19 @@ func clear() -> void:
 		remove_child(badge)
 		badge.queue_free()
 	_badges.clear()
-	_inspected_id = 0
+	close_detail()
 	_detail_results = {}
+
+
+func close_detail() -> void:
+	_inspected_id = 0
 	if is_instance_valid(_detail):
 		_detail.hide()
+
+
+func shift_badges(delta: Vector2) -> void:
+	for badge: Control in _badges.values():
+		badge.position += delta
 
 
 func present(tiles: Array, results: Dictionary, selected_id: int, detail_area := Rect2(), unavailable_hint := "牌效数据暂不可用。", snapshot_note := "") -> void:
@@ -116,12 +117,12 @@ func present(tiles: Array, results: Dictionary, selected_id: int, detail_area :=
 		_badges.erase(id)
 	if not used.has(_inspected_id):
 		_inspected_id = 0
-	_show_detail(results.get(_inspected_id), detail_area)
+	_show_detail(results.get(_inspected_id))
 
 
 func _inspect(id: int) -> void:
 	_inspected_id = 0 if _inspected_id == id else id
-	_show_detail(_detail_results.get(_inspected_id), _detail_area)
+	_show_detail(_detail_results.get(_inspected_id))
 
 
 func _label_rect(tiles: Array, index: int, face: Rect2, label_top: float) -> Rect2:
@@ -136,38 +137,80 @@ func _label_rect(tiles: Array, index: int, face: Rect2, label_top: float) -> Rec
 	return Rect2(Vector2((face.size.x - width) * 0.5, label_top - face.position.y), Vector2(width, LABEL_HEIGHT))
 
 
-func _show_detail(result: Variant, area: Rect2) -> void:
-	if not is_instance_valid(_detail):
+func _show_detail(result: Variant) -> void:
+	if not is_instance_valid(_detail): return
+	var area := _detail_area if _detail_area.has_area() else Rect2(Vector2.ZERO, size)
+	if _inspected_id <= 0 or not area.has_area():
+		_detail.hide()
 		return
-	var visible_area := area.intersection(Rect2(Vector2.ZERO, size))
-	var display := visible_area.size.x >= 180.0 and visible_area.size.y >= 64.0 and _inspected_id > 0
-	_detail.visible = display
-	if not display:
-		return
-	_detail.position = visible_area.position
-	_detail.size = visible_area.size
+	var waits: Array[Dictionary] = []
 	if not _valid_efficiency(result):
-		_detail.text = _unavailable_hint
+		_detail.show_result(_unavailable_hint, waits, _snapshot_note, area)
 		return
-	var waits := PackedStringArray()
 	var incoming: Variant = result.get("ukeire")
 	if incoming is Array:
 		for entry in incoming:
 			if not entry is Dictionary:
 				continue
-			var name := _tile_name(entry.get("tile"))
+			var tile: Variant = entry.get("tile")
 			var remaining: Variant = entry.get("count")
-			if not name.is_empty() and _count_is_valid(remaining, 4) and remaining > 0:
-				waits.append("%s×%d" % [name, int(remaining)])
+			if _count_is_valid(tile, 26) and _count_is_valid(remaining, 4) and remaining > 0:
+				var suit := floori(float(tile) / 9.0)
+				var rank := int(tile) % 9
+				waits.append({"suit": SUIT_IDS[suit], "rank": rank + 1,
+					"title": NUMERALS[rank] + SUITS[suit], "count": int(remaining)})
 	var status := "和牌资格未校验"
 	var legality: Variant = result.get("legalWaits")
 	if legality is Dictionary and legality.get("verified") == true:
 		status = "已通过和牌校验" if legality.get("legal") == true else "未通过和牌校验"
 	if result.shanten.minimum > 0:
 		status = "尚未结构听牌"
-	_detail.text = "%s · 向听 %d · 有效进张 %d 张（未见牌） · %s\n%s" % [_analysis_scope(result), int(result.shanten.minimum), int(result.ukeireCount), status,
-		"、".join(waits) if not waits.is_empty() else "无未见有效牌"]
-	if not _snapshot_note.is_empty(): _detail.text += "\n" + _snapshot_note
+	elif result.has("claimUkeireCount"):
+		var claim_count: Variant = result.claimUkeireCount
+		status = "杠/定缺条件下接炮候选 %d 张；最终以合法动作为准" % int(claim_count) if _count_is_valid(claim_count, 108) else "接炮资格信息不足"
+	var summary := "%s · 向听 %d · 有效进张 %d 张（未见牌）" % [_analysis_scope(result), int(result.shanten.minimum), int(result.ukeireCount)]
+	if result.get("analysisMode") == "discard" and _rank(result) > 0:
+		summary += " · 推荐第 %d" % _rank(result)
+	var missing: Variant = result.get("ownMissingSuit")
+	if _count_is_valid(missing, 2):
+		summary += " · 定缺%s" % SUITS[int(missing)]
+	var notes := PackedStringArray([status if not waits.is_empty() else status + " · 无未见有效牌"])
+	# Only display search scores when this candidate was actually searched.
+	# Zero can otherwise mean a unique efficiency row or an exhausted wall.
+	if result.get("lookAheadEvaluated") == true and _count_is_valid(result.get("q"), 20000) and _count_is_valid(result.get("k"), 20000):
+		notes.append("后续进张 Q=%d · 靠张改良 K=%d（加权指标，非胡牌概率）" % [int(result.q), int(result.k)])
+	var risk := _risk_note(result.get("riskReasons"))
+	if not risk.is_empty(): notes.append(risk)
+	var reason := _ranking_note(result)
+	if not reason.is_empty(): notes.append("同分依据　" + reason)
+	if not _snapshot_note.is_empty(): notes.append(_snapshot_note)
+	_detail.show_result(summary, waits, "\n".join(notes), area)
+
+
+static func _risk_note(reasons: Variant) -> String:
+	if not reasons is PackedStringArray or reasons.size() != 3: return ""
+	var clues := PackedStringArray()
+	for kind in ["elevated", "possible", "rule_blocked", "supply_blocked", "unknown"]:
+		var count: int = reasons.count(kind)
+		if count == 0: continue
+		var label: String = {
+			"elevated": "强威胁", "possible": "可能接炮", "rule_blocked": "规则阻断",
+			"supply_blocked": "库存阻断", "unknown": "信息不足",
+		}[kind]
+		clues.append("%s %d 家" % [label, count])
+	return "" if clues.is_empty() else "放铳线索　" + " · ".join(clues)
+
+
+static func _ranking_note(result: Dictionary) -> String:
+	match result.get("rankingReason"):
+		"elevated_risk": return "强威胁对手较少"
+		"claim_supply": return "可接炮进张较多"
+		"q": return "后续进张质量 %d" % int(result.get("q", 0))
+		"k": return "靠张改良 %d" % int(result.get("k", 0))
+		"other_risk": return "其余可能接炮的对手较少"
+		"gift_kong": return "可能接明杠的对手较少"
+		"chicken_exposure": return "已知鸡牌转移风险较小"
+		_: return ""
 
 
 static func _analysis_scope(result: Dictionary) -> String:
@@ -185,12 +228,3 @@ static func _rank(result: Dictionary) -> int:
 
 static func _count_is_valid(value: Variant, maximum: int) -> bool:
 	return (value is int or value is float) and value >= 0 and value <= maximum and value == floorf(value)
-
-
-static func _tile_name(value: Variant) -> String:
-	if not _count_is_valid(value, 33):
-		return ""
-	var tile := int(value)
-	if tile < 27:
-		return NUMERALS[tile % 9] + SUITS[floori(tile / 9.0)]
-	return HONORS[tile - 27]

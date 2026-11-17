@@ -4,6 +4,7 @@ extends Control
 const API_SCRIPT = preload("res://modules/foundation/network/api_client.gd")
 const ART := "res://modules/games/mahjong/guiyang/assets/"
 const GAME_SCRIPT := "res://modules/games/mahjong/guiyang/guiyang_3d_screen.gd"
+const BATTLE_DISPLAY := preload("res://modules/foundation/ui/battle_display.gd")
 const LOBBY_SCRIPT := "res://modules/games/mahjong/guiyang/mahjong_lobby_view.gd"
 const TRANSPORT := preload("res://modules/games/mahjong/guiyang/mahjong_transport.gd")
 const GUEST_SESSIONS := preload("res://modules/games/mahjong/guiyang/mahjong_guest_sessions.gd")
@@ -59,6 +60,12 @@ var _login_art: TextureRect
 var _login_tray: PanelContainer
 var _login_pad: MarginContainer
 var _login_content: VBoxContainer
+var _login_form_intro: VBoxContainer
+var _login_form_columns: BoxContainer
+var _login_form_fields: VBoxContainer
+var _login_form_actions: VBoxContainer
+var _login_form_title: Label
+var _login_title_clearance: Control
 var _login_footer: Label
 var _login_form_back: Button
 var _entry_buttons: Array[Button] = []
@@ -107,6 +114,9 @@ var _room_directory_loaded := false
 var _room_directory_request := 0
 var _room_directory_error := ""
 var _public_rooms: Array = []
+var _spectator_supported := false
+var _pending_watch: Dictionary = {}
+var _watch_return_message := ""
 var _presets: Array = []
 var _selected_rule: Dictionary = {}
 var _pending_lobby_id := ""
@@ -143,6 +153,7 @@ var _account_request_generation := 0
 var _account_session_expired := false
 var _training_to_abandon := ""
 var _finished_friend_return: Dictionary = {}
+var _rematch_window_match_id := ""
 
 
 func _ready() -> void:
@@ -201,6 +212,12 @@ func _reset(next_state: String, background: Texture2D = null) -> void:
 	_login_header = null
 	_login_footer = null
 	_login_form_back = null
+	_login_form_intro = null
+	_login_form_columns = null
+	_login_form_fields = null
+	_login_form_actions = null
+	_login_form_title = null
+	_login_title_clearance = null
 	_entry_buttons.clear()
 	_guest_identity_view = null
 	_lobby_entry = null
@@ -334,7 +351,8 @@ func _build_login_tray() -> VBoxContainer:
 	_login_margin = margins
 	var scroll := ScrollContainer.new()
 	scroll.name = "MahjongLoginScroll"
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# A temporary vertical scrollbar during a resize must not widen the form.
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.follow_focus = true
@@ -347,10 +365,14 @@ func _build_login_tray() -> VBoxContainer:
 	layout.alignment = BoxContainer.ALIGNMENT_CENTER
 	scroll.add_child(layout)
 	_login_layout = layout
+	_login_title_clearance = Control.new()
+	_login_title_clearance.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_login_title_clearance.hide()
+	layout.add_child(_login_title_clearance)
 	_login_header = VBoxContainer.new()
 	layout.add_child(_login_header)
 	_login_logo = _login_brand()
-	_login_header.add_child(_login_logo)
+	_screen.add_child(_login_logo)
 	var motto := Label.new()
 	motto.text = "◇  乡里麻将 · 亲友对局 · 轻松娱乐  ◇"
 	motto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -360,20 +382,8 @@ func _build_login_tray() -> VBoxContainer:
 	motto.add_theme_constant_override("outline_size", 5)
 	motto.add_theme_font_size_override("font_size", 22)
 	_login_header.add_child(motto)
-	var form := _state != "login"
-	var tray: PanelContainer = MODAL_THEME.village_panel(layout) if form else PanelContainer.new()
+	var tray: PanelContainer = MODAL_THEME.village_panel(layout)
 	tray.name = "MahjongLoginTray"
-	if not form:
-		var space := Control.new()
-		space.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		space.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		layout.add_child(space)
-		tray.minimum_size_changed.connect(_layout_screen, CONNECT_DEFERRED)
-	else:
-		tray.minimum_size_changed.connect(_center_login_form.bind(tray), CONNECT_DEFERRED)
-	if not form:
-		tray.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
-		layout.add_child(tray)
 	_login_tray = tray
 	var pad := MarginContainer.new()
 	tray.add_child(pad)
@@ -414,7 +424,7 @@ func _layout_screen() -> void:
 	_center_exit_dialog()
 	var safe := LOGIN_THEME.safe_insets(_screen)
 	if is_instance_valid(_login_form_back):
-		var hit := maxf(52.0, LOGIN_THEME.touch_extent(_screen))
+		var hit := MODAL_THEME.size_icon_button(_login_form_back, _screen)
 		_login_form_back.offset_left = -safe.z - hit - 14
 		_login_form_back.offset_right = -safe.z - 14
 		_login_form_back.offset_top = safe.y + 14
@@ -423,60 +433,76 @@ func _layout_screen() -> void:
 	var viewport_size := _screen.size
 	var touch := LOGIN_THEME.touch_extent(_screen)
 	var available := viewport_size - Vector2(safe.x + safe.z, safe.y + safe.w)
-	var wide := available.x >= 900.0 and (available.x >= available.y * 1.5 or available.y < 1100.0)
-	var form := _state != "login"
-	var form_width := minf(740.0, available.x - 40.0) if form else minf(560.0, available.x - 40.0)
-	var column_gap := 24.0
-	if wide and form: form_width = minf(form_width, (available.x - 40.0 - column_gap) * 0.60)
-	var header_width := minf(440.0, form_width * 0.60) if wide and form else form_width
-	var content_width := form_width + header_width + column_gap if wide and form else form_width
-	var edge := maxf(20.0, (available.x - content_width) * 0.5)
+	var compact := LOGIN_THEME.compact_entry_landscape(available)
+	var wide := not compact and available.x >= 900.0 and (available.x >= available.y * 1.5 or available.y < 1100.0)
+	var roomy := available.x >= (1380.0 if wide else 780.0) and available.y >= (1050.0 if wide else 1250.0)
+	var form_width := minf(740.0, available.x - 40.0)
+	var edge := maxf(20.0, (available.x - form_width) * 0.5)
 	_login_margin.offset_left = edge + safe.x
 	_login_margin.offset_right = -edge - safe.z
-	var top := clampf(viewport_size.y * (0.045 if wide else 0.068), 15.0, 89.0) if form else clampf(viewport_size.y * 0.032, 12.0, 42.0)
+	var logo_width := 72.0 if compact else minf(available.x * 0.34, clampf(available.y * 0.20, 120.0, 220.0))
+	_login_logo.size = Vector2(logo_width, logo_width / _login_logo.texture.get_size().aspect())
+	_login_logo.position = Vector2(safe.x + 12.0, safe.y + 8.0)
+	var top := 26.0 if compact else clampf(viewport_size.y * 0.045, 20.0, 64.0)
+	if not compact and edge < 20.0 + logo_width:
+		top = maxf(top, 16.0 + _login_logo.size.y)
 	_login_margin.offset_top = safe.y + top
 	var unit := minf(form_width / 740.0, 1.0)
-	var entry_height := maxf(touch, maxf(60.0, 116.0 * unit))
-	var footer_height := 43.0
+	var entry_height := maxf(touch, 52.0 if compact else (116.0 if roomy else 60.0))
+	var requested_entry_width := 224.0 if compact else (600.0 if roomy else (420.0 if wide else 242.0))
+	var entry_width := minf(requested_entry_width, (form_width - 92.0) * 0.5 if compact else form_width - 104.0)
+	var footer_height := 32.0 if compact else 43.0
 	_login_footer.offset_left = safe.x
 	_login_footer.offset_right = -safe.z
 	_login_footer.offset_top = -safe.w - footer_height
 	_login_footer.offset_bottom = -safe.w
-	_login_margin.offset_bottom = -safe.w - footer_height - 8.0
-	_login_layout.add_theme_constant_override("separation", roundi(column_gap) if wide else 14)
-	_login_layout.vertical = not (wide and form)
-	_login_header.size_flags_horizontal = Control.SIZE_FILL
-	_login_header.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_login_header.custom_minimum_size = Vector2(header_width, 0.0)
-	_login_tray.size_flags_horizontal = Control.SIZE_FILL
+	_login_margin.offset_bottom = -safe.w - footer_height - (4.0 if compact else 8.0)
+	_login_layout.add_theme_constant_override("separation", 14)
+	_login_header.visible = not compact and (not wide or available.y >= 760.0)
+	_login_title_clearance.visible = compact
+	if is_instance_valid(_login_form_title):
+		_login_form_title.add_theme_font_size_override("font_size", 23 if compact else 28)
+		_login_form_title.get_parent().custom_minimum_size.y = 50.0 if compact else 61.0
+	_login_tray.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_login_tray.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_login_tray.custom_minimum_size.x = form_width
-	_login_logo.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_login_logo.size_flags_vertical = Control.SIZE_FILL
-	var logo_width := minf(header_width, 510.0)
-	if not wide: logo_width = minf(logo_width, available.y * 0.30)
-	_login_logo.custom_minimum_size = Vector2(logo_width, logo_width / _login_logo.texture.get_size().aspect())
-	var motto := _login_header.get_child(1) as Label
-	motto.add_theme_font_size_override("font_size", 18 if header_width < 420.0 else 22)
-	for side in ["left", "right"]: _login_pad.add_theme_constant_override("margin_" + side, 22 if form else 5)
-	_login_pad.add_theme_constant_override("margin_top", 13 if form else 6)
-	_login_pad.add_theme_constant_override("margin_bottom", 14 if form else 3)
-	_login_content.add_theme_constant_override("separation", roundi(maxf(8.0, 12.0 * unit)))
+	var motto := _login_header.get_child(0) as Label
+	motto.add_theme_font_size_override("font_size", 18 if form_width < 420.0 else 22)
+	for side in ["left", "right"]: _login_pad.add_theme_constant_override("margin_" + side, 12 if compact else 22)
+	_login_pad.add_theme_constant_override("margin_top", 0 if compact else 13)
+	_login_pad.add_theme_constant_override("margin_bottom", 0 if compact else 14)
+	var row_gap := roundi(maxf(8.0, 12.0 * unit))
 	# A short landscape viewport keeps full-size fields and the paper rim;
 	# reclaim space between rows rather than shrinking readable bold glyphs.
-	if wide and form and viewport_size.y < 800.0:
-		_login_content.add_theme_constant_override("separation", 8)
+	if wide and viewport_size.y < 800.0:
+		row_gap = 8
+	if compact: row_gap = 4
+	_login_content.add_theme_constant_override("separation", row_gap)
 	_login_content.alignment = BoxContainer.ALIGNMENT_BEGIN
-	for child in _login_content.get_children():
+	var fields: Container = _login_content
+	if is_instance_valid(_login_form_columns):
+		_login_form_intro.visible = not compact
+		_login_form_columns.vertical = not compact
+		_login_form_columns.add_theme_constant_override("separation", 18 if compact else row_gap)
+		for section in [_login_form_intro, _login_form_fields, _login_form_actions]:
+			section.add_theme_constant_override("separation", row_gap)
+			section.size_flags_horizontal = Control.SIZE_EXPAND_FILL if compact else Control.SIZE_FILL
+			section.size_flags_vertical = Control.SIZE_SHRINK_CENTER if compact else Control.SIZE_FILL
+		fields = _login_form_fields
+	for child in fields.get_children():
 		if child is PanelContainer and child.has_meta("account_field"):
 			child.size_flags_vertical = Control.SIZE_FILL
-			child.custom_minimum_size.y = maxf(touch, maxf(76.0, 90.0 * unit))
+			child.custom_minimum_size.y = maxf(touch, 68.0 if compact else maxf(76.0, 90.0 * unit))
+			var field_style: StyleBox = child.get_theme_stylebox("panel")
+			field_style.set_content_margin(SIDE_TOP, 5.0 if compact else 8.0)
+			field_style.set_content_margin(SIDE_BOTTOM, 5.0 if compact else 8.0)
 	if _state == "account_register" and is_instance_valid(_login_secret):
-		_login_secret.placeholder_text = "8–128位" if form_width < 420.0 else "输入 8–128 个字符"
+		_login_secret.placeholder_text = "8–128位" if compact or form_width < 420.0 else "输入 8–128 个字符"
 	_login_art.texture = MODAL_THEME.VILLAGE_LANDSCAPE if available.x >= available.y * 0.85 else MODAL_THEME.LOGIN_BACKDROP
 	for button in _entry_buttons:
+		button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		button.size_flags_vertical = Control.SIZE_FILL
-		button.custom_minimum_size.y = entry_height
+		button.custom_minimum_size = Vector2(maxf(touch, entry_width), entry_height)
 		button.add_theme_font_size_override("font_size", clampi(roundi(entry_height * 0.39), 22, 30))
 	if touch > 0.0:
 		for button: BaseButton in _login_content.find_children("*", "BaseButton", true, false):
@@ -484,19 +510,6 @@ func _layout_screen() -> void:
 			var base: Vector2 = button.get_meta("login_minimum", button.custom_minimum_size)
 			button.set_meta("login_minimum", base)
 			button.custom_minimum_size = base.max(Vector2.ONE * touch)
-	if form:
-		_center_login_form(_login_tray)
-	else:
-		var required := _login_header.get_combined_minimum_size().y + _login_tray.get_combined_minimum_size().y + 2.0 * _login_layout.get_theme_constant("separation")
-		var available_gap := viewport_size.y - safe.y - safe.w - top - required
-		_login_margin.offset_bottom = -safe.w - clampf(entry_height * 4.0 - 3.0, footer_height + 8.0, maxf(footer_height + 8.0, available_gap))
-
-
-func _center_login_form(tray: Control) -> void:
-	if not is_instance_valid(tray) or tray != _login_tray or not is_instance_valid(_login_header): return
-	# The box centers the complete logo/form group. No artificial header height
-	# or expanding field is needed to consume the remaining screen space.
-	_login_header.custom_minimum_size.y = 0.0
 
 
 func _add_login_status(parent: Container, message: String) -> void:
@@ -663,6 +676,7 @@ func _navigate_village_back() -> bool:
 
 func _login_form_heading(parent: Container, caption: String, back_name: String, go_back: Callable) -> void:
 	var title := MODAL_THEME.village_title(parent, caption, _login_tray)
+	_login_form_title = title
 	title.add_theme_font_size_override("font_size", 28)
 	var back := Button.new()
 	back.name = back_name
@@ -702,41 +716,50 @@ func _show_account_form(registering: bool) -> void:
 	var tray := _build_login_tray()
 	_login_form_heading(tray, "注册新账号" if registering else "账号登录", "MahjongAccountLoginBackButton",
 		_show_account_login if registering else _back_to_login)
-	_guest_label(tray, "创建小板凳账号" if registering else "欢迎回到小板凳乡村麻将", 21, Color("#795237"))
-	var credentials := _guest_label(tray, "账号与密码" if registering else "账号密码登录", 24, LOGIN_THEME.INK)
+	_login_form_intro = VBoxContainer.new()
+	tray.add_child(_login_form_intro)
+	_guest_label(_login_form_intro, "创建小板凳账号" if registering else "欢迎回到小板凳乡村麻将", 21, Color("#795237"))
+	var credentials := _guest_label(_login_form_intro, "账号与密码" if registering else "账号密码登录", 24, LOGIN_THEME.INK)
 	credentials.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_login_identifier = _account_field(tray, "账号", "请输入用户名", LOGIN_ICONS["account"], false)
+	_login_form_columns = BoxContainer.new()
+	_login_form_columns.vertical = true
+	tray.add_child(_login_form_columns)
+	_login_form_fields = VBoxContainer.new()
+	_login_form_columns.add_child(_login_form_fields)
+	_login_form_actions = VBoxContainer.new()
+	_login_form_columns.add_child(_login_form_actions)
+	_login_identifier = _account_field(_login_form_fields, "账号", "请输入用户名", LOGIN_ICONS["account"], false)
 	_login_identifier.name = "MahjongAccountLoginUsername"
 	_login_identifier.max_length = 32
 	_login_identifier.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_EMAIL_ADDRESS
 	var remembered := _remembered_account()
 	if not registering: _login_identifier.text = remembered
-	_login_secret = _account_field(tray, "密码", "输入 8–128 个字符" if registering else "请输入登录密码", LOGIN_LOCK, true)
+	_login_secret = _account_field(_login_form_fields, "密码", "输入 8–128 个字符" if registering else "请输入登录密码", LOGIN_LOCK, true)
 	_login_secret.name = "MahjongAccountLoginPassword"
 	_login_secret.max_length = 128
 	_login_secret.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_PASSWORD
 	var helpers := HBoxContainer.new()
-	tray.add_child(helpers)
+	_login_form_fields.add_child(helpers)
 	_remember_identifier = CheckBox.new()
 	_remember_identifier.name = "MahjongRememberAccount"
 	_remember_identifier.text = "记住账号"
+	_remember_identifier.custom_minimum_size = Vector2(112.0, 44.0)
 	_remember_identifier.add_theme_font_override("font", MODAL_THEME.village_font())
 	_remember_identifier.set_pressed_no_signal(not remembered.is_empty())
 	_remember_identifier.add_theme_color_override("font_color", LOGIN_THEME.INK)
 	_remember_identifier.add_theme_color_override("font_hover_color", LOGIN_THEME.INK)
 	_remember_identifier.add_theme_font_size_override("font_size", 18)
-	_remember_identifier.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	helpers.add_child(_remember_identifier)
 	if not registering:
 		var forgot := _account_link(helpers, "忘记密码？", func():
 			_set_login_status("此版本尚未提供密码找回，可返回并选择游客登录。", true))
 		forgot.name = "MahjongForgotPasswordButton"
 	var section_status := "账号用 3–32 位英文字母、数字或下划线，首位不能为下划线。" if registering else ""
-	_add_login_status(tray, section_status)
+	_add_login_status(_login_form_actions, section_status)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.add_theme_color_override("font_color", LOGIN_THEME.INK)
 	_status.add_theme_font_size_override("font_size", 16)
-	_submit_account = _login_entry(tray, "创建账号" if registering else "登 录", "enter", _submit_named_account)
+	_submit_account = _login_entry(_login_form_actions, "创建账号" if registering else "登 录", "enter", _submit_named_account)
 	MODAL_THEME.village_button(_submit_account, true)
 	_submit_account.name = "MahjongAccountLoginSubmit"
 	_login_identifier.text_submitted.connect(func(_value: String): _login_secret.grab_focus())
@@ -744,7 +767,7 @@ func _show_account_form(registering: bool) -> void:
 	var bottom := HBoxContainer.new()
 	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
 	bottom.add_theme_constant_override("separation", 7)
-	tray.add_child(bottom)
+	_login_form_actions.add_child(bottom)
 	if not registering: _account_link(bottom, "注册新账号", _show_account_registration).name = "MahjongRegisterButton"
 	_account_link(bottom, "返回其他登录方式", _back_to_login).name = "MahjongOtherLoginMethods"
 	_layout_screen()
@@ -787,7 +810,7 @@ func _account_field(parent: Container, title: String, placeholder: String, icon:
 	field.add_theme_color_override("font_placeholder_color", Color("#887765"))
 	field.add_theme_color_override("selection_color", Color("#efd194"))
 	field.add_theme_font_size_override("font_size", 21)
-	field.custom_minimum_size.y = maxf(44.0, LOGIN_THEME.touch_extent(_screen))
+	field.custom_minimum_size = Vector2(84.0, maxf(44.0, LOGIN_THEME.touch_extent(_screen)))
 	stack.add_child(field)
 	if hide_text:
 		var eye := Button.new()
@@ -797,7 +820,8 @@ func _account_field(parent: Container, title: String, placeholder: String, icon:
 		eye.add_theme_constant_override("icon_max_width", 32)
 		eye.flat = true
 		eye.tooltip_text = "显示密码"
-		eye.custom_minimum_size.x = 45
+		eye.custom_minimum_size = Vector2(45.0, 44.0)
+		eye.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		eye.pressed.connect(func():
 			field.secret = not field.secret
 			eye.icon = LOGIN_EYE if field.secret else LOGIN_EYE_OFF
@@ -929,10 +953,9 @@ func _open_settings() -> void:
 
 func _fit_global_settings(overlay: Control, view: Control) -> void:
 	var safe := LOGIN_THEME.safe_insets(overlay)
-	var margin := Vector2(18, 30)
-	var origin := Vector2(safe.x, safe.y) + margin
-	var content := overlay.size - Vector2(safe.x + safe.z, safe.y + safe.w) - margin * 2.0
-	view.fit(Rect2(origin, content.max(Vector2.ONE)))
+	var origin := Vector2(safe.x, safe.y)
+	var content := overlay.size - origin - Vector2(safe.z, safe.w)
+	view.fit(Rect2(origin, content))
 
 
 func _login() -> void:
@@ -1049,6 +1072,13 @@ func _send_egg_request(request: HTTPRequest, url: String, token: String) -> Erro
 	return request.request(url, PackedStringArray(["Authorization: Bearer " + token]))
 
 
+func _refresh_lobby_eggs() -> void:
+	if _state not in ["lobby", "room"] or not _has_account_session(): return
+	# An HTTP snapshot started before the notification may contain the old amount.
+	_cancel_egg_request()
+	_refresh_eggs()
+
+
 func _receive_egg_balance(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray,
 		request: HTTPRequest, generation: int, server: String, account: String, token: String) -> void:
 	if request != _egg_request or generation != _egg_request_generation: return
@@ -1086,6 +1116,7 @@ func _render_lobby() -> void:
 		"pending": not _pending_lobby_id.is_empty(), "message": _lobby_message,
 		"command_error": _lobby_command_error, "directory_available": _room_directory_available,
 		"directory_loaded": _room_directory_loaded, "directory_error": _room_directory_error, "public_rooms": _public_rooms,
+		"spectator_supported": _spectator_supported,
 		"recent": _recent,
 		"privacy": {
 			"available": can_manage_account, "open": _privacy_open, "can_submit": can_manage_account,
@@ -1110,6 +1141,8 @@ func _start_lobby_connection() -> void:
 	_lobby_deadline.stop()
 	_lobby_message = "操作确认超时，正在重新同步房间……" if resync else "正在连接麻将大厅……"
 	_room_directory_available = false
+	_spectator_supported = false
+	_pending_watch.clear()
 	_clear_room_directory_snapshot()
 	_next_session_probe_tick = 0
 	_lobby_socket.start(TRANSPORT.endpoint(_session_server), _session_token)
@@ -1138,6 +1171,8 @@ func _on_lobby_lost(reason: String) -> void:
 	_lobby_command_acked = false
 	_lobby_command_error = ""
 	_room_directory_available = false
+	_spectator_supported = false
+	_pending_watch.clear()
 	_clear_room_directory_snapshot()
 	_lobby_deadline.stop()
 	_lobby_message = reason + " · 等待重新同步"
@@ -1165,6 +1200,7 @@ func _on_lobby_packet(raw: String) -> void:
 	match str(packet.get("type","")):
 		"mahjong_lobby_state":
 			if packet.get("state") is Dictionary and packet.get("presets") is Array:
+				_spectator_supported = bool(packet.get("spectator_supported", false))
 				_room_directory_available = bool(packet.get("room_directory", false))
 				var current_request: bool = not bool(packet.get("room_directory_requests", false)) or packet.get("directory_request_id") == str(_room_directory_request)
 				if _room_directory_open and _room_directory_available and current_request and packet.state.get("status") == "idle" and packet.get("public_rooms") is Array:
@@ -1176,6 +1212,9 @@ func _on_lobby_packet(raw: String) -> void:
 		"mahjong_lobby_result":
 			var confirmed: Variant = packet.get("state")
 			_on_lobby_result(str(packet.get("command_id","")), bool(packet.get("ok",false)), str(packet.get("message","")), str(packet.get("code","")), confirmed if confirmed is Dictionary else {})
+		"mahjong_wallet_changed":
+			if packet.get("account_id") == _account.get("account_id", ""):
+				_refresh_lobby_eggs()
 
 
 func _set_room_directory(open: bool) -> void:
@@ -1232,7 +1271,9 @@ func _on_lobby_state(state: Dictionary, presets: Array) -> void:
 				break
 		if _selected_rule.is_empty() and not _presets.is_empty() and _presets[0] is Dictionary:
 			_selected_rule = {"rule_set_id":str(_presets[0].get("rule_set_id","")),"rule_version":str(_presets[0].get("rule_version",""))}
-	if first: _lobby_message = ""
+	if first:
+		_lobby_message = ""
+		_refresh_lobby_eggs()
 	if _state == "game" and is_instance_valid(_game):
 		_game.reconcile_lobby_assignment(state)
 		return
@@ -1269,15 +1310,31 @@ func _apply_lobby_assignment() -> void:
 
 
 func _valid_rule(selection: Dictionary) -> bool:
-	if selection.is_empty(): return false
+	return not _catalog_rule(selection).is_empty()
+
+
+func _catalog_rule(selection: Dictionary) -> Dictionary:
+	if selection.is_empty(): return {}
 	for item in _presets:
 		if item is Dictionary and str(item.get("rule_set_id",""))==str(selection.get("rule_set_id","")) and str(item.get("rule_version",""))==str(selection.get("rule_version","")):
-			return true
-	return false
+			return item
+	return {}
 
 
 func _on_lobby_result(id: String, ok: bool, message: String, code := "", confirmed: Dictionary = {}) -> void:
 	if id.is_empty() or id != _pending_lobby_id: return
+	var watch := _pending_watch
+	_pending_watch = {}
+	if ok and not watch.is_empty():
+		_lobby_deadline.stop()
+		_pending_lobby_id = ""
+		_lobby_command_acked = false
+		_lobby_message = ""
+		if _state == "lobby" and _match.get("status", "idle") == "idle":
+			watch["spectating"] = true
+			watch["kind"] = "watch"
+			_make_game(false, watch)
+		return
 	if ok:
 		_lobby_command_acked = true
 		if confirmed.get("status") in ["idle", "waiting", "matched", "playing"]:
@@ -1426,13 +1483,16 @@ func _on_lobby_action(action: String, payload: Dictionary) -> void:
 			var rule_choice := _selected_rule
 			if action == "create" and (payload.has("rule_set_id") or payload.has("rule_version")):
 				rule_choice = {"rule_set_id": str(payload.get("rule_set_id", "")), "rule_version": str(payload.get("rule_version", ""))}
-			if not _valid_rule(rule_choice): return
+			var descriptor := _catalog_rule(rule_choice)
+			if descriptor.is_empty() or (action == "quick" and descriptor.get("quick_match", true) == false): return
 			fields = rule_choice.duplicate()
 			if action == "create":
 				if payload.get("options") is Dictionary: fields["options"] = payload.options.duplicate()
 				for key in ["room_id", "round_limit", "turn_timeout_seconds", "password"]:
 					if payload.has(key): fields[key] = payload[key]
-		"join":
+				if _spectator_supported and payload.get("allow_spectators") is bool:
+					fields["allow_spectators"] = payload.allow_spectators
+		"join", "watch":
 			if phase!="idle": return
 			var code := str(payload.get("room_id","")).strip_edges()
 			if not _valid_room_code(code):
@@ -1441,6 +1501,14 @@ func _on_lobby_action(action: String, payload: Dictionary) -> void:
 				return
 			fields = {"room_id":code}
 			if payload.has("password"): fields["password"] = payload.password
+			if action == "watch":
+				var seat: Variant = payload.get("watch_seat")
+				if not _spectator_supported or not seat is int or seat < 0 or seat >= 4: return
+				fields["watch_seat"] = seat
+		"set_spectator_permission":
+			var enabled: Variant = payload.get("enabled")
+			if not _spectator_supported or not _match.get("allow_spectators", false) or not enabled is bool: return
+			fields = {"room_id": str(_match.get("room_id", "")), "enabled": enabled}
 		"ready", "unready":
 			var players: Array = _match.get("player_account_ids",[])
 			var ready_accounts: Array = _match.get("ready_account_ids",[])
@@ -1453,7 +1521,9 @@ func _on_lobby_action(action: String, payload: Dictionary) -> void:
 			fields = {"room_id":str(_match.get("room_id",""))}
 		_: return
 	if action in ["quick","create","join","training","ready"]: _enter_when_ready = true
-	if action == "leave": _enter_when_ready = false
+	if action == "leave":
+		_enter_when_ready = false
+		_rematch_window_match_id = ""
 	_submit_lobby(action, fields)
 
 
@@ -1483,6 +1553,7 @@ func _submit_lobby(action: String, fields: Dictionary) -> void:
 		_render_lobby()
 		return
 	_pending_lobby_id = command_id
+	_pending_watch = fields.duplicate() if action == "watch" else {}
 	_lobby_command_acked = false
 	_lobby_command_error = ""
 	_lobby_message = "等待牌桌服务确认……"
@@ -1706,6 +1777,8 @@ func _disconnect_lobby() -> void:
 	_clear_room_directory_snapshot()
 	_room_directory_open = false
 	_room_directory_available = false
+	_spectator_supported = false
+	_pending_watch.clear()
 	_lobby_command_error = ""
 	_enter_when_ready = false
 	_cancel_history()
@@ -1731,6 +1804,7 @@ func _clear_live_session() -> void:
 	_history_extra.clear()
 	_history_extra_loaded = false
 	_finished_friend_return.clear()
+	_rematch_window_match_id = ""
 	_training_to_abandon = ""
 	_board_return_route.clear()
 	_auto_match_sent = false
@@ -1763,6 +1837,11 @@ func _enter_training() -> void:
 
 
 func _make_game(practice: bool, context: Dictionary) -> Variant:
+	var preserve_window_size: bool = (
+		not _rematch_window_match_id.is_empty() and context.get("kind") == "friend"
+		and context.get("previous_match_id") == _rematch_window_match_id
+	)
+	_rematch_window_match_id = ""
 	_board_return_route = _lobby_view.navigation_route() if is_instance_valid(_lobby_view) else {}
 	_reset("training" if practice else "game")
 	var screen_script := load(GAME_SCRIPT) as Script
@@ -1772,11 +1851,12 @@ func _make_game(practice: bool, context: Dictionary) -> Variant:
 	var game = screen_script.new()
 	game.product = _product
 	game.training_mode = practice
+	game.preserve_window_size = preserve_window_size
 	if (practice or context.get("kind") == "training") and _board_return_route.get("training_open", false):
 		context["return_destination"] = "训练场"
 	context["account_id"] = str(_account.get("account_id",""))
 	context["display_name"] = str(_account.get("display_name","我"))
-	if _egg_balance >= 0: context["own_egg_balance"] = _egg_balance
+	if _egg_balance >= 0 and not context.get("spectating", false): context["own_egg_balance"] = _egg_balance
 	context["websocket_url"] = TRANSPORT.endpoint(_session_server)
 	if not context.get("rule") is Dictionary:
 		for item in _presets:
@@ -1789,7 +1869,9 @@ func _make_game(practice: bool, context: Dictionary) -> Variant:
 	_game = game
 	game.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	game.session_expired.connect(_expire_live_session)
-	game.entry_cancelled.connect(func(message: String): _lobby_message = message)
+	game.entry_cancelled.connect(func(message: String):
+		_lobby_message = message
+		if context.get("spectating", false): _watch_return_message = message)
 	game.request_return_to_lobby.connect(_return_from_game.bind(game, false))
 	game.request_next_round.connect(_return_from_game.bind(game, true))
 	var source := [game, _wallet_session_generation, _session_server, str(_account.get("account_id", "")), _session_token]
@@ -1939,7 +2021,11 @@ func _history_summary(raw: Variant) -> Dictionary:
 			var values: Variant = breakdown.get(component)
 			if values is Array and values.size() == 4 and values.all(_is_history_integer):
 				own_scores[component] = int(values[seat])
-		if own_scores.size() == 3: row["breakdown"] = own_scores
+		if own_scores.size() == 3:
+			var checked: Variant = breakdown.get("cha_jiao")
+			if rule.get("dingque") == true and checked is Array and checked.size() == 4 and checked.all(_is_history_integer):
+				own_scores["cha_jiao"] = int(checked[seat])
+			row["breakdown"] = own_scores
 	return row
 
 
@@ -2050,6 +2136,12 @@ func _return_to_lobby() -> void:
 
 func _return_from_game(game: Control, keep_room: bool) -> void:
 	if game != _game: return
+	if game.match_context.get("spectating", false):
+		var notice := _watch_return_message
+		_watch_return_message = ""
+		_return_to_lobby()
+		if not notice.is_empty(): _present_error(notice, "watch_ended")
+		return
 	var match_id: String = game.finished_friend_match_id()
 	if not match_id.is_empty():
 		_finished_friend_return = {
@@ -2057,7 +2149,12 @@ func _return_from_game(game: Control, keep_room: bool) -> void:
 			"rounds":int(game.match_context.get("completed_rounds", 0)) + 1, "leave":not keep_room,
 		}
 		_lobby_message = "正在同步好友房……"
-		if not keep_room: _board_return_route.clear()
+		if not keep_room:
+			_board_return_route.clear()
+		elif not OS.has_feature("mobile"):
+			_rematch_window_match_id = match_id
+			# Relinquish the display before opening the waiting room or another board.
+			BATTLE_DISPLAY.leave(game, true)
 	_return_to_lobby()
 	if not _finished_friend_return.is_empty() and _lobby_synced:
 		_apply_lobby_assignment()

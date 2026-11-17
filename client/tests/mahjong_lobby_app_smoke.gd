@@ -6,11 +6,15 @@ class AppFixture:
 	var sent: Array[Dictionary] = []
 	var entered: Dictionary = {}
 	var quit_requested := false
+	var enter_real_board := false
 	func _request_health() -> void: _show_login()
 	func _send_lobby_packet(packet: Dictionary) -> Error:
 		sent.append(packet.duplicate(true))
 		return OK
 	func _enter_game() -> void:
+		if enter_real_board:
+			super._enter_game()
+			return
 		entered = _match.duplicate(true)
 		_state = "game"
 	func _quit_game() -> void: quit_requested = true
@@ -100,6 +104,9 @@ func _run() -> void:
 	await _check_navigation(presets)
 	app.queue_free()
 	await process_frame
+	if not OS.has_feature("mobile") and DisplayServer.get_name() != "headless":
+		await _check_rematch_window_size(presets, Vector2i(744, 860), true)
+		await _check_rematch_window_size(presets, Vector2i(1008, 630), false)
 	if failures==0: print("MAHJONG_LOBBY_APP_OK selected_rule=true state_driven=true duplicate_guard=true return_to_room=true rematch_click_ready=true")
 	quit(0 if failures==0 else 1)
 
@@ -264,6 +271,56 @@ func _check_rematch(presets: Array) -> void:
 	_click_rematch(app, other_hand)
 	_expect(app.sent.is_empty(), "旧结算不可提交到另一局")
 	app.queue_free()
+
+
+func _check_rematch_window_size(presets: Array, resized: Vector2i, wait_for_other_players: bool) -> void:
+	var app := AppFixture.new()
+	app.enter_real_board = true
+	root.add_child(app)
+	app._account = {"account_id":"host", "display_name":"测试牌友"}
+	app._lobby_synced = true
+	root.size = Vector2i(720, 850)
+	await process_frame
+	var next_hand := {"room_id":"0421", "kind":"friend", "status":"matched", "start":false, "completed_rounds":1,
+		"previous_match_id":"finished-hand", "capacity":4, "player_account_ids":["host","a","b","c"], "ready_account_ids":[]}
+	app._match = next_hand.duplicate(true)
+	var first: Control = app._make_game(false, {"room_id":"0421", "kind":"friend", "seat_index":0, "completed_rounds":0})
+	first._handle_packet(JSON.stringify({"type":"mahjong_joined", "room_id":"0421", "match_id":"finished-hand", "your_seat":0}))
+	first._handle_packet(JSON.stringify({"type":"mahjong_state", "room_id":"0421", "match_id":"finished-hand", "kind":"friend",
+		"phase":"finished", "status":"finished", "your_seat":0, "winners":[], "scores":[0,0,0,0], "can_rematch":true}))
+	root.size = resized
+	await process_frame
+	_expect(root.size == resized, "用户调整后的桌面窗口未达到 %s" % resized)
+	var again := first.find_child("MahjongNextRoundButton", true, false) as Button
+	_expect(again != null and not again.disabled, "结算缺少可点击的再来一局按钮")
+	if again != null:
+		var click := InputEventMouseButton.new()
+		click.button_index = MOUSE_BUTTON_LEFT
+		click.position = again.get_global_transform_with_canvas() * (again.size * 0.5)
+		click.pressed = true
+		root.push_input(click, true)
+		click.pressed = false
+		root.push_input(click, true)
+	_expect(app._state == "room" and _sent_ready(app, 1), "从结算点击再来一局后应进入等候房并提交准备")
+	if wait_for_other_players:
+		await process_frame
+		_expect(root.size == resized, "等待下一局时窗口从 %s 变为 %s" % [resized, root.size])
+		_expect(root.content_scale_size == Vector2i.ZERO, "等候房应恢复菜单的响应式投影")
+		root.size = resized + Vector2i(22, 8)
+		resized = root.size
+	var started := next_hand.duplicate(true)
+	started.status = "playing"
+	started.start = true
+	started.ready_account_ids = ["host","a","b","c"]
+	app._on_lobby_state(started, presets)
+	_expect(app._state == "game" and is_instance_valid(app._game) and app._game != first, "已准备的座位应进入新牌桌")
+	await process_frame
+	_expect(not is_instance_valid(first), "切换后应清理旧牌桌")
+	_expect(root.size == resized, "下一局开桌并清理旧牌桌后窗口从 %s 变为 %s" % [resized, root.size])
+	_expect(root.content_scale_size == Vector2i(1440, 810), "续局牌桌应恢复对局的投影")
+	print("MAHJONG_REMATCH_WINDOW wait=%s expected=%s actual=%s" % [wait_for_other_players, resized, root.size])
+	app.queue_free()
+	await process_frame
 
 
 func _click_rematch(app: AppFixture, snapshot: Dictionary) -> void:

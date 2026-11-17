@@ -5,6 +5,9 @@ class_name XbdApiClient
 
 var base_url: String = "http://127.0.0.1:8080"
 const SERVER_FILE := "user://xbd_server_url.txt"
+const SESSION_ALPHABET := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+
+var _session_token := ""
 
 
 func _init(url: String = "") -> void:
@@ -28,12 +31,67 @@ func set_base_url(url: String, persist: bool = true) -> bool:
 	var cleaned := url.strip_edges().trim_suffix("/")
 	if not (cleaned.begins_with("http://") or cleaned.begins_with("https://")):
 		return false
+	if cleaned != base_url:
+		clear_session()
 	base_url = cleaned
 	if persist:
 		var file := FileAccess.open(SERVER_FILE, FileAccess.WRITE)
 		if file != null:
 			file.store_string(base_url)
 	return true
+
+
+static func valid_session_token(token: Variant) -> bool:
+	if not token is String or token.length() != 43:
+		return false
+	for character in token:
+		if character not in SESSION_ALPHABET:
+			return false
+	return true
+
+
+func accept_guest_login(response: Variant) -> Dictionary:
+	if not response is Dictionary or not response.get("account_id") is String or response.account_id.is_empty():
+		return {}
+	if not valid_session_token(response.get("session_token")):
+		return {}
+	_session_token = response.session_token
+	var guest: Dictionary = response.duplicate()
+	guest.erase("session_token")
+	return guest
+
+
+func clear_session() -> void:
+	_session_token = ""
+
+
+func authorization_headers() -> PackedStringArray:
+	if _session_token.is_empty():
+		return PackedStringArray()
+	return PackedStringArray(["Authorization: Bearer " + _session_token])
+
+
+static func socket_session_expired(socket: WebSocketPeer) -> bool:
+	return socket.get_close_code() == 1008 and socket.get_close_reason() == "session_expired"
+
+
+func check_session(owner: Node, expired: Callable) -> HTTPRequest:
+	if _session_token.is_empty(): return null
+	var request := HTTPRequest.new()
+	request.timeout = 6.0
+	request.max_redirects = 0
+	owner.add_child(request)
+	request.request_completed.connect(_on_session_checked.bind(request, base_url, _session_token, expired), CONNECT_ONE_SHOT)
+	if request.request(base_url + "/api/v1/auth/session", authorization_headers()) != OK:
+		request.queue_free()
+		return null
+	return request
+
+
+func _on_session_checked(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray, request: HTTPRequest, origin: String, token: String, expired: Callable) -> void:
+	request.queue_free()
+	if result == HTTPRequest.RESULT_SUCCESS and code == 401 and base_url == origin and _session_token == token and expired.is_valid():
+		expired.call()
 
 
 func health_url() -> String:

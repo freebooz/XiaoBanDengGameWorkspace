@@ -16,12 +16,20 @@ func _expect(condition: bool, message: String) -> void:
 
 
 func _run() -> void:
+	Engine.max_fps = 0
+	if DisplayServer.get_name() != "headless": DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	root.content_scale_size = Vector2i.ZERO
 	var overlay := OVERLAY.new()
 	root.add_child(overlay)
+	var capture_path := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--preview="): capture_path = arg.trim_prefix("--preview=")
 	var rank_one := {"shanten": {"minimum": 0}, "ukeireCount": 3, "ukeire": [
 		{"tile": 21, "count": 1}, {"tile": 24, "count": 2},
 	], "rank": 1, "legalWaits": "not_checked", "risk": {"level": "high"}}
-	var rank_two := {"shanten": {"minimum": 1}, "ukeireCount": 31, "ukeire": [], "rank": 2}
+	var rank_two := {"shanten": {"minimum": 1}, "ukeireCount": 31, "ukeire": [], "rank": 2,
+		"analysisMode": "discard", "lookAheadEvaluated": true, "q": 160,
+		"riskReasons": PackedStringArray(["elevated", "supply_blocked", "unknown"]), "rankingReason": "k", "k": 286}
 	var rank_three := {"shanten": {"minimum": 1}, "ukeireCount": 16, "ukeire": [], "rank": 3}
 	var result := {1: rank_one, 2: rank_two, 3: rank_one, 4: rank_three, 14: {"shanten": {"minimum": 0}, "ukeireCount": -2}}
 	for entry in [{"id":5,"shanten":2}, {"id":6,"shanten":3}, {"id":7,"shanten":4}, {"id":8,"shanten":8}, {"id":9,"shanten":1}]:
@@ -31,14 +39,16 @@ func _run() -> void:
 	var yellow_green := Color("#afd254")
 	var yellow := Color("#f1cc61")
 	for viewport_size: Vector2 in [Vector2(1280, 720), Vector2(1600, 720), Vector2(1280, 800), Vector2(1200, 900)]:
+		root.size = Vector2i(viewport_size)
 		overlay.size = viewport_size
+		await process_frame
 		var tiles: Array = []
 		var origin := Vector2(viewport_size.x * 0.075, viewport_size.y * 0.80)
 		var stride := viewport_size.x * 0.06
 		for index in 14:
 			var y := -23.0 if index == 0 else 0.0
 			tiles.append({"id": index + 1, "rect": Rect2(origin + Vector2(index * stride, y), Vector2(stride + 3.0, 84.0))})
-		overlay.present(tiles, result, 1, Rect2(116, 210, 460, 96))
+		overlay.present(tiles, result, 1)
 		_expect(overlay.get_child_count() == 15, "exactly one overlay badge per tile")
 		var previous := Rect2()
 		for id in range(1, 15):
@@ -74,17 +84,58 @@ func _run() -> void:
 		_expect(best.text == duplicate.text and best.badge_color == duplicate.badge_color,
 			"identical ranks share the same value and color")
 		_expect(not best.high_risk and invalid.text == "—", "unverified risk absent, invalid counts unavailable")
-		var detail: RichTextLabel = overlay.get_node("MahjongEfficiencyDetail")
+		var detail: Control = overlay.get_node("MahjongEfficiencyDetail")
 		_expect(not detail.visible, "selecting the tile does not open the detail panel")
-		(best.get_node("Inspect") as Button).pressed.emit()
-		_expect(detail.visible and "四条×1" in detail.text and "七条×2" in detail.text, "badge details show effective tile counts")
-		_expect("和牌资格未校验" in detail.text and detail.mouse_filter == Control.MOUSE_FILTER_IGNORE, "structure alone does not claim legal win")
-		(best.get_node("Inspect") as Button).pressed.emit()
+		await _click(best.get_node("Inspect"))
+		_expect(detail.visible and detail._tile_root.get_child_count() == 2, "badge opens a shared 3D viewport with both effective tiles")
+		var first: Node3D = detail._tile_root.get_node("MahjongEffectiveTile_tiao_4")
+		var face := first.find_child("TileFace", true, false) as MeshInstance3D
+		var body := first.find_child("TileBody", true, false) as MeshInstance3D
+		_expect(face != null and face.mesh != null and face.material_override.resource_name == "Mahjong50Face_1:4"
+			and body != null and body.mesh != null, "preview uses the live table's engraved face and full 3D tile body")
+		_expect(detail._captions[0].text == "四条  1 张" and detail._captions[1].text == "七条  2 张",
+			"each actual model has the correct unseen count")
+		_expect("和牌资格未校验" in detail._note.text and detail.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+			"structure alone does not claim legal win; the overlay does not block the screen")
+		_expect(not "Q=" in detail._note.text, "Uncomputed look-ahead must not display a misleading zero score")
+		var frame: Rect2 = detail._frame.get_global_rect()
+		_expect(frame.get_center().distance_to(viewport_size * 0.5) <= 2.0, "detail opens at screen center")
+		if not capture_path.is_empty() and viewport_size.x == 1280 and viewport_size.y == 720 and DisplayServer.get_name() != "headless":
+			await RenderingServer.frame_post_draw
+			_expect(root.get_texture().get_image().save_png(capture_path) == OK, "3D preview screenshot saves")
+		await _click(detail.find_child("MahjongCloseEfficiencyDetail", true, false))
+		_expect(not detail.visible and best.selected, "closing the detail leaves the selected hand unchanged")
+		await _click(second.get_node("Inspect"))
+		_expect("靠张改良 286" in detail._note.text and "信息不足 1 家" in detail._note.text,
+			"Details explain the contextual tie-break and identify incomplete opponent information")
+		_expect("推荐第 2" in detail._summary.text and "Q=160" in detail._note.text
+			and "K=286" in detail._note.text and "非胡牌概率" in detail._note.text,
+			"Details expose the computed native ranking and both tie metrics without inventing win probability")
+		_expect(Rect2(Vector2.ZERO, viewport_size).encloses(detail._frame.get_global_rect()),
+			"Contextual reasons fit in the details at every tested aspect ratio")
+		if not capture_path.is_empty() and viewport_size.x == 1280 and viewport_size.y == 720 and DisplayServer.get_name() != "headless":
+			await RenderingServer.frame_post_draw
+			_expect(root.get_texture().get_image().save_png(capture_path.get_basename() + "_tie.png") == OK,
+				"Contextual recommendation screenshot saves")
+		await _click(detail.find_child("MahjongCloseEfficiencyDetail", true, false))
 		overlay.present(tiles, {1: rank_one}, 0)
 		_expect(best.badge_color == green and last.text == "—" and last.badge_color == invalid.badge_color,
 			"a sole legal candidate stays green and stale data clears")
 	overlay.clear()
 	_expect(overlay.get_child_count() == 1 and not overlay.get_child(0).visible, "decision end removes all badges immediately")
 	if not _failed:
-		print("MAHJONG_EFFICIENCY_OVERLAY_OK fixed_shanten_colors=true below_tiles=true landscape_4x3_through_20x9=true input_passthrough=true")
+		print("MAHJONG_EFFICIENCY_OVERLAY_OK fixed_shanten_colors=true landscape_4x3_through_20x9=true centered_glb_tiles=true true_counts=true")
 	quit(int(_failed))
+
+
+func _click(button: Button) -> void:
+	if DisplayServer.get_name() == "headless":
+		button.pressed.emit()
+	else:
+		for pressed in [true, false]:
+			var event := InputEventMouseButton.new()
+			event.button_index = MOUSE_BUTTON_LEFT
+			event.position = button.get_global_rect().get_center()
+			event.pressed = pressed
+			root.push_input(event, true)
+	for frame in 5: await process_frame

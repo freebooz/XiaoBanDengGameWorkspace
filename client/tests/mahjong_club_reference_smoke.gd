@@ -49,11 +49,13 @@ func _run() -> void:
 	_check(is_same(mic,screen._own_mic))
 	screen._select_tile(7)
 	await process_frame
-	var selected := screen.find_child("MahjongSelectedTileOutline",true,false) as Control
-	_check(selected != null and selected.visible)
-	_check(selected.mouse_filter==Control.MOUSE_FILTER_IGNORE)
+	var selected := screen._hand_models[screen._hand_ids.find(7)]
+	_check(screen._tile_focus._selected_tile == selected and selected.position.y > screen._hand_models[0].position.y and not screen._tile_focus._selection_materials.is_empty(), "Selected tile is raised and uses its 3D highlight material")
+	var outline := screen.find_child("MahjongSelectedTileOutline",true,false) as Control
+	_check(outline == null or not outline.is_visible_in_tree(), "Selection leaves the flat outline hidden")
 	_check(not screen._play_button.disabled)
 	screen._state["phase"]="reaction"
+	screen._state["turn"]=1
 	screen._state["options"]=[{"type":"hu"},{"type":"pass"}]
 	screen._render()
 	_check(not screen._response_buttons["hu"].disabled and screen._response_buttons["chi"].disabled)
@@ -99,9 +101,13 @@ func _run() -> void:
 		quit(1)
 		return
 	if DisplayServer.get_name()!="headless":
-		await RenderingServer.frame_post_draw
-		root.get_texture().get_image().save_png("res://../../../artifacts/landscape/mahjong_club_reference_smoke.png")
-	print("MAHJONG_CLUB_REFERENCE_OK upright_hands=true center_deadline=true true_session=true selected_outline=true stable_mic=true legal_hu_only=true public_meld_faces=16")
+		for argument in OS.get_cmdline_user_args():
+			if argument.begins_with("--screen-out="):
+				await RenderingServer.frame_post_draw
+				if root.get_texture().get_image().save_png(argument.trim_prefix("--screen-out=")) != OK:
+					quit(2)
+					return
+	print("MAHJONG_CLUB_REFERENCE_OK upright_hands=true center_deadline=true true_session=true selection_material=true stable_mic=true legal_hu_only=true public_meld_faces=16")
 	screen.queue_free()
 	await process_frame
 	await process_frame

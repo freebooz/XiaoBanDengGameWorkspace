@@ -73,8 +73,38 @@ func _run() -> void:
 	_check(screen._selected_id==6 and screen.commands.is_empty(),"Choosing a different tile must only select it")
 	await _tap(screen,5)
 	_check(screen.commands.size()==1 and screen.commands[0].tile_id==6,"Server-authorized tile must submit on its second touch")
+	await _check_native_resize(screen)
 	Input.emulate_mouse_from_touch=emulate
 	screen.queue_free()
 	await process_frame
 	print("MAHJONG_DOUBLE_TAP_OK first_select=true second_play_once=true emulated_mouse=false pending_repeat=false illegal_phase=false restricted_tile=true" if not _failed else "MAHJONG_DOUBLE_TAP_FAILED")
 	quit(1 if _failed else 0)
+
+
+func _check_native_resize(screen: Fixture) -> void:
+	var capture := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--viewport-capture="): capture = arg.trim_prefix("--viewport-capture=")
+	screen._set_quality(0)
+	for dimensions in [Vector2i(1280,720), Vector2i(1920,864), Vector2i(1280,800), Vector2i(1200,900), Vector2i(2560,1440)]:
+		# Exercise a scaled canvas as well as the ordinary full-resolution product.
+		root.content_scale_size = Vector2i(1440,810) if dimensions.x == 2560 else Vector2i.ZERO
+		root.size = dimensions
+		for frame in 3: await process_frame
+		var canvas_size := root.get_visible_rect().size
+		var output := screen._board_view.size * Vector2(root.size) / canvas_size
+		var render := Vector2(screen._board_viewport.size)
+		_check((output - render).abs().x <= 1.0 and (output - render).abs().y <= 1.0,
+			"3D board must redraw at actual output pixels under resize %s (output %s, rendered %s)" % [dimensions, output, render])
+		_check(screen._board_viewport.scaling_3d_scale == 1.0, "3D resolution scale must remain native")
+		screen._clear_pending_command()
+		screen.commands.clear()
+		screen._select_tile(0)
+		await _tap(screen,5)
+		_check(screen._selected_id == 6 and screen.commands.is_empty(), "First native touch must pick the projected tile at %s" % [dimensions])
+		await _tap(screen,5)
+		_check(screen.commands.size() == 1 and screen.commands[0].tile_id == 6,
+			"Second native touch must play the same physical tile at %s" % [dimensions])
+		if not capture.is_empty() and dimensions.x == 2560 and DisplayServer.get_name() != "headless":
+			await RenderingServer.frame_post_draw
+			_check(root.get_texture().get_image().save_png(capture) == OK, "Native board screenshot must save")

@@ -56,6 +56,7 @@ func _ready() -> void:
 	_replay_page = _column(body, 12)
 	_replay_back = _button(_replay_page, "MahjongReplayBackButton", "‹  返回单局明细", "history_replay_back")
 	_replay_back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_replay_back.custom_minimum_size.x = 168.0
 	_replay_view = REPLAY_VIEW.new()
 	_replay_page.add_child(_replay_view)
 	_message = _label(body, "", 19, Color("#815431"))
@@ -90,6 +91,7 @@ func apply(data: Dictionary) -> void:
 		var scores: Dictionary = detail.get("breakdown", {})
 		_breakdown.text = "这局没有分项记录" if scores.is_empty() else "胡分  %s\n杠分  %s\n鸡分  %s" % [
 			_signed(scores.hu), _signed(scores.gang), _signed(scores.ji)]
+		if scores.has("cha_jiao"): _breakdown.text += "\n查叫  %s" % _signed(int(scores.cha_jiao))
 	_message.text = "加载中……" if loading else error if not error.is_empty() else "还没有已结算的牌局" if _list.visible and rows.is_empty() else ""
 	_message.visible = not _message.text.is_empty()
 	_retry.visible = not loading and not error.is_empty()

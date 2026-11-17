@@ -33,3 +33,6 @@ driver/enable_input=true
 
 [network]
 limits/debugger/max_queued_messages=2048
+
+[xiaobandeng]
+network/default_server_url="https://api.xbd.freeboozstudio.test"

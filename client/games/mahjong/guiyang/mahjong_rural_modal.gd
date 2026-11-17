@@ -9,6 +9,8 @@ const BASE := "res://modules/games/mahjong/guiyang/assets/ui/rural_modal/"
 const PAPER_CARD := preload(BASE + "warm_kraft_card.png")
 const SECTION := preload(BASE + "section.svg")
 const CLOSE := preload("res://modules/games/mahjong/guiyang/assets/ui/harvest/round_button.png")
+const HUD_ICON_EXTENT := 56.0
+const ICON_VISUAL_RATIO := 0.90
 const NAV := preload(BASE + "nav.svg")
 const NAV_SELECTED := preload(BASE + "nav_selected.svg")
 const TOGGLE_ON := preload(BASE + "toggle_on.png")
@@ -35,6 +37,7 @@ const ICONS := {
 	"display": preload(BASE + "icon_display.svg"),
 	"rules": preload(BASE + "icon_rules.svg"),
 	"back": preload(BASE + "icon_back.svg"),
+	"refresh": preload(BASE + "icon_refresh.svg"),
 }
 const INK := Color("#462818")
 const CREAM := Color("#fff4dd")
@@ -114,14 +117,15 @@ class VillagePanel extends PanelContainer:
 			draw_style_box(surface, Rect2(Vector2.ZERO, size))
 
 
-static func village_header(parent: Control, back_name: String, action: Callable, brand_name := "MahjongVillageBrand") -> HBoxContainer:
+static func village_header(parent: Control, back_name: String, action: Callable, brand_name := "MahjongVillageBrand", draw_brand := true) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.name = "MahjongVillageHeader"
 	row.add_theme_constant_override("separation", 12)
 	parent.add_child(row)
 	var brand := TextureRect.new()
 	brand.name = brand_name
-	brand.texture = VILLAGE_BRAND
+	if draw_brand:
+		brand.texture = VILLAGE_BRAND
 	brand.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	brand.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	brand.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -144,14 +148,12 @@ static func village_header(parent: Control, back_name: String, action: Callable,
 	return row
 
 
-static func fit_village_header(header: HBoxContainer, width: float, height: float, touch: float) -> void:
+static func fit_village_header(header: HBoxContainer, width: float, height: float) -> void:
 	var logo := header.get_child(0) as TextureRect
 	var back := header.get_child(-1) as Button
 	var span := minf(width * 0.46, clampf(height * 0.27, 120.0, 420.0))
 	logo.custom_minimum_size = Vector2(span, span / VILLAGE_BRAND.get_size().aspect())
-	var hit := maxf(touch, clampf(width * 0.1, 46.0, 83.0))
-	back.custom_minimum_size = Vector2.ONE * hit
-	back.add_theme_constant_override("icon_max_width", roundi(hit * 0.53))
+	size_icon_button(back, header)
 
 
 static func village_panel(parent: Control, insets := Vector4(20, 18, 20, 18)) -> PanelContainer:
@@ -272,9 +274,45 @@ static func close_button(control: Button) -> void:
 	control.icon = icon("close")
 	control.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	control.expand_icon = true
-	control.add_theme_constant_override("icon_max_width", 26)
-	control.custom_minimum_size = Vector2(50, 50)
+	size_icon_button(control, control)
 	_ink_states(control, Color.TRANSPARENT, Color.TRANSPARENT)
+
+
+static func icon_button(control: Button, glyph: Texture2D, description: String) -> void:
+	control.text = ""
+	close_button(control)
+	control.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	control.icon = glyph
+	control.tooltip_text = description
+	control.accessibility_name = description
+
+
+static func icon_button_extent(owner: Control) -> float:
+	return _icon_metrics(owner).y
+
+
+static func _icon_metrics(owner: Control) -> Vector2:
+	if not owner.is_inside_tree():
+		return Vector2.ONE * HUD_ICON_EXTENT * ICON_VISUAL_RATIO
+	var transform := owner.get_global_transform()
+	var canvas := owner.get_viewport_transform() * transform
+	var pixels_per_unit := maxf(0.01, minf(canvas.x.length(), canvas.y.length()))
+	var local_scale := maxf(0.01, minf(transform.x.length(), transform.y.length()))
+	var touch := RURAL.touch_extent(owner) / local_scale
+	var visual := maxf(HUD_ICON_EXTENT / pixels_per_unit, touch) * ICON_VISUAL_RATIO
+	return Vector2(visual, maxf(visual, touch))
+
+
+static func size_icon_button(control: Button, owner: Control, compact_extent := 0.0) -> float:
+	var metrics := _icon_metrics(owner)
+	if compact_extent > 0.0:
+		metrics = Vector2(compact_extent * ICON_VISUAL_RATIO, compact_extent)
+	control.custom_minimum_size = Vector2.ONE * metrics.y
+	for state in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
+		control.get_theme_stylebox(state).set("aspect_max_extent", metrics.x)
+	control.add_theme_constant_override("icon_max_width", maxi(1, roundi(metrics.x * 0.52)))
+	control.queue_redraw()
+	return metrics.y
 
 
 static func button(control: Button, role := "secondary") -> void:

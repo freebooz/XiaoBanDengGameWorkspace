@@ -8,7 +8,15 @@ const CREAM := Color("#fff0d7")
 const MUTED := Color("#e0c3a0")
 const BRASS := Color("#ab7f50")
 const FELT_SCALE := 0.689 / 0.6675
-const FELT_COLOR := Color("#203d25")
+const FELT_COLOR := Color("#192f1e")
+const KEY_POSITION := Vector3(-0.60, 1.20, 0.42)
+# Approximate white points in sRGB for the project's unitless light mode.
+const KEY_4800K := Color("#ffe5cb")
+const FILL_6000K := Color("#fff7ef")
+const RIM_COOL_DAYLIGHT := Color("#e6efff")
+const KEY_ENERGY := 1.46
+const FILL_ENERGY := 0.45
+const RIM_ENERGY := 0.36
 const CORNER_STEPS := 12
 # Half-width, height and corner radius of the closed wooden rail, in GLB metres.
 const RAIL_PROFILE := [
@@ -26,14 +34,18 @@ static var _reflection_skies: Dictionary = {}
 
 static func configure_stage(stage: Node3D, quality: int) -> void:
 	var compatibility := RenderingServer.get_current_rendering_method() == "gl_compatibility"
-	var local_energy := 0.78 if compatibility else 1.0
+	# Linear tone mapping has less highlight headroom on the energy-saving tier.
+	var local_energy := 0.66 if compatibility else (0.86 if quality == 0 else 1.0)
 	var environment := (stage.get_node("WorldEnvironment") as WorldEnvironment).environment
 	environment.background_mode = Environment.BG_CLEAR_COLOR
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color("#efebe2")
-	environment.ambient_light_energy = 0.08 if compatibility else 0.10
+	environment.ambient_light_color = Color("#ebeff4")
+	environment.ambient_light_energy = 0.14 if compatibility else 0.17
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.sky = _studio_reflection(quality)
+	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC if quality > 0 and not compatibility else Environment.TONE_MAPPER_LINEAR
+	environment.tonemap_exposure = 1.08 if quality > 0 and not compatibility else 1.0
+	environment.tonemap_white = 1.75
 	(stage.get_node("Floor") as MeshInstance3D).hide()
 
 	# The angled spot is now the only shadow caster. Retire the former
@@ -47,8 +59,10 @@ static func configure_stage(stage: Node3D, quality: int) -> void:
 		old_northwest.light_energy = 0.0
 		old_northwest.shadow_enabled = false
 		old_northwest.hide()
-	_configure_fill(stage, "FillLight", Vector3(0.0, 0.25, 0.78), Color("#fff1df"), 0.16 * local_energy, 1.45)
-	_configure_fill(stage, "NortheastSeatLight", Vector3(0.62, 0.32, -0.58), Color("#ffe4bc"), (0.13 if quality > 0 else 0.0) * local_energy, 1.35)
+	# The upright hand faces away from the broad key. Lift the front fill
+	# there so the engraved pips remain legible on smaller displays.
+	_configure_fill(stage, "FillLight", Vector3(0.0, 0.30, 0.82), FILL_6000K, FILL_ENERGY * local_energy, 1.48)
+	_configure_fill(stage, "NortheastSeatLight", Vector3(0.64, 0.44, -0.64), RIM_COOL_DAYLIGHT, (RIM_ENERGY if quality > 0 else 0.0) * local_energy, 1.72)
 	_configure_overhead(stage, quality, local_energy)
 	# This filter is global in Godot. Restore the renderer's platform default
 	# when the Mahjong stage exits, rather than leaking it into another game.
@@ -77,19 +91,19 @@ static func _configure_overhead(stage: Node3D, quality: int, energy_scale: float
 		spot = SpotLight3D.new()
 		spot.name = "OverheadTableLight"
 		stage.add_child(spot)
-	spot.position = Vector3(-0.55, 1.15, 0.30)
+	spot.position = KEY_POSITION
 	spot.look_at(Vector3(0.0, 0.0, 0.0))
-	spot.light_color = Color("#fff0dc")
-	spot.light_energy = 1.10 * energy_scale
-	spot.light_specular = 0.52
+	spot.light_color = KEY_4800K
+	spot.light_energy = KEY_ENERGY * energy_scale
+	spot.light_specular = 0.39
 	spot.spot_range = 2.7
 	spot.spot_angle = 55.0
 	spot.spot_attenuation = 0.45
 	spot.spot_angle_attenuation = 0.55
 	spot.light_size = 0.0 # Explicit PCF, no per-fragment PCSS search on mobile.
 	spot.shadow_enabled = true
-	spot.shadow_blur = 1.2
-	spot.shadow_opacity = 0.78
+	spot.shadow_blur = 1.30 if quality > 0 else 1.12
+	spot.shadow_opacity = 0.64
 	spot.shadow_bias = 0.012
 	spot.shadow_normal_bias = 0.16
 

@@ -1,9 +1,15 @@
 use std::{cmp::Reverse, collections::HashMap};
 
+mod context;
+pub use context::{
+    CoachContext, ContextCandidate, ContextHand, Opponent, Risk, analyze_discards_with_context,
+    analyze_hand_with_context,
+};
+
 pub const TILE_TYPES: usize = 34;
 pub type Counts = [u8; TILE_TYPES];
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EffectiveTile {
     pub tile: usize,
     pub count: u8,
@@ -30,6 +36,7 @@ pub enum AnalysisError {
     InvalidTileTotal,
     KnownExceedsTotal,
     InvalidDiscard,
+    InvalidContext,
 }
 
 impl AnalysisError {
@@ -39,6 +46,7 @@ impl AnalysisError {
             Self::InvalidTileTotal => "invalid_tile_total",
             Self::KnownExceedsTotal => "known_exceeds_total",
             Self::InvalidDiscard => "invalid_discard",
+            Self::InvalidContext => "invalid_context",
         }
     }
 }
@@ -66,11 +74,22 @@ pub fn analyze_discards(
     own_meld_tiles: &Counts,
     legal: &[usize],
 ) -> Result<Vec<Candidate>, AnalysisError> {
-    let total_held = hand.iter().map(|&count| usize::from(count)).sum::<usize>();
-    if meld_count > 4 || total_held != 14 - 3 * meld_count {
-        return Err(AnalysisError::InvalidHandSize);
-    }
+    validate_hand_size(hand, meld_count, 14)?;
     let (unseen, shape_totals) = supplies(hand, visible, totals, own_meld_tiles)?;
+    let eligible = discard_allowlist(hand, legal)?;
+    let mut candidates = evaluate_discards(
+        hand,
+        &unseen,
+        &shape_totals,
+        meld_count,
+        eligible,
+        &mut PatternCache::default(),
+    );
+    candidates.sort_by_key(|item| (item.shanten, Reverse(item.ukeire_count), item.discard));
+    Ok(candidates)
+}
+
+fn discard_allowlist(hand: &Counts, legal: &[usize]) -> Result<[bool; TILE_TYPES], AnalysisError> {
     let mut eligible = [false; TILE_TYPES];
     for &tile in legal {
         if tile >= TILE_TYPES || hand[tile] == 0 {
@@ -78,8 +97,17 @@ pub fn analyze_discards(
         }
         eligible[tile] = true;
     }
+    Ok(eligible)
+}
 
-    let mut pattern_cache = PatternCache::default();
+fn evaluate_discards(
+    hand: &Counts,
+    unseen: &Counts,
+    shape_totals: &Counts,
+    meld_count: usize,
+    eligible: [bool; TILE_TYPES],
+    pattern_cache: &mut PatternCache,
+) -> Vec<Candidate> {
     let mut after = *hand;
     let mut candidates = Vec::new();
     for (discard, allowed) in eligible.into_iter().enumerate() {
@@ -87,13 +115,7 @@ pub fn analyze_discards(
             continue;
         }
         after[discard] -= 1;
-        let result = evaluate(
-            &after,
-            &unseen,
-            &shape_totals,
-            meld_count,
-            &mut pattern_cache,
-        );
+        let result = evaluate(&after, unseen, shape_totals, meld_count, pattern_cache);
         after[discard] += 1;
         candidates.push(Candidate {
             discard,
@@ -102,8 +124,7 @@ pub fn analyze_discards(
             ukeire: result.ukeire,
         });
     }
-    candidates.sort_by_key(|item| (item.shanten, Reverse(item.ukeire_count), item.discard));
-    Ok(candidates)
+    candidates
 }
 
 /// Analyze the current 13-equivalent hand between turns; no fictitious discard.
@@ -114,10 +135,7 @@ pub fn analyze_hand(
     meld_count: usize,
     own_meld_tiles: &Counts,
 ) -> Result<HandAnalysis, AnalysisError> {
-    let held = hand.iter().map(|&n| usize::from(n)).sum::<usize>();
-    if meld_count > 4 || held != 13 - 3 * meld_count {
-        return Err(AnalysisError::InvalidHandSize);
-    }
+    validate_hand_size(hand, meld_count, 13)?;
     let (unseen, shape_totals) = supplies(hand, visible, totals, own_meld_tiles)?;
     Ok(evaluate(
         hand,
@@ -126,6 +144,18 @@ pub fn analyze_hand(
         meld_count,
         &mut PatternCache::default(),
     ))
+}
+
+fn validate_hand_size(
+    hand: &Counts,
+    meld_count: usize,
+    equivalent: usize,
+) -> Result<(), AnalysisError> {
+    let held = hand.iter().map(|&n| usize::from(n)).sum::<usize>();
+    if meld_count > 4 || held != equivalent - 3 * meld_count {
+        return Err(AnalysisError::InvalidHandSize);
+    }
+    Ok(())
 }
 
 fn supplies(
@@ -157,25 +187,37 @@ fn evaluate(
     meld_count: usize,
     cache: &mut PatternCache,
 ) -> HandAnalysis {
-    let mut after = *hand;
     let shanten = cache.shanten(hand, totals, meld_count);
-    let mut ukeire = Vec::new();
-    for (tile, &count) in unseen.iter().enumerate() {
-        if count == 0 {
-            continue;
-        }
-        after[tile] += 1;
-        let improves = cache.shanten(&after, totals, meld_count) < shanten;
-        after[tile] -= 1;
-        if improves {
-            ukeire.push(EffectiveTile { tile, count });
-        }
-    }
+    let ukeire =
+        effective_tiles(hand, unseen, totals, meld_count, shanten, cache).collect::<Vec<_>>();
     HandAnalysis {
         shanten,
         ukeire_count: ukeire.iter().map(|tile| u16::from(tile.count)).sum(),
         ukeire,
     }
+}
+
+fn effective_tiles<'a>(
+    hand: &Counts,
+    unseen: &'a Counts,
+    totals: &'a Counts,
+    meld_count: usize,
+    shanten: i8,
+    cache: &'a mut PatternCache,
+) -> impl Iterator<Item = EffectiveTile> + 'a {
+    let mut after = *hand;
+    unseen.iter().enumerate().filter_map(move |(tile, &count)| {
+        // Look-ahead caches may pass the pre-draw unseen supply. A branch can
+        // already hold its fourth copy; never form a fifth-copy hand or feed
+        // a digit above four into the suit cache's base-five key.
+        if count == 0 || after[tile] >= totals[tile] {
+            return None;
+        }
+        after[tile] += 1;
+        let improves = cache.shanten(&after, totals, meld_count) < shanten;
+        after[tile] -= 1;
+        improves.then_some(EffectiveTile { tile, count })
+    })
 }
 
 // Exact minimum missing-tile distance to a legal 4-meld-and-head target.
@@ -189,14 +231,21 @@ type Costs = [[u8; 2]; 5];
 struct PatternCache {
     suited: [HashMap<u32, Costs>; 3],
     honors: HashMap<u32, Costs>,
+    shanten_by_hand: HashMap<Counts, i8>,
 }
 
 impl PatternCache {
     fn shanten(&mut self, hand: &Counts, totals: &Counts, open_melds: usize) -> i8 {
+        if let Some(&cached) = self.shanten_by_hand.get(hand) {
+            return cached;
+        }
         let mut combined = [[INF; 2]; 5];
         combined[0][0] = 0;
         for (suit, cache) in self.suited.iter_mut().enumerate() {
             let start = suit * 9;
+            if totals[start..start + 9].iter().all(|&limit| limit == 0) {
+                continue;
+            }
             combined = merge_costs(
                 combined,
                 component(
@@ -207,29 +256,36 @@ impl PatternCache {
                 ),
             );
         }
-        combined = merge_costs(
-            combined,
-            component(&hand[27..], &totals[27..], false, &mut self.honors),
-        );
+        if totals[27..].iter().any(|&limit| limit > 0) {
+            combined = merge_costs(
+                combined,
+                component(&hand[27..], &totals[27..], false, &mut self.honors),
+            );
+        }
         let mut minimum = combined[4 - open_melds][1] as i8 - 1;
         if open_melds == 0 {
             // Guiyang/basic_108 allow a quad as two pairs. Riichi's distinct
             // seven-pair formula is not applicable to these server rules.
-            let mut pair_cost = [INF; 8];
-            pair_cost[0] = 0;
+            let mut pair_slots = 0;
+            let mut complete = 0;
+            let mut partial = 0;
             for (&held, &limit) in hand.iter().zip(totals) {
-                let mut next = [INF; 8];
-                for have in 0..=7 {
-                    for add in 0..=usize::from(limit / 2).min(7 - have) {
-                        next[have + add] = next[have + add].min(
-                            pair_cost[have].saturating_add((2 * add as u8).saturating_sub(held)),
-                        );
-                    }
-                }
-                pair_cost = next;
+                let slots = limit / 2;
+                let held_pairs = (held / 2).min(slots);
+                pair_slots += slots;
+                complete += held_pairs;
+                partial += u8::from(held % 2 == 1 && held_pairs < slots);
             }
-            minimum = minimum.min(pair_cost[7] as i8 - 1);
+            if pair_slots >= 7 {
+                // Each additional pair of a kind costs at least as much as
+                // the one before it, so take full pairs, singles, then blanks.
+                let needed = 7u8.saturating_sub(complete);
+                let from_singles = needed.min(partial);
+                let missing = 2 * needed - from_singles;
+                minimum = minimum.min(missing as i8 - 1);
+            }
         }
+        self.shanten_by_hand.insert(*hand, minimum);
         minimum
     }
 }
@@ -316,6 +372,191 @@ mod tests {
 
     fn sample() -> Counts {
         hand_with(&[0, 1, 2, 3, 4, 5, 8, 15, 16, 17, 19, 19, 22, 23])
+    }
+
+    #[test]
+    fn basic_108_table_example_prefers_the_stronger_shape_improvement() {
+        // 1456m 12289p 15579s, with 1m and 1s tied at 2 shanten / 16 ukeire.
+        let hand = hand_with(&[0, 3, 4, 5, 9, 10, 10, 16, 17, 18, 22, 22, 24, 26]);
+        let ranking = analyze_discards_with_context(
+            &hand,
+            &[0; TILE_TYPES],
+            &wall(),
+            0,
+            &[0; TILE_TYPES],
+            &[0, 18, 18],
+            &CoachContext {
+                requires_kong_to_claim: Some(false),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(ranking.len(), 2);
+        assert_eq!(
+            (
+                ranking[0].candidate.shanten,
+                ranking[0].candidate.ukeire_count
+            ),
+            (2, 16)
+        );
+        assert_eq!(
+            (
+                ranking[1].candidate.shanten,
+                ranking[1].candidate.ukeire_count
+            ),
+            (2, 16)
+        );
+        assert_eq!(ranking[0].candidate.discard, 18);
+        assert_eq!((ranking[0].q, ranking[1].q), (160, 160));
+        assert_eq!((ranking[0].k, ranking[1].k), (286, 254));
+        assert_eq!(ranking[0].reason, "k");
+    }
+
+    #[test]
+    fn strict_guiyang_table_example_prefers_the_supply_blocked_discard() {
+        // 245699m 23p 235669s. Three 9s are visible, and a seat with
+        // 8888s / 555p / 777p has completed a kong and has three melds.
+        let hand = hand_with(&[1, 3, 4, 5, 8, 8, 10, 11, 19, 20, 22, 23, 23, 26]);
+        let visible = hand_with(&[26, 26, 26, 25, 25, 25, 25, 13, 13, 13, 15, 15, 15]);
+        let ranking = analyze_discards_with_context(
+            &hand,
+            &visible,
+            &wall(),
+            0,
+            &[0; TILE_TYPES],
+            &[1, 26],
+            &CoachContext {
+                requires_kong_to_claim: Some(true),
+                remaining: Some(20),
+                opponents: [
+                    Some(Opponent {
+                        meld_count: 3,
+                        completed_kong: true,
+                        ..Default::default()
+                    }),
+                    None,
+                    None,
+                ],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            (
+                ranking[0].candidate.shanten,
+                ranking[0].candidate.ukeire_count
+            ),
+            (2, 24)
+        );
+        assert_eq!(
+            (
+                ranking[1].candidate.shanten,
+                ranking[1].candidate.ukeire_count
+            ),
+            (2, 24)
+        );
+        assert_eq!(ranking[0].candidate.discard, 26);
+        assert_eq!(
+            ranking[0].risk,
+            [Risk::SupplyBlocked, Risk::Unknown, Risk::Unknown]
+        );
+        assert_eq!(ranking[1].risk[0], Risk::Elevated);
+        assert_eq!(ranking[0].reason, "elevated_risk");
+    }
+
+    #[test]
+    fn no_kong_blocks_the_strict_claim_but_does_not_block_gift_kong() {
+        let hand = sample();
+        // An earlier 9m discard is visible in addition to the candidate's 9m.
+        let visible = hand_with(&[8]);
+        let opponent = Some(Opponent::default());
+        let mut context = CoachContext {
+            requires_kong_to_claim: Some(true),
+            own_has_kong: Some(false),
+            remaining: Some(8),
+            opponents: [opponent, None, None],
+            ..Default::default()
+        };
+        let analyze = |visible: &Counts, context: &CoachContext| {
+            analyze_discards_with_context(
+                &hand,
+                visible,
+                &wall(),
+                0,
+                &[0; TILE_TYPES],
+                &[8],
+                context,
+            )
+            .unwrap()
+            .pop()
+            .unwrap()
+        };
+
+        let strict = analyze(&[0; TILE_TYPES], &context);
+        assert_eq!(
+            strict.risk,
+            [Risk::RuleBlocked, Risk::Unknown, Risk::Unknown]
+        );
+        assert_eq!(strict.gift_kong_risk, 1);
+        assert_eq!(strict.claim_ukeire, Some(vec![]));
+
+        context.requires_kong_to_claim = Some(false);
+        let basic = analyze(&visible, &context);
+        assert_eq!(basic.risk[0], Risk::Elevated);
+        assert_eq!(basic.gift_kong_risk, 0);
+        assert_eq!(
+            basic
+                .claim_ukeire
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|tile| tile.count)
+                .sum::<u8>(),
+            8
+        );
+
+        context.requires_kong_to_claim = None;
+        let unknown = analyze(&visible, &context);
+        assert_eq!(unknown.risk[0], Risk::Unknown);
+        assert_eq!(unknown.claim_ukeire, None);
+    }
+
+    #[test]
+    fn dingque_constrains_win_shape_without_removing_known_tiles() {
+        // 123m 456m 789m 22p 55s is an ordinary wait, but not without s.
+        let hand = hand_with(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 10, 22, 22]);
+        let context = CoachContext {
+            own_missing_suit: Some(2),
+            requires_kong_to_claim: Some(false),
+            ..Default::default()
+        };
+        let ordinary = analyze_hand(&hand, &[0; TILE_TYPES], &wall(), 0, &[0; TILE_TYPES]).unwrap();
+        let constrained = analyze_hand_with_context(
+            &hand,
+            &[0; TILE_TYPES],
+            &wall(),
+            0,
+            &[0; TILE_TYPES],
+            &context,
+        )
+        .unwrap();
+        assert_eq!(ordinary.shanten, 0);
+        assert_eq!(constrained.hand.shanten, 2);
+        assert!(constrained.hand.ukeire.iter().all(|tile| tile.tile < 18));
+        assert_eq!(constrained.claim_ukeire, Some(vec![]));
+        let mut too_many_known = [0; TILE_TYPES];
+        too_many_known[22] = 3;
+        assert!(matches!(
+            analyze_hand_with_context(
+                &hand,
+                &too_many_known,
+                &wall(),
+                0,
+                &[0; TILE_TYPES],
+                &context,
+            ),
+            Err(AnalysisError::KnownExceedsTotal)
+        ));
     }
 
     #[test]

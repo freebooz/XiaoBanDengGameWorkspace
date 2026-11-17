@@ -8,6 +8,7 @@ const MOVE_NAMES := {
 }
 const SUITS := {"wan": "万", "tong": "筒", "tiao": "条"}
 const RANKS := ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
+const SCORE_CATEGORIES := {"hu":"胡牌", "gang":"杠分", "ji":"鸡分", "cha_jiao":"查叫"}
 
 var _replay: Dictionary = {}
 var _events: Array = []
@@ -17,6 +18,7 @@ var _move: Label
 var _seats: Array[Label] = []
 var _previous: Button
 var _next: Button
+var _score_transfers: Label
 
 
 func _ready() -> void:
@@ -48,6 +50,8 @@ func _ready() -> void:
 	add_child(controls)
 	_previous = _navigation(controls, "MahjongReplayPreviousButton", "‹  上一步", -1)
 	_next = _navigation(controls, "MahjongReplayNextButton", "下一步  ›", 1)
+	_score_transfers = _label(self, "MahjongReplayScoreTransfers", 18)
+	_score_transfers.hide()
 
 
 func apply(replay: Dictionary) -> void:
@@ -67,12 +71,19 @@ func _project() -> void:
 	var discards: Array[Dictionary] = []
 	var melds := [{}, {}, {}, {}]
 	var winners: Array[int] = []
+	var missing_suits: Array = []
 	var latest := "开局"
 	for index in range(_step):
 		var event: Variant = _events[index]
 		if not event is Dictionary:
 			continue
 		var kind := str(event.get("kind", ""))
+		if kind == "dingque":
+			var published: Variant = event.get("missing_suits")
+			if published is Array and published.size() == 4 and published.all(func(suit): return SUITS.has(suit)):
+				missing_suits = published
+				latest = "四家定缺已公开"
+			continue
 		if kind == "wall_exhausted":
 			latest = MOVE_NAMES[kind]
 			continue
@@ -90,6 +101,8 @@ func _project() -> void:
 			discards[discard_index].claimed = true
 		if kind == "hu":
 			winners.append(seat)
+			if event.get("robbed_tile") is Dictionary:
+				latest = "%d号座 · 抢杠胡 %s" % [seat + 1, _tile_name(event.robbed_tile)]
 			continue
 		var meld: Variant = event.get("meld")
 		var meld_index := int(event.get("meld_index", -1))
@@ -112,7 +125,9 @@ func _project() -> void:
 	for seat in range(4):
 		var tail := remaining[seat] as PackedStringArray
 		var end := tail.size()
-		var text := "%d号座%s%s\n弃牌 %d" % [seat + 1, " · 庄家" if seat == dealer else "", " · 胡牌" if seat in winners else "", end]
+		var text := "%d号座%s%s" % [seat + 1, " · 庄家" if seat == dealer else "", " · 胡牌" if seat in winners else ""]
+		if not missing_suits.is_empty(): text += " · 缺 " + SUITS[missing_suits[seat]]
+		text += "\n弃牌 %d" % end
 		if end > 0:
 			text += " · " + "、".join(tail.slice(maxi(0, end - 6), end))
 		var open_melds := PackedStringArray(melds[seat].values())
@@ -122,6 +137,25 @@ func _project() -> void:
 		_seats[seat].text = text
 	_previous.disabled = _step <= 0
 	_next.disabled = _step >= _events.size()
+	_score_transfers.text = _final_transfers() if _step > 0 and _step == _events.size() else ""
+	_score_transfers.visible = not _score_transfers.text.is_empty()
+
+
+func _final_transfers() -> String:
+	var transfers: Variant = _replay.get("score_transfers")
+	if not transfers is Array: return ""
+	var rows := PackedStringArray()
+	for transfer in transfers:
+		if not transfer is Dictionary or not SCORE_CATEGORIES.has(transfer.get("category")): continue
+		var payer := int(transfer.get("payer", -1))
+		var receiver := int(transfer.get("receiver", -1))
+		var amount := int(transfer.get("amount", 0))
+		if payer < 0 or payer >= 4 or receiver < 0 or receiver >= 4 or payer == receiver or amount <= 0: continue
+		var hand_type := str(transfer.get("hand_type", ""))
+		var row := "%s · %d号座 → %d号座 · %d 分" % [SCORE_CATEGORIES[transfer.category], payer + 1, receiver + 1, amount]
+		if not hand_type.is_empty(): row += " · " + hand_type
+		rows.append(row)
+	return "\n".join(rows)
 
 
 func _tile_name(value: Variant) -> String:

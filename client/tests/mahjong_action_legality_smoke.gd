@@ -138,10 +138,12 @@ func _run() -> void:
 	packet=_packet()
 	packet.hand[3]={"id":4,"suit":"wan","rank":1}
 	packet.options=[{"type":"play"},{"type":"an_gang","tile_id":2}]
+	packet.action_window_id="legal-hand:concealed-kong"
 	await _push(screen,packet)
 	_check(screen._response_buttons.gang.is_visible_in_tree(),"Valid concealed kong is hidden")
 	await _tap(screen._response_buttons.gang)
 	_check(screen.sent.size()==1 and screen.sent[0].action=="an_gang" and screen.sent[0].tile_id==2,"Concealed kong must send the precise server-provided physical ID")
+	_check(screen.sent.size()==1 and screen.sent[0].get("action_window_id")==packet.action_window_id,"Action must echo the window from the accepted private snapshot")
 	screen._on_response("gang")
 	screen._send_action("an_gang",2)
 	_check(screen.sent.size()==1,"Repeated clicks or callbacks must not submit a pending action twice")
@@ -163,6 +165,7 @@ func _run() -> void:
 	_check(screen._response_buttons.gang.is_visible_in_tree(),"Own fourth held tile must still allow a pong upgrade")
 	await _tap(screen._response_buttons.gang)
 	_check(screen.sent.size()==1 and screen.sent[0].action=="bu_gang" and screen.sent[0].tile_id==1,"Pong upgrade mapped to the wrong action or physical ID")
+	_check(screen.sent.size()==1 and not screen.sent[0].has("action_window_id"),"An older server snapshot may omit the window ID")
 	packet.phase="reaction"
 	packet.turn=1
 	packet.last_discard={"id":90,"suit":"wan","rank":1}
@@ -171,6 +174,8 @@ func _run() -> void:
 	packet.options=[{"type":"pass"},{"type":"ming_gang"},{"type":"bu_gang","tile_id":90}]
 	await _reject_gang(screen,packet,"an exposed pong cannot use another player's fourth discard")
 	packet=_packet("reaction",1)
+	packet.rule_set_id="basic_108"
+	packet.rule_version="1.0.0"
 	packet.options=[{"type":"peng"},{"type":"ming_gang"},{"type":"hu"},{"type":"pass"}]
 	packet.remaining=0
 	await _reject_gang(screen,packet,"discard kong requires a replacement wall tile")
@@ -189,6 +194,9 @@ func _run() -> void:
 	_cases.append("legal pong sends canonical action")
 	for phase in ["turn","reaction"]:
 		packet=_packet(phase,0 if phase=="turn" else 1)
+		if phase == "reaction":
+			packet.rule_set_id = "basic_108"
+			packet.rule_version = "1.0.0"
 		packet.options=[{"type":"hu"}]
 		await _push(screen,packet)
 		await _tap(screen._response_buttons.hu)
@@ -207,6 +215,54 @@ func _run() -> void:
 	await _tap(pass_button)
 	_check(screen.sent.size()==1 and screen.sent[0].action=="pass" and screen.sent[0].tile_id==0,"Pass-only touch must submit a real pass")
 	_cases.append("pass only response touch")
+	for dimensions in [Vector2i(1280,720), Vector2i(1600,720), Vector2i(1280,800), Vector2i(1024,768)]:
+		root.size = dimensions
+		for frame in 3: await process_frame
+		packet=_packet("reaction",1)
+		packet.options=[{"type":"peng"},{"type":"ming_gang"},{"type":"pass"}]
+		await _push(screen,packet)
+		var seat_positions: Array = screen._seat_panels.map(func(panel): return panel.get_global_rect())
+		var action_row: Rect2 = screen._actions_root.get_global_rect()
+		var board_center: float = screen._board_view.get_global_rect().get_center().x
+		# The tile-safe lane can shift by a few logical pixels to preserve clearance.
+		_check(absf(action_row.get_center().x - board_center) <= 4.0, "Response row must stay visually centered at %s" % [dimensions])
+		var previous := Rect2()
+		for kind in ["peng", "gang", "pass"]:
+			var button: Button = screen._response_buttons[kind]
+			var rect := button.get_global_rect()
+			_check(button.is_visible_in_tree() and rect.end.y <= screen._own_hand_top() and not rect.intersects(previous),
+				"Each reaction button stays above the hand and keeps its own touch target at %s: %s" % [dimensions, kind])
+			previous = rect
+		await _tap(pass_button)
+		_check(screen.sent.size()==1 and screen.sent[0].action=="pass" and screen.sent[0].tile_id==0,
+			"Pass next to other reactions submits one legal command at %s" % [dimensions])
+		_cases.append("mixed response pass %s" % str(dimensions))
+
+		packet = _packet()
+		packet.options.append({"type":"pass"})
+		await _push(screen, packet)
+		_check(not pass_button.is_visible_in_tree(), "Own turn must not expose pass at %s" % [dimensions])
+		screen._on_response("pass")
+		_check(screen.sent.is_empty(), "Own turn must refuse a direct pass request")
+		var tile_id := int(packet.hand[0].id)
+		screen._select_tile(tile_id)
+		var top := INF
+		for model: Node3D in screen._hand_models:
+			var body: Rect2 = screen._projected_tile_rect(model, &"TileBody")
+			if body.has_area(): top = minf(top, screen._board_view.position.y + body.position.y)
+		var discard_rect: Rect2 = screen._play_button.get_global_rect()
+		_check(screen._play_button.is_visible_in_tree() and not screen._play_button.disabled and discard_rect.end.y < top,
+			"Discard button must be above the raised tile body and available at %s" % [dimensions])
+		_check(is_equal_approx(discard_rect.get_center().x, board_center) and is_equal_approx(discard_rect.end.y, action_row.end.y),
+			"Single discard control and multiple reactions must share a stable center and baseline at %s" % [dimensions])
+		_check(seat_positions == screen._seat_panels.map(func(panel): return panel.get_global_rect()),
+			"Turn changes and raised tiles cannot move the player cards at %s" % [dimensions])
+		await _tap(screen._play_button)
+		_check(screen.sent.size() == 1 and screen.sent[0].action == "play" and screen.sent[0].tile_id == tile_id,
+			"Own turn must submit the selected physical tile at %s" % [dimensions])
+		_cases.append("own discard touch %s" % str(dimensions))
+	root.size = Vector2i(1440,810)
+	for frame in 3: await process_frame
 	packet=_packet("reaction",1)
 	packet.options=[{"type":"ming_gang"},{"type":"pass"}]
 	packet.discards[0].claimed=true
@@ -273,9 +329,83 @@ func _run() -> void:
 	disconnected_choice.call()
 	_check(screen.sent.is_empty(),"An old connection's popup survived a fresh snapshot")
 	choices=screen._overlay_root.find_children("MahjongGangChoice*","Button",true,false)
+	# The replacement popup's containers must settle before calculating touch coordinates.
+	for frame in 2: await process_frame
 	await _tap(choices[1])
 	_check(screen.sent.size()==1 and screen.sent[0].action=="an_gang" and screen.sent[0].tile_id==5,"Fresh multi-kong choice lost its precise subtype/ID")
+	await _check_guiyang_claim_gate(screen)
+	await _check_dingque(screen)
 	print("ACTION_LEGALITY_RESULT="+str(not _failed)+" cases="+str(_cases.size()+16))
 	screen.queue_free()
 	await process_frame
 	quit(1 if _failed else 0)
+
+
+func _check_guiyang_claim_gate(screen) -> void:
+	var packet := _packet("reaction", 1)
+	packet.options = [{"type":"hu"},{"type":"pass"}]
+	await _push(screen, packet)
+	_check(not screen._response_buttons.hu.visible, "Guiyang with no completed own kong must suppress discard hu")
+	screen._on_response("hu")
+	_check(screen.sent.is_empty(), "Guiyang without a completed kong cannot submit reaction hu")
+	packet.rule_version = "3.0.0"
+	await _push(screen, packet)
+	_check(not screen._response_buttons.hu.visible, "Guiyang local version retains the strict completed-kong restriction")
+	packet.melds[0].append({"kind":"an_gang","tiles":[
+		{"id":71,"suit":"wan","rank":8},{"id":72,"suit":"wan","rank":8},
+		{"id":73,"suit":"wan","rank":8},{"id":74,"suit":"wan","rank":8},
+	]})
+	await _push(screen, packet)
+	_check(screen._response_buttons.hu.visible, "A completed own kong permits the server-authorized Guiyang hu")
+
+
+func _check_dingque(screen) -> void:
+	var packet := _packet("dingque", 1)
+	packet.rule_set_id = "zunyi_dingque"
+	packet.rule_version = "1.0.0"
+	packet["rule"] = {"dingque":true,"options":{"version":"2.0.0","chicken":true,"rob_kong":true}}
+	packet["missing_suits"] = ["", "tong", "", ""]
+	packet.options = [{"type":"dingque","suit":"wan"},{"type":"dingque","suit":"tong"},
+		{"type":"dingque","suit":"tiao"},{"type":"dingque","suit":"bad"},{"type":"play"}]
+	screen._selected_id = 1
+	await _push(screen, packet)
+	_check(screen._legal_options("dingque").size() == 3 and not screen._play_button.visible,
+		"Only valid private missing-suit options may appear during selection")
+	_check(screen.find_children("MahjongMissingSuit*", "Label", true, false).is_empty(),
+		"A partially supplied suit list must not display anyone's choice")
+	var tile_touch := InputEventScreenTouch.new()
+	tile_touch.pressed = true
+	tile_touch.position = screen._projected_tile_rect(screen._hand_models[1]).get_center()
+	screen._on_board_input(tile_touch)
+	_check(screen._selected_id == 0 and screen._coach_overlay._badges.is_empty(),
+		"During dingque, pressing a hand tile cannot raise it or show discard recommendations")
+	var choose := screen.find_child("MahjongDingque_tong", true, false) as Button
+	if choose == null or choose.disabled or not choose.is_visible_in_tree():
+		_check(false, "The legal missing-suit choice must be a visible native button")
+		return
+	await _capture("dingque-selection")
+	await _tap(choose)
+	_check(screen.sent.size() == 1, "A missing-suit touch must submit one authoritative command")
+	if screen.sent.is_empty(): return
+	var command: Dictionary = screen.sent[0]
+	_check(command.action == "dingque" and command.get("suit") == "tong" and not command.has("tile_id")
+		and command.match_id == packet.match_id and not str(command.command_id).is_empty(),
+		"A missing-suit command carries its suit and decision identity")
+	choose.pressed.emit()
+	_check(screen.sent.size() == 1 and screen._pending_action, "A second press cannot duplicate a pending choice")
+	screen._handle_packet(JSON.stringify({"type":"mahjong_action_result","command_id":command.command_id,"ok":true}))
+	_check(screen._pending_action, "The action receipt alone does not confirm a missing-suit choice")
+	packet.options = []
+	screen._handle_packet(JSON.stringify(packet))
+	_check(not screen._pending_action and not choose.visible and "等待" in screen._status.text,
+		"A same-epoch snapshot removing private options confirms the choice without revealing anyone's suit")
+	packet.epoch += 1
+	packet.phase = "turn"
+	packet.turn = 0
+	packet.missing_suits = ["tong","wan","tiao","tong"]
+	packet.options = [{"type":"play","tile_id":7}]
+	screen._handle_packet(JSON.stringify(packet))
+	_check(screen.find_children("MahjongMissingSuit*", "Label", true, false).size() == 4
+		and screen._can_play_tile(7) and not screen._can_play_tile(1),
+		"Published missing suits display for four seats; authoritative physical discard still controls play")
+	await _capture("dingque-published")

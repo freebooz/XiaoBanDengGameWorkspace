@@ -14,6 +14,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	root.content_scale_size = Vector2i.ZERO
 	if not ResourceLoader.exists(VIEW_PATH):
 		push_error("The native Mahjong lobby view has not been implemented.")
 		quit(1)
@@ -34,9 +35,10 @@ func _run() -> void:
 	_host.add_child(_view)
 	await process_frame
 	await _check_adaptive_layout(data)
-	_check_lobby(data)
+	await _check_lobby(data)
 	await _capture_guided_if_requested()
 	_check_custom_rules(data)
+	_check_zunyi_rules(data)
 	_check_waiting_room(data)
 	_check_active_room(data)
 	_host.queue_free()
@@ -74,6 +76,7 @@ func _check_adaptive_layout(data: Dictionary) -> void:
 	_check(not layout.vertical and secondary.get_global_rect().position.x > _node("MahjongQuickButton").get_global_rect().position.x,
 		"The landscape lobby preserves the featured action and room action column.")
 	_press("MahjongTrainingHallButton")
+	await process_frame
 	var training := _node("MahjongTrainingLayout") as BoxContainer
 	_check(training != null and not training.vertical, "Training uses two columns on a landscape tablet.")
 	var card := _node("MahjongTrainingBotCard") as PanelContainer
@@ -145,7 +148,6 @@ func _resize_host(new_size: Vector2) -> void:
 func _capture_guided_if_requested() -> void:
 	var output := OS.get_environment("MAHJONG_GUIDED_PREVIEW_DIR")
 	if output.is_empty() or DisplayServer.get_name() == "headless": return
-	root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	_host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	await process_frame
 	await process_frame
@@ -156,7 +158,10 @@ func _capture_guided_if_requested() -> void:
 	await RenderingServer.frame_post_draw
 	var tiles := _node("MahjongGuidedTile4")
 	var displayed_area := Rect2(Vector2.ZERO, root.get_visible_rect().size)
-	_check(displayed_area.encloses(tiles.get_global_rect()), "The last tile choice stays within the rendered viewport.")
+	_check(displayed_area.encloses(tiles.get_global_rect()),
+		"The last tile choice must fit %s: tile=%s view=%s content=%s scroller=%s min=%s" % [displayed_area,
+			tiles.get_global_rect(), _view.get_global_rect(), _view._content.get_global_rect(),
+			_view._scroll.get_global_rect(), _view._scroll.get_combined_minimum_size()])
 	var file_name := "guided_%dx%d.png" % [root.size.x, root.size.y]
 	_check(root.get_texture().get_image().save_png(output.path_join(file_name)) == OK, "Can save the rendered teaching view.")
 	_press("MahjongGuidedBackButton")
@@ -179,10 +184,10 @@ func _fixture() -> Dictionary:
 
 
 func _check_lobby(data: Dictionary) -> void:
-	_check(_visible("MahjongLobbyLandscape") and _visible("MahjongLobbyBrandMark"), "Lobby has its landscape and reusable brand.")
-	var logo := _node("MahjongLobbyBrandMark")
-	var header := _node("MahjongFlowHeader")
-	_check(logo != null and header != null and logo.get_parent().get_index() < header.get_index(), "The reusable brand bar is above the player header.")
+	_check(_visible("MahjongLobbyLandscape") and _visible("MahjongViewportBrand"), "Lobby has its landscape and reusable brand.")
+	var logo := _node("MahjongViewportBrand") as TextureRect
+	_check(logo != null and logo.texture != null and logo.get_global_rect().position.distance_to(Vector2(8, 6)) <= 1.0,
+		"The reusable brand starts at the upper-left of the desktop viewport.")
 	var identity := _node("MahjongLobbyAccountName") as Label
 	var avatar := _node("MahjongLobbyProfileAvatar") as TextureRect
 	_check(is_instance_valid(avatar) and avatar.is_visible_in_tree() and avatar.texture != null
@@ -230,6 +235,11 @@ func _check_lobby(data: Dictionary) -> void:
 	_press("MahjongGuidedTrainingButton")
 	_check(_visible("MahjongGuidedPage") and not _visible("MahjongPracticeButton"), "The teaching route opens its own offline page.")
 	if _visible("MahjongGuidedPage"):
+		await process_frame
+		var discard := _node("MahjongGuidedDiscardButton") as Control
+		var hand := _node("MahjongGuidedTilePreview") as Control
+		_check(discard.get_global_rect().end.y <= hand.get_global_rect().position.y, "The tutorial's discard button must be above the hand preview.")
+		_check(not _visible("MahjongGuidedPassButton"), "An own-turn lesson cannot offer pass.")
 		_check(_disabled("MahjongGuidedDiscardButton"), "Discard requires selection.")
 		_press("MahjongGuidedTile1")
 		_press("MahjongGuidedDiscardButton")
@@ -305,7 +315,7 @@ func _check_lobby(data: Dictionary) -> void:
 
 func _check_custom_rules(data: Dictionary) -> void:
 	var settings := _node("MahjongSettingsButton") as Button
-	_check(settings != null and settings.text == "设置", "The lobby exposes general settings.")
+	_check(settings != null and settings.icon != null and settings.accessibility_name == "设置", "The lobby exposes general settings.")
 	_press("MahjongSettingsButton")
 	_expect("settings")
 	_press("MahjongCreateButton")
@@ -349,6 +359,43 @@ func _expect_create(options: Dictionary) -> void:
 		and payload.get("rule_set_id") == "guiyang" and payload.get("rule_version") == "v1",
 		"Creation sends the chosen code, round count, preset ID, version and host rules.")
 	_actions.clear()
+
+
+func _check_zunyi_rules(data: Dictionary) -> void:
+	var trial := {"rule_set_id":"zunyi_dingque","rule_version":"1.0.0","name":"遵义定缺","region":"遵义","seat_count":4,
+		"dingque":true,"quick_match":false,"mutable_options":["chicken","rob_kong"],
+		"options":{"version":"2.0.0","chicken":true,"rob_kong":true}}
+	var old_selection: Dictionary = data.selected
+	data.presets.append(trial)
+	data.selected = {"rule_set_id":trial.rule_set_id, "rule_version":trial.rule_version}
+	_view.call("apply", data)
+	_check(_disabled("MahjongQuickButton"), "A selected friend/training-only preset disables quick match")
+	_press("MahjongTrainingHallButton")
+	_check(not _disabled("MahjongTrainingButton") and _visible("MahjongTrainingRuleSelect"),
+		"Training remains available and offers all published presets")
+	_press("MahjongTrainingHallBackButton")
+	_press("MahjongCreateButton")
+	_press("MahjongCreateRuleSelector")
+	_press("MahjongCreateRuleCard_zunyi_dingque_1_0_0")
+	var chicken := _node("MahjongRuleChicken") as CheckButton
+	var rob := _node("MahjongRuleRobKong") as CheckButton
+	_check(chicken != null and chicken.is_visible_in_tree() and not chicken.disabled and chicken.button_pressed,
+		"Dingque chicken option is visible, enabled and defaults on")
+	_check(rob != null and rob.is_visible_in_tree() and not rob.disabled and rob.button_pressed,
+		"Dingque rob-kong option is visible, enabled and defaults on")
+	for name in ["MahjongRuleChargeChicken", "MahjongRuleBlackEight", "MahjongRuleKongPass"]:
+		_check(not _visible(name), "The V2 form must hide legacy option " + name)
+	if chicken != null: chicken.button_pressed = false
+	_press("MahjongCustomRulesCreateButton")
+	var payload: Dictionary = _actions[0].payload if _actions.size() == 1 else {}
+	_check(payload.get("rule_set_id") == "zunyi_dingque" and payload.get("rule_version") == "1.0.0"
+		and payload.get("options") == {"version":"2.0.0","chicken":false,"rob_kong":true},
+		"Trial room creation uses only version and the two allowed options")
+	_actions.clear()
+	_press("MahjongCustomRulesBackButton")
+	data.presets.pop_back()
+	data.selected = old_selection
+	_view.call("apply", data)
 
 func _check_view_clipboard(code: LineEdit) -> void:
 	if not DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):

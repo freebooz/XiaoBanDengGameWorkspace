@@ -71,13 +71,14 @@ func _run() -> void:
 		await _capture_if_requested("personal_history_list")
 		app.find_child("MahjongHistoryMatch_new", true, false).pressed.emit()
 		_expect(app.requests.back().url.ends_with("/api/v1/mahjong/history/new"), "Details load from the authorized match endpoint.")
-		var detail := _row("new", 1, [1], [-3, 9, -3, -3])
-		detail.score_breakdown = {"hu": [-2, 6, -2, -2], "gang": [0, 1, -1, 0], "ji": [-1, 2, 0, -1]}
+		var detail := _row("new", 1, [], [-4, 7, -3, 0])
+		detail.rule = {"name":"遵义定缺","rule_set_id":"zunyi_dingque","rule_version":"1.0.0","dingque":true}
+		detail.score_breakdown = {"hu": [0, 0, 0, 0], "gang": [-1, 1, 0, 0], "ji": [0, 0, 0, 0], "cha_jiao": [-3, 6, -3, 0]}
 		page = app.get("_history_page_http")
 		page.request_completed.emit(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify({"match": detail}).to_utf8_buffer())
 		var breakdown := app.find_child("MahjongHistoryBreakdown", true, false) as Label
-		_expect(breakdown != null and "+6" in breakdown.text and "+1" in breakdown.text and "+2" in breakdown.text,
-			"Breakdown reads the authenticated player's seat in all three score arrays.")
+		_expect(breakdown != null and "杠分  +1" in breakdown.text and "查叫  +6" in breakdown.text,
+			"Zunyi details read the authenticated player's kong and wall-exhaustion wait scores.")
 		await _capture_if_requested("personal_history_detail")
 		var replay_button := app.find_child("MahjongHistoryReplayButton", true, false) as Button
 		_expect(replay_button != null and replay_button.is_visible_in_tree(), "The match detail provides a replay action.")
@@ -86,6 +87,7 @@ func _run() -> void:
 			_expect(app.requests.back().url.ends_with("/api/v1/mahjong/history/new/replay"), "Replay is requested from the owning match endpoint.")
 			var discard := {"id": 1, "suit": "wan", "rank": 1}
 			var events := [
+				{"seat": -1, "kind": "dingque", "missing_suits": ["tong","wan","tiao","wan"]},
 				{"sequence": 1, "seat": 0, "kind": "play", "tile": discard, "discard_index": 0},
 				{"sequence": 2, "seat": 1, "kind": "peng", "discard_index": 0, "meld_index": 0,
 					"meld": {"kind": "peng", "from_seat": 0, "tiles": [discard, discard, discard]}},
@@ -96,10 +98,17 @@ func _run() -> void:
 				{"sequence": 5, "seat": -1, "kind": "wall_exhausted"},
 			]
 			page = app.get("_history_page_http")
+			var transfers := [
+				{"payer":0, "receiver":1, "category":"cha_jiao", "amount":3, "reason":"wall_exhausted"},
+				{"payer":2, "receiver":1, "category":"cha_jiao", "amount":3, "reason":"wall_exhausted"},
+			]
 			page.request_completed.emit(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), JSON.stringify(
-				{"replay": {"version": 1, "dealer": 0, "events": events}}).to_utf8_buffer())
+				{"replay": {"version": 1, "dealer": 0, "events": events, "score_transfers":transfers}}).to_utf8_buffer())
 			var replay_seat := app.find_child("MahjongReplaySeat1", true, false) as Label
-			_expect(replay_seat != null and "弃牌 0" in replay_seat.text, "Step zero contains no public discards.")
+			_expect(replay_seat != null and "弃牌 0" in replay_seat.text and "缺 筒" not in replay_seat.text,
+				"Step zero contains neither public discards nor future missing suit choices.")
+			app.find_child("MahjongReplayNextButton", true, false).pressed.emit()
+			_expect("缺 筒" in replay_seat.text, "Replay publishes the four choices together at the authoritative dingque event.")
 			app.find_child("MahjongReplayNextButton", true, false).pressed.emit()
 			_expect("弃牌 1" in replay_seat.text and "一万" in replay_seat.text, "The next step shows the committed discard.")
 			app.find_child("MahjongReplayNextButton", true, false).pressed.emit()
@@ -111,6 +120,12 @@ func _run() -> void:
 			var third_seat := app.find_child("MahjongReplaySeat3", true, false) as Label
 			_expect(third_seat.text.ends_with("副露 1 · 暗杠"), "A public replay shows only the concealed kong's existence.")
 			await _capture_if_requested("personal_history_replay")
+			app.find_child("MahjongReplayNextButton", true, false).pressed.emit()
+			var ledger := app.find_child("MahjongReplayScoreTransfers", true, false) as Label
+			_expect(ledger != null and ledger.is_visible_in_tree() and "查叫 · 1号座 → 2号座 · 3 分" in ledger.text
+				and "查叫 · 3号座 → 2号座 · 3 分" in ledger.text, "The last committed replay step shows the payer and receiver of each exact transfer.")
+			app.find_child("MahjongReplayPreviousButton", true, false).pressed.emit()
+			_expect(ledger == null or not ledger.is_visible_in_tree(), "Rewinding hides the still-future score transfers.")
 			app.find_child("MahjongReplayPreviousButton", true, false).pressed.emit()
 			_expect(third_seat.text.ends_with("副露 0"), "Previous truncates the public replay prefix.")
 			app.find_child("MahjongReplayBackButton", true, false).pressed.emit()

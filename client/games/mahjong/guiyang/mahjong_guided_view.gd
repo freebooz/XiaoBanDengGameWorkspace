@@ -11,7 +11,7 @@ const ACTION_LABELS := {"discard": "打出", "peng": "碰", "gang": "杠", "hu":
 const LESSONS := [
 	{
 		"title": "选牌与打出", "example": "当前轮到你 · 手牌节选",
-		"hint": "先点击选中八筒，再点一次八筒或点「打出」。第一次点击只选牌。",
+		"hint": "轮到自己时要打出一张牌。先选中八筒，再点一次八筒或点手牌上方的「打出」。",
 		"hand": ["二万", "五条", "八筒", "九万"],
 		"tiles": [{"suit":"wan","rank":2}, {"suit":"tiao","rank":5}, {"suit":"tong","rank":8}, {"suit":"wan","rank":9}],
 		"choice": "discard",
@@ -23,8 +23,8 @@ const LESSONS := [
 		"choice": "peng",
 	},
 	{
-		"title": "选择过牌", "example": "其他玩家打出 · 六万",
-		"hint": "你手上有一对六万，可以碰。即使来牌凑齐胡牌，默认贵阳捉鸡也要求先完成一个杠才能点炮胡。这次选择「过」。自摸无需先杠。",
+		"title": "放弃响应", "example": "其他玩家打出 · 六万",
+		"hint": "你手上有一对六万，可以碰。这里点「过」只放弃这次碰牌机会。贵阳捉鸡要求接炮前本人已完成一个杠，自摸无需先杠。",
 		"hand": ["六万", "六万"], "tiles": [{"suit":"wan","rank":6}, {"suit":"wan","rank":6}],
 		"choice": "pass",
 	},
@@ -46,6 +46,7 @@ const LESSONS := [
 var _step := 0
 var _selected := -1
 var _feedback_text := ""
+var _header: HBoxContainer
 var _progress: Label
 var _title: Label
 var _instruction: Label
@@ -64,29 +65,31 @@ var _materials := TILE_MATERIALS.new()
 func _ready() -> void:
 	name = "MahjongGuidedPage"
 	add_theme_constant_override("separation", 12)
-	var toolbar := HBoxContainer.new()
-	add_child(toolbar)
-	_button(toolbar, "MahjongGuidedBackButton", "‹  返回训练场", false).pressed.connect(func() -> void: back_requested.emit())
-	_progress = _label(toolbar, "", 21)
-	_progress.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_progress.add_theme_color_override("font_color", RURAL.CREAM)
+	_header = MODAL.village_header(self, "MahjongGuidedBackButton", func() -> void: back_requested.emit(), "MahjongGuidedBrandSpace", false)
+	var back := _header.get_child(-1) as Button
+	back.tooltip_text = "返回训练场"
+	back.accessibility_name = "返回训练场"
 
-	var frame := PanelContainer.new()
-	frame.add_theme_stylebox_override("panel", MODAL.paper_frame(Vector4(19, 19, 19, 19)))
-	add_child(frame)
-	var padding := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		padding.add_theme_constant_override("margin_" + side, 18)
-	frame.add_child(padding)
+	var frame := MODAL.village_panel(self, Vector4(34, 38, 34, 34))
+	frame.name = "MahjongGuidedLessonPanel"
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 11)
-	padding.add_child(content)
-	_title = _label(content, "", 32)
-	_title.add_theme_font_override("font", RURAL.title_font())
+	frame.add_child(content)
+	_title = MODAL.village_title(content, "", frame)
+	_title.name = "MahjongGuidedLessonTitle"
+	_progress = _label(content, "", 19)
+	_progress.add_theme_color_override("font_color", MODAL.MUTED)
 	_instruction = _label(content, "", 23)
 	_example = _label(content, "", 20)
 	_example.add_theme_color_override("font_color", Color("#5a654b"))
+	var controls := HBoxContainer.new()
+	controls.add_theme_constant_override("separation", 10)
+	content.add_child(controls)
+	for action: String in ACTION_LABELS:
+		var button := _button(controls, "MahjongGuided%sButton" % action.capitalize(), ACTION_LABELS[action], true)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.pressed.connect(_perform.bind(action))
+		_actions[action] = button
 	_build_preview(content)
 	_tiles_row = HBoxContainer.new()
 	_tiles_row.add_theme_constant_override("separation", 9)
@@ -97,19 +100,20 @@ func _ready() -> void:
 		tile_button.toggle_mode = true
 		tile_button.pressed.connect(_select.bind(index))
 		_tile_buttons.append(tile_button)
-	var controls := HBoxContainer.new()
-	controls.add_theme_constant_override("separation", 10)
-	content.add_child(controls)
-	for action: String in ACTION_LABELS:
-		var button := _button(controls, "MahjongGuided%sButton" % action.capitalize(), ACTION_LABELS[action], true)
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.pressed.connect(_perform.bind(action))
-		_actions[action] = button
 	_feedback = _label(content, "", 20)
 	_feedback.add_theme_color_override("font_color", Color("#865335"))
 	_restart = _button(content, "MahjongGuidedRestartButton", "再练一次", true)
 	_restart.pressed.connect(restart)
+	resized.connect(_fit_layout)
+	get_viewport().size_changed.connect(_fit_layout)
+	_fit_layout()
 	_render()
+
+
+func _fit_layout() -> void:
+	var height := get_viewport_rect().size.y
+	MODAL.fit_village_header(_header, size.x, height)
+	_preview.custom_minimum_size.y = clampf(height * 0.21, 116.0, 174.0)
 
 
 func _build_preview(parent: Control) -> void:

@@ -49,10 +49,10 @@ class Caption extends RefCounted:
 			return
 		if not _initialized:
 			_initialized = true
-			# Keep small naturally sized controls usable after text stops setting the width.
-			if button.get_parent() is Container and button.custom_minimum_size.x <= 0.0:
-				if (button.size_flags_horizontal & Control.SIZE_EXPAND) == 0:
+			if button.get_parent() is Container:
+				if button.custom_minimum_size.x <= 0.0 and (button.size_flags_horizontal & Control.SIZE_EXPAND) == 0:
 					button.custom_minimum_size.x = minf(button.get_combined_minimum_size().x, 112.0)
+				button.custom_minimum_size = button.custom_minimum_size.max(Vector2(44, 44))
 			button.clip_text = true
 			button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		_text = button.text
@@ -82,7 +82,9 @@ class Caption extends RefCounted:
 			horizontal = maxf(horizontal, style.get_margin(SIDE_LEFT) + style.get_margin(SIDE_RIGHT))
 			vertical = maxf(vertical, style.get_margin(SIDE_TOP) + style.get_margin(SIDE_BOTTOM))
 		var outline := float(button.get_theme_constant("outline_size"))
-		var available := button.size - Vector2(horizontal, vertical) - Vector2.ONE * (outline * 2.0 + 2.0)
+		var inset := Vector2(maxf(horizontal, minf(30.0, button.size.x * 0.12)),
+			maxf(vertical, minf(30.0, button.size.y * 0.24)))
+		var available := button.size - inset - Vector2.ONE * (outline * 2.0 + 2.0)
 		var gap := float(button.get_theme_constant("h_separation"))
 		if _icon != null:
 			var icon_width := float(_icon.get_width())

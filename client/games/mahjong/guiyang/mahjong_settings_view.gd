@@ -2,6 +2,7 @@ extends Panel
 ## Presents immediate preferences. Owners apply and store their values.
 
 const MODAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_modal.gd")
+const RURAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_theme.gd")
 const TABS := ["基础设置", "音效设置", "画面设置", "玩法规则"]
 const DESIGN_SIZE := Vector2(714, 530)
 const STACKED_TABS_WIDTH := 560.0
@@ -15,6 +16,8 @@ var _scroll: ScrollContainer
 var _music: Button
 var _effects: Button
 var _coach: Button
+var _spectator_toggle: Button
+var _spectator_note: Label
 var _voice: OptionButton
 var _rules: Label
 var _dismiss: Button
@@ -38,7 +41,6 @@ func setup(close: Callable, set_music: Callable, set_effects: Callable, set_qual
 	var header := HBoxContainer.new()
 	layout.add_child(header)
 	var balance := Control.new()
-	balance.custom_minimum_size.x = 47
 	balance.mouse_filter = MOUSE_FILTER_IGNORE
 	header.add_child(balance)
 	var plaque_slot := CenterContainer.new()
@@ -50,10 +52,10 @@ func setup(close: Callable, set_music: Callable, set_effects: Callable, set_qual
 	_dismiss.name = "MahjongSettingsClose"
 	_dismiss.tooltip_text = "关闭游戏设置"
 	_dismiss.accessibility_name = "关闭游戏设置"
-	_dismiss.custom_minimum_size = Vector2(47, 47)
 	_dismiss.size_flags_vertical = SIZE_SHRINK_CENTER
 	header.add_child(_dismiss)
 	MODAL.close_button(_dismiss)
+	balance.custom_minimum_size.x = _dismiss.custom_minimum_size.x
 	_dismiss.pressed.connect(close)
 
 	_navigation = GridContainer.new()
@@ -128,7 +130,7 @@ func setup(close: Callable, set_music: Callable, set_effects: Callable, set_qual
 		tiers.add_child(tier)
 		_quality_buttons.append(tier)
 		tier.pressed.connect(set_quality.bind(index))
-	_help(_pages[2], "画质档位调整渲染精度、抗锯齿和阴影。")
+	_help(_pages[2], "画质档位调整抗锯齿、阴影和材质过滤。牌桌分辨率随窗口变化。")
 
 	_rules = _label(_pages[3], "")
 	_rules.name = "MahjongSettingsRulesCopy"
@@ -150,11 +152,16 @@ func setup(close: Callable, set_music: Callable, set_effects: Callable, set_qual
 	_dismiss.grab_focus()
 
 
-func fit(bounds: Rect2) -> void:
+func fit(safe_area: Rect2) -> void:
+	var balance := _dismiss.get_parent().get_child(0) as Control
+	balance.custom_minimum_size.x = MODAL.size_icon_button(_dismiss, _dismiss)
+	var margin := Vector2(18, 30)
+	var bounds := Rect2(safe_area.position + margin, (safe_area.size - margin * 2.0).max(Vector2.ONE))
 	var width := minf(DESIGN_SIZE.x, bounds.size.x)
 	var ratio := DESIGN_SIZE.aspect()
 	if width >= STACKED_TABS_WIDTH:
 		width = minf(width, maxf(STACKED_TABS_WIDTH, bounds.size.y * ratio))
+	width = minf(bounds.size.x, maxf(width, RURAL.tablet_panel_min_width(safe_area.size)))
 	var stacked := width < STACKED_TABS_WIDTH
 	var height := maxf(width / ratio, 450.0 if stacked else 340.0)
 	size = Vector2(width, minf(height, bounds.size.y))
@@ -162,6 +169,20 @@ func fit(bounds: Rect2) -> void:
 	if _navigation != null:
 		_navigation.columns = 2 if stacked else TABS.size()
 		_quality_row.vertical = stacked
+
+
+func sync_spectator_permission(visible_on_table: bool, enabled: bool, occupied: bool,
+		can_change: bool, notice: String, setter: Callable) -> void:
+	if _spectator_toggle == null:
+		if not visible_on_table: return
+		_spectator_toggle = _toggle(_pages[0], "开放本座观战", "MahjongTableSpectatorPermission", setter)
+		_spectator_note = _label(_pages[0], "")
+		_spectator_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_spectator_toggle.get_parent().visible = visible_on_table
+	_spectator_toggle.set_pressed_no_signal(enabled)
+	_spectator_toggle.disabled = not can_change
+	_spectator_note.text = notice if not notice.is_empty() else "本座已有 1 名观战者" if occupied else ""
+	_spectator_note.visible = visible_on_table and not _spectator_note.text.is_empty()
 
 
 func _input(event: InputEvent) -> void:

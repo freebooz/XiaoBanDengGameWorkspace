@@ -46,9 +46,9 @@ func _fixture() -> Dictionary:
 		"options":[{"type":"play"}], "winners":[]}
 
 func _run() -> void:
-	DirAccess.remove_absolute("E:/work/2026/XiaoBanDengGameWorkspace/artifacts/mahjong_reference_buttons_fixture.cfg")
+	var preferences := "user://mahjong_reference_buttons_fixture_%d.cfg" % OS.get_process_id()
 	var screen := OfflineTable.new()
-	screen.preference_file = "E:/work/2026/XiaoBanDengGameWorkspace/artifacts/mahjong_reference_buttons_fixture.cfg"
+	screen.preference_file = preferences
 	screen.match_context = {"room_id":"3131", "account_id":"fixture"}
 	root.add_child(screen)
 	await process_frame
@@ -68,7 +68,8 @@ func _run() -> void:
 	screen._handle_packet(JSON.stringify(first))
 	screen._select_tile(11)
 	_check(not screen._play_button.disabled, "合法回合选牌后打出仍被禁用")
-	_check(screen._play_button.is_visible_in_tree() and not screen._actions_root.is_visible_in_tree(), "只有出牌选项时不应显示响应操作区")
+	var response_visible: bool = screen._response_buttons.values().any(func(button: Button): return button.is_visible_in_tree())
+	_check(screen._play_button.is_visible_in_tree() and not response_visible, "只有出牌选项时不得显示任一响应按钮")
 	await process_frame
 	_check(screen._hand_models.size() == 14, "参考布局未保留十四张实际三维手牌")
 	for model in screen._hand_models:
@@ -76,8 +77,11 @@ func _run() -> void:
 		face.position += screen._board_view.position
 		_check(not face.grow(-2).intersects(screen._actions_root.get_rect()), "响应按钮遮挡了自己的三维牌面")
 	if DisplayServer.get_name() != "headless":
-		await RenderingServer.frame_post_draw
-		root.get_viewport().get_texture().get_image().save_png("E:/work/2026/XiaoBanDengGameWorkspace/artifacts/mahjong_reference_buttons_table.png")
+		for argument in OS.get_cmdline_user_args():
+			if argument.begins_with("--screen-out="):
+				await RenderingServer.frame_post_draw
+				var image := root.get_viewport().get_texture().get_image()
+				_check(image.save_png(argument.trim_prefix("--screen-out=")) == OK, "无法保存指定的桌面预览")
 	for kind in ["chi","peng","gang","hu","pass"]:
 		_check(screen.find_child("MahjongAction_" + kind, true, false) != null, "缺少响应动作控件：" + kind)
 	var chi := screen._actions_root.find_child("MahjongAction_chi", true, false) as Button
@@ -115,7 +119,7 @@ func _run() -> void:
 	for kind in ["peng", "gang", "hu", "pass"]:
 		_check(screen._response_buttons[kind].is_visible_in_tree(), "缺少服务端给出的响应：" + kind)
 	var skip := screen._response_buttons["pass"] as Button
-	_check(skip.text == "跳过" and skip.get_parent() == screen and skip.is_visible_in_tree(), "跳过响应独立保留，不能冒充打出")
+	_check(skip.text == "过" and skip != screen._play_button and skip.is_visible_in_tree(), "跳过响应独立保留，不能冒充打出")
 	var before_skip := screen.delivered.size()
 	screen._play_button.pressed.emit()
 	_check(screen.delivered.size() == before_skip, "响应阶段打出不发送动作")
@@ -302,7 +306,7 @@ func _run() -> void:
 	await process_frame
 	# 等待音频线程释放刚停止的音乐播放引用。
 	await create_timer(0.12).timeout
-	DirAccess.remove_absolute("E:/work/2026/XiaoBanDengGameWorkspace/artifacts/mahjong_reference_buttons_fixture.cfg")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(preferences))
 	if _failures.is_empty(): print("MAHJONG_REFERENCE_BUTTONS_SMOKE_OK readiness action_payloads gang_selector errors social seat_dedup stable_touch_voice single_modal mute preferences exit")
 	quit(0 if _failures.is_empty() else 1)
 

@@ -158,7 +158,73 @@ func _run() -> void:
 	board._handle_packet(JSON.stringify(tied))
 	_check(board._selected_id == 11, "Equal native rank candidates must choose stable physical ID, independent of option order or hidden labels")
 	board._set_coach_enabled(true)
+	_check_contextual_selection(board, packet.epoch + 2)
 	board.queue_free()
 	await process_frame
 	if failures.is_empty(): print("MAHJONG_AUTO_SELECTION_OK native_best=true no_auto_submit=true manual_priority=true stable_window=true new_draw=true delayed_result_guard=true legal_id_filter=true click_confirms_once=true")
 	quit(0 if failures.is_empty() else 1)
+
+
+func _check_contextual_selection(board: Fixture, first_epoch: int) -> void:
+	var sequence := _packet()
+	sequence.epoch = first_epoch
+	sequence.rule_set_id = "basic_108"
+	sequence.rule_version = "1.0.0"
+	sequence.hand = _hand_by_suit([[1,4,5,6], [1,2,2,8,9], [1,5,5,7,9]])
+	var previous_commands := board.commands.size()
+	board._handle_packet(JSON.stringify(sequence))
+	_check(board._selected_id == 10, "With equal 2·16 and equal Q, the real Rust recommendation must keep the stronger shape and discard 1 tiao")
+	var discard_wan: Dictionary = board._coach_results.get(1, {})
+	var discard_tiao: Dictionary = board._coach_results.get(10, {})
+	_check(discard_wan.get("q") == 160 and discard_tiao.get("q") == 160
+		and discard_wan.get("k") == 254 and discard_tiao.get("k") == 286,
+		"Both tie rows must retain the native weighted Q and K values for details")
+	_check(discard_wan.get("lookAheadEvaluated") == true and discard_tiao.get("lookAheadEvaluated") == true,
+		"The native bridge must distinguish fully searched tie candidates from uncomputed zero scores")
+
+	var threat := _packet()
+	threat.epoch = first_epoch + 1
+	threat.remaining = 41
+	threat.hand_counts = [14,4,13,13]
+	threat["rule"] = {"rule_set_id":"guiyang", "rule_version":"2.0.0",
+		"options":{"version":"1.0.0", "requires_kong_to_claim":true, "chicken":true, "black_eight":true}}
+	threat.hand = _hand_by_suit([[2,4,5,6,9,9], [2,3], [2,3,5,6,6,9]])
+	threat.melds[1] = [
+		{"kind":"ming_gang", "tiles":_copies(31, "tiao", 8, 4)},
+		{"kind":"peng", "tiles":_copies(35, "tong", 5, 3)},
+		{"kind":"peng", "tiles":_copies(38, "tong", 7, 3)},
+	]
+	threat.discards = [
+		{"seat":1,"tile":{"id":41,"suit":"tiao","rank":9}},
+		{"seat":2,"tile":{"id":42,"suit":"tiao","rank":9}},
+		{"seat":3,"tile":{"id":43,"suit":"tiao","rank":9}},
+	]
+	board._handle_packet(JSON.stringify(threat))
+	_check(board._selected_id == 14, "With equal 2·24 against three melds including a kong, the real Rust recommendation must discard the supply-blocked 9 tiao")
+	_check(board._coach_results.get(14, {}).get("riskReasons") == PackedStringArray(["supply_blocked", "rule_blocked", "rule_blocked"]),
+		"The native risk result must distinguish the public inventory block from the effective rule blocks")
+	_check(board.commands.size() == previous_commands, "A context-ranked recommendation must remain a local selection")
+	var previous_key: Array = board._coach_key.duplicate(true)
+	var previous_results: Dictionary = board._coach_results.duplicate(true)
+	board._select_tile(1)
+	threat.remaining = 8
+	board._handle_packet(JSON.stringify(threat))
+	_check(board._coach_key != previous_key, "Late-wall public context must invalidate earlier analysis even within the same snapshot epoch")
+	board._deliver(previous_key, previous_results)
+	_check(board._selected_id == 1, "A new risk estimate and a delayed result must preserve a manual choice")
+
+
+func _hand_by_suit(ranks_by_suit: Array) -> Array:
+	var hand: Array = []
+	for index in range(3):
+		var suit: String = ["wan", "tong", "tiao"][index]
+		for rank in ranks_by_suit[index]:
+			hand.append({"id":hand.size()+1, "suit":suit, "rank":rank})
+	return hand
+
+
+func _copies(first_id: int, suit: String, rank: int, count: int) -> Array:
+	var tiles: Array = []
+	for offset in range(count):
+		tiles.append({"id":first_id+offset, "suit":suit, "rank":rank})
+	return tiles

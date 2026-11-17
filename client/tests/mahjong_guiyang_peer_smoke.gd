@@ -9,6 +9,8 @@ var _rematch := false
 var _resume_session_only := false
 var _transport_fault := false
 var _custom_rules := false
+var _zunyi := false
+const DINGQUE_SUITS := ["wan", "tong", "tiao"]
 const CUSTOM_OPTIONS := {
 	"version": "1.0.0", "chicken": true, "charge_chicken": false,
 	"black_eight": false, "requires_kong_to_claim": true, "rob_kong": false,
@@ -35,11 +37,12 @@ func _run() -> void:
 		if argument == "--resume-session-only": _resume_session_only = true
 		if argument == "--transport-fault": _transport_fault = true
 		if argument == "--custom-rules": _custom_rules = true
+		if argument == "--zunyi": _zunyi = true
 	if _peer not in [0, 1, 2, 3] or _fixture.is_empty() or not _uncapped("startup"):
 		push_error("四端验证参数错误，或原生客户端仍限制帧率")
 		quit(1)
 		return
-	_deadline = Time.get_ticks_msec() + 100000
+	_deadline = Time.get_ticks_msec() + (240000 if _zunyi else 100000)
 	var passed := await _exercise()
 	if is_instance_valid(_app):
 		_app.queue_free()
@@ -96,6 +99,14 @@ func _login_button() -> Button:
 
 func _is_guiyang(state: Dictionary) -> bool:
 	return state.get("rule_set_id") == "guiyang" and state.get("rule_version") == "2.0.0"
+
+
+func _requested_rule(state: Dictionary) -> bool:
+	if not _zunyi: return _is_guiyang(state)
+	var rule: Variant = state.get("rule")
+	return state.get("rule_set_id") == "zunyi_dingque" and state.get("rule_version") == "1.0.0" \
+		and rule is Dictionary and rule.get("dingque") == true and rule.get("quick_match") == false \
+		and rule.get("options") == {"version":"2.0.0", "chicken":true, "rob_kong":true}
 
 
 func _table() -> Variant:
@@ -162,10 +173,14 @@ func _exercise() -> bool:
 		if not _preview.is_empty() and not game._legal_options("play").is_empty():
 			game._select_tile(int(game._state.hand[0].id))
 		if not await _capture("friend_table.png"): return false
-		if _transport_fault and not await _verify_transport_reconnect(): return false
-		if not await _resume(): return false
-		if not _receipt("resumed", true): return false
-	if not await _until(func(): return FileAccess.file_exists(_file("resumed")), "host resume"): return false
+		if not _zunyi:
+			if _transport_fault and not await _verify_transport_reconnect(): return false
+			if not await _resume(): return false
+			if not _receipt("resumed", true): return false
+	if _zunyi:
+		if not await _complete_dingque(1): return false
+	elif not await _until(func(): return FileAccess.file_exists(_file("resumed")), "host resume"):
+		return false
 	if not await _until(_drive_round, "settlement"): return false
 	if not await _verify_settlement(1): return false
 	if _rematch: return await _play_rematch()
@@ -260,8 +275,10 @@ func _join_room() -> bool:
 		if not await _capture("join_room.png"): return false
 		if not _press(_named_button("MahjongCloseJoinButton"), "close room code form"): return false
 		if not _press(_named_button("MahjongCreateButton"), "open friend room setup"): return false
-		if not _press(_named_button("MahjongCreateRuleCard_guiyang_2_0_0"), "select Guiyang 2.0.0"): return false
-		if _custom_rules:
+		if not _press(_named_button("MahjongCreateRuleSelector"), "open the server ruleset cards"): return false
+		var rule_card := "MahjongCreateRuleCard_zunyi_dingque_1_0_0" if _zunyi else "MahjongCreateRuleCard_guiyang_2_0_0"
+		if not _press(_named_button(rule_card), "select the requested server rule"): return false
+		if _custom_rules and not _zunyi:
 			if not await _create_custom_room(): return false
 		elif not _press(_named_button("MahjongCustomRulesCreateButton"), "create friend room"):
 			return false
@@ -278,7 +295,7 @@ func _join_room() -> bool:
 		code.text_changed.emit(_room)
 		if not _press(_named_button("MahjongJoinButton"), "join friend room"): return false
 	if not await _until(func(): return _app._state == "room" and _app._match.get("status") == "matched" and _app._match.get("player_account_ids", []).size() == 4 and _app._pending_lobby_id.is_empty(), "four distinct humans seated"): return false
-	if _app._match.get("room_id") != _room or not _is_guiyang(_app._match): return false
+	if _app._match.get("room_id") != _room or not _requested_rule(_app._match): return false
 	if not _verify_custom_rules(_app._match, "waiting", 1): return false
 	if _peer == 0:
 		if not await _until(func(): return int(_app._match.get("ready_players", 0)) == 3, "three guests ready"): return false
@@ -312,7 +329,7 @@ func _create_custom_room() -> bool:
 
 
 func _verify_custom_rules(state: Dictionary, stage: String, round_number: int) -> bool:
-	if not _custom_rules: return true
+	if not _custom_rules or _zunyi: return true
 	var rule: Variant = state.get("rule")
 	if not rule is Dictionary or not _is_guiyang(rule) or rule.get("options") != CUSTOM_OPTIONS:
 		print("MAHJONG_PEER_STEP index=%d custom_rules_mismatch=%s-%d" % [_peer, stage, round_number])
@@ -335,11 +352,15 @@ func _verify_deal(round_number: int) -> bool:
 	if not _same_table(state) or _match_id.is_empty() or _seat not in [0, 1, 2, 3] or players.size() != 4 or players[_seat] != account:
 		push_error("invalid initial seat, rules or match metadata for peer %d" % _peer)
 		return false
-	if state.get("phase") != "turn" or not game._array("discards").is_empty() or int(state.get("remaining", -1)) != 55:
+	var phase := "dingque" if _zunyi else "turn"
+	if state.get("phase") != phase or not game._array("discards").is_empty() or int(state.get("remaining", -1)) != 55:
 		push_error("peer %d did not receive the untouched 108-tile initial deal" % _peer)
 		return false
 	var hand := game._array("hand") as Array
 	if hand.size() != (14 if _seat == int(state.get("dealer", -1)) else 13): return false
+	if _zunyi and (state.has("missing_suits") or game._legal_options("dingque").size() != 3 or not game._legal_options("play").is_empty()):
+		push_error("Initial Zunyi deal must offer three private choices without publishing any suit or discard")
+		return false
 	return _receipt("deal-%d-%d" % [round_number, _peer], {
 		"pid": OS.get_process_id(), "room_id": _room, "match_id": _match_id,
 		"rule_set_id": state.rule_set_id, "rule_version": state.rule_version,
@@ -349,7 +370,7 @@ func _verify_deal(round_number: int) -> bool:
 
 
 func _same_table(state: Dictionary) -> bool:
-	return _is_guiyang(state) and state.get("kind") == "friend" and state.get("room_id") == _room and state.get("match_id") == _match_id and not state.has("wall") and not state.has("hands")
+	return _requested_rule(state) and state.get("kind") == "friend" and state.get("room_id") == _room and state.get("match_id") == _match_id and not state.has("wall") and not state.has("hands")
 
 
 func _all_receipts(prefix: String) -> bool:
@@ -363,10 +384,56 @@ func _resume() -> bool:
 	if not _press(_named_button("MahjongTool_leave"), "open temporary leave dialog"): return false
 	if not _press(_named_button("MahjongLeaveConfirm"), "temporarily leave friend table"): return false
 	if not await _until(func(): return _app._state == "lobby" and _app._match.get("status") == "playing", "lobby return after disconnect"): return false
+	if not await _until(func(): return _button_ready(_named_button("MahjongResumeButton")), "resume available after lobby sync"): return false
 	if not _press(_named_button("MahjongResumeButton"), "resume friend table"): return false
 	if not await _until(_table_playing, "resumed table snapshot"): return false
 	var game = _table()
 	return game.get_instance_id() != previous_id and _same_table(game._state) and int(game._state.get("your_seat", -1)) == _seat
+
+
+func _complete_dingque(round_number: int) -> bool:
+	var host_first := round_number == 1 and _peer == 0
+	if round_number == 1 and _peer != 0:
+		if not await _until(func(): return FileAccess.file_exists(_file("resumed")), "host resumes after submitting a private choice"): return false
+	var game = _table()
+	if game._state.has("missing_suits") or game._state.get("phase") != "dingque": return false
+	var counts := {"wan":0, "tong":0, "tiao":0}
+	for tile: Dictionary in game._array("hand"):
+		counts[tile.suit] += 1
+	var chosen: String = DINGQUE_SUITS[_seat % 3]
+	for suit in DINGQUE_SUITS:
+		if counts[suit] < counts[chosen]: chosen = suit
+	var choice := _named_button("MahjongDingque_" + chosen)
+	if not _button_ready(choice): return false
+	if DisplayServer.get_name() == "headless":
+		if not _press(choice, "confirm missing suit"): return false
+	else:
+		var touch := InputEventScreenTouch.new()
+		touch.position = choice.get_global_transform_with_canvas() * (choice.size * 0.5)
+		touch.pressed = true
+		root.push_input(touch, true)
+		await process_frame
+		touch = touch.duplicate() as InputEventScreenTouch
+		touch.pressed = false
+		root.push_input(touch, true)
+	_commands += 1
+	if not await _until(func():
+		return game._state.get("phase") != "dingque" or (game._legal_options("dingque").is_empty() and not game._pending_action)
+	, "authoritative private choice acknowledgement"): return false
+	if host_first:
+		if game._state.get("phase") != "dingque" or game._state.has("missing_suits"):
+			push_error("A host's confirmed choice cannot publish any suits before the other peers choose")
+			return false
+		if not await _resume(): return false
+		game = _table()
+		if game._state.get("phase") != "dingque" or game._state.has("missing_suits") or not game._legal_options("dingque").is_empty():
+			push_error("Resuming must restore the accepted private choice and its hidden status")
+			return false
+		if not _receipt("resumed", true): return false
+	if not await _until(func(): return game._state.get("missing_suits", []).size() == 4, "all four missing suits announced"): return false
+	var published: Array = game._state.missing_suits
+	if published[_seat] != chosen or not published.all(func(suit): return suit in DINGQUE_SUITS): return false
+	return _receipt("dingque-public-%d-%d" % [round_number, _peer], {"match_id":_match_id, "seat":_seat, "missing_suits":published})
 
 
 func _verify_transport_reconnect() -> bool:
@@ -413,8 +480,17 @@ func _drive_round() -> bool:
 			if _press(_named_button("MahjongAction_" + kind), kind): _commands += 1
 			return false
 	if not game._legal_options("play").is_empty() and not game._array("hand").is_empty():
-		game._select_tile(int(game._array("hand")[0].id))
-		if _press(_named_button("MahjongPlaySelectedTile"), "discard"): _commands += 1
+		var hand: Array = game._array("hand")
+		var legal := hand.filter(func(tile: Dictionary) -> bool: return game._can_play_tile(int(tile.id)))
+		if _zunyi:
+			var missing: String = game._state.missing_suits[_seat]
+			if hand.any(func(tile: Dictionary) -> bool: return tile.suit == missing) \
+					and (legal.is_empty() or not legal.all(func(tile: Dictionary) -> bool: return tile.suit == missing)):
+				push_error("Server did not constrain physical discards to the missing suit")
+				return true
+		if not legal.is_empty():
+			game._select_tile(int(legal[0].id))
+			if _press(_named_button("MahjongPlaySelectedTile"), "discard"): _commands += 1
 	return false
 
 
@@ -426,6 +502,7 @@ func _verify_settlement(round_number: int) -> bool:
 	var scores := game._array("scores") as Array
 	if not _same_table(state) or not is_instance_valid(panel) or not panel.is_visible_in_tree() or scores.size() != 4 or _app._recent.size() != round_number:
 		return false
+	if _zunyi and not _zunyi_ledger_matches(state, scores): return false
 	var result: Dictionary = _app._recent[0]
 	if result.get("match_id") != _match_id or result.get("kind") != "friend" or int(result.get("score")) != int(scores[_seat]): return false
 	var prefix := "settlement-%d" % round_number
@@ -441,6 +518,29 @@ func _verify_settlement(round_number: int) -> bool:
 		var screenshot := "settlement.png" if round_number == 1 else "settlement_next_round.png"
 		return await _capture(screenshot) and _receipt(captured, true)
 	return await _until(func(): return FileAccess.file_exists(_file(captured)), "host captured settlement")
+
+
+func _zunyi_ledger_matches(state: Dictionary, scores: Array) -> bool:
+	var breakdown: Variant = state.get("score_breakdown")
+	var transfers: Variant = state.get("score_transfers")
+	if not breakdown is Dictionary or not transfers is Array: return false
+	var ledger := {"hu":[0,0,0,0], "gang":[0,0,0,0], "ji":[0,0,0,0], "cha_jiao":[0,0,0,0]}
+	for transfer in transfers:
+		if not transfer is Dictionary or not ledger.has(transfer.get("category")) or str(transfer.get("reason", "")).is_empty(): return false
+		var payer := int(transfer.get("payer", -1))
+		var receiver := int(transfer.get("receiver", -1))
+		var amount := int(transfer.get("amount", 0))
+		if payer not in [0,1,2,3] or receiver not in [0,1,2,3] or payer == receiver or amount <= 0: return false
+		ledger[transfer.category][payer] -= amount
+		ledger[transfer.category][receiver] += amount
+	for category in ledger:
+		var reported: Variant = breakdown.get(category)
+		if not reported is Array or reported.size() != 4 or ledger[category] != reported.map(func(value): return int(value)):
+			push_error("Zunyi %s ledger differs from published breakdown: %s, %s" % [category, str(ledger[category]), str(reported)])
+			return false
+	for seat in range(4):
+		if ledger.hu[seat] + ledger.gang[seat] + ledger.ji[seat] + ledger.cha_jiao[seat] != int(scores[seat]): return false
+	return true
 
 
 func _play_rematch() -> bool:
@@ -472,6 +572,7 @@ func _play_rematch() -> bool:
 	print("MAHJONG_GUIYANG_REMATCH_READY index=%d room=%s seat=%d" % [_peer, _room, _seat])
 	if _peer == 0 and not await _capture("friend_table_next_round.png"): return false
 	_commands = 0
+	if _zunyi and not await _complete_dingque(2): return false
 	if not await _until(_drive_round, "round two settlement"): return false
 	if not await _verify_settlement(2): return false
 	_commands += first_commands

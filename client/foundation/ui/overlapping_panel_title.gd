@@ -32,9 +32,8 @@ func _notification(what: int) -> void:
 	if what != NOTIFICATION_SORT_CHILDREN or _plate == null:
 		return
 	var plate_size := _plate.get_combined_minimum_size()
-	var frame_rect := _frame.get_global_rect()
 	var border_offset := float(_frame.get_meta("title_border_offset", 0))
-	var target_center := Vector2(frame_rect.get_center().x, frame_rect.position.y + border_offset)
+	var target_center := _frame.get_global_transform() * Vector2(_frame.size.x * 0.5, border_offset)
 	var local_origin := get_global_transform().affine_inverse() * target_center - plate_size * 0.5
 	fit_child_in_rect(_plate, Rect2(local_origin, plate_size))
 

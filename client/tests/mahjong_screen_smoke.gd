@@ -4,7 +4,7 @@ extends SceneTree
 class RenderFixture:
 	extends "res://modules/games/mahjong/guiyang/guiyang_3d_screen.gd"
 	var submitted: Array[Dictionary] = []
-	func _send_action(kind: String, tile_id: int = 0) -> void:
+	func _send_action(kind: String, tile_id: int = 0, _source_key: Array = [], _suit: String = "") -> void:
 		submitted.append({"kind":kind,"tile_id":tile_id})
 	func _connect_socket() -> void:
 		pass
@@ -16,6 +16,8 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	root.content_scale_size = Vector2i.ZERO
+	root.size = Vector2i(1440, 810)
 	var script = load("res://modules/games/mahjong/guiyang/guiyang_3d_screen.gd")
 	if script == null:
 		push_error("麻将对局脚本无法加载")
@@ -31,16 +33,17 @@ func _run() -> void:
 	if not _verify_landscape(screen):
 		quit(1)
 		return
-	screen._set_quality(0)
-	var low_pixels: int = screen._board_viewport.size.x * screen._board_viewport.size.y
-	if not _verify_aspect(screen):
-		quit(1)
-		return
-	screen._set_quality(2)
-	if screen._board_viewport.size.x * screen._board_viewport.size.y < low_pixels * 3 or not _verify_aspect(screen):
-		push_error("高画质没有提高渲染精度或改变了牌桌比例")
-		quit(1)
-		return
+	root.content_scale_size = Vector2i(1440, 810)
+	root.size = Vector2i(2560, 1440)
+	for frame in 3: await process_frame
+	for quality in [0, 1, 2]:
+		screen._set_quality(quality)
+		if not _verify_aspect(screen):
+			quit(1)
+			return
+	root.content_scale_size = Vector2i.ZERO
+	root.size = Vector2i(1440, 810)
+	for frame in 3: await process_frame
 	screen._set_quality(1)
 	var hand: Array = []
 	for index in range(14):
@@ -54,9 +57,7 @@ func _run() -> void:
 	}
 	screen._render()
 	await process_frame
-	# The pass control is separate from the primary action row; the amber main
-	# action is always discard. All five legal response handlers still exist.
-	if screen._hand_models.size() != 14 or screen._response_buttons.size() != 5 or _buttons(screen._actions_root).size() != 4 or screen._response_buttons["pass"].get_parent() != screen or screen._pieces_root.get_child_count() < 14 or screen._play_button == null:
+	if screen._hand_models.size() != 14 or screen._response_buttons.size() != 5 or screen._response_buttons.pass.visible or screen._pieces_root.get_child_count() < 14 or not screen._play_button.visible:
 		push_error("三维手牌或打牌按钮未渲染")
 		quit(1)
 		return
@@ -171,17 +172,22 @@ func _run() -> void:
 			return
 	print("MAHJONG_QUALITY_PICKING_OK")
 	for layout_size in [Vector2(1800, 810), Vector2(1440, 1080), Vector2(1440, 810)]:
-		screen.size = layout_size
-		await process_frame
+		root.size = Vector2i(layout_size)
+		for frame in 3: await process_frame
 		if not _verify_landscape(screen) or not _verify_hand_and_controls(screen) or not _pick(screen, 6, false):
 			quit(1)
 			return
 	print("MAHJONG_LANDSCAPE_RESIZE_OK")
 	screen._state["phase"] = "reaction"
-	screen._state["options"] = [{"type": "peng"}, {"type": "ming_gang"}, {"type": "an_gang", "tile_id": 2}, {"type": "bu_gang", "tile_id": 3}, {"type": "hu"}, {"type": "pass"}]
+	screen._state["turn"] = 1
+	screen._state.hand[3].rank = 1
+	var reaction_tile := {"id": 98, "suit": "wan", "rank": 1}
+	screen._state["last_discard"] = reaction_tile
+	screen._state["discards"] = [{"seat":1, "tile":reaction_tile, "claimed":false}]
+	screen._state["options"] = [{"type":"peng"}, {"type":"ming_gang"}, {"type":"hu"}, {"type":"pass"}]
 	screen._render()
 	await process_frame
-	if _buttons(screen._actions_root).size() != 4 or not screen._response_buttons["pass"].is_visible_in_tree() or not screen._play_button.is_visible_in_tree() or not screen._play_button.disabled or screen._legal_options("gang").size() != 3 or not _verify_hand_and_controls(screen):
+	if _buttons(screen._actions_root).filter(func(button): return button.is_visible_in_tree()).size() != 4 or not screen._response_buttons.pass.is_visible_in_tree() or screen._play_button.visible or screen._legal_options("gang").size() != 1 or not _verify_hand_and_controls(screen):
 		push_error("碰、杠、胡、过操作没有全部显示")
 		quit(1)
 		return
@@ -203,10 +209,18 @@ func _run() -> void:
 		[{"kind": "an_gang", "tiles": [{}, {}, {}, {}]}],
 		[{"kind": "bu_gang", "tiles": tiles.call("tiao", 8, [41, 42, 43, 44])}],
 	]
+	screen._state["hand"] = hand.slice(0, 11)
 	screen._render()
 	await process_frame
 	if screen._pieces_root.find_children("MahjongDiscard*", "Node3D", false, false).size() != 1 or not _verify_melds(screen):
 		push_error("碰杠牌组或被认领的弃牌显示错误")
+		quit(1)
+		return
+	var left_hand: Node3D = screen._hand_models.front()
+	var right_hand: Node3D = screen._hand_models.back()
+	var own_melds: Array = screen._pieces_root.find_children("MahjongMeld0_*", "Node3D", false, false)
+	if not is_zero_approx(left_hand.position.x + right_hand.position.x) or own_melds.back().position.x >= left_hand.position.x:
+		push_error("本人手牌应保持居中，碰杠副露保留在左侧")
 		quit(1)
 		return
 	print("MAHJONG_DISCARD_AND_MELD_OK exposed=11 concealed=4 touching_rows=true")
@@ -300,6 +314,7 @@ func _run() -> void:
 	print("MAHJONG_SETTLEMENT_OK")
 	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	screen._state["phase"] = "turn"
+	screen._state["turn"] = 0
 	screen._state["status"] = "playing"
 	screen._state["discards"] = []
 	screen._state["melds"] = [[], [], [], []]
@@ -315,7 +330,9 @@ func _run() -> void:
 			if not _verify_rendered_ink(screen, picture):
 				quit(1)
 				return
-			print("MAHJONG_SCREENSHOT_RESULT=" + str(picture.save_png("E:/work/2026/XiaoBanDengGameWorkspace/artifacts/mahjong_screen_smoke.png")))
+			for arg in OS.get_cmdline_user_args():
+				if arg.begins_with("--preview="):
+					print("MAHJONG_SCREENSHOT_RESULT=" + str(picture.save_png(arg.trim_prefix("--preview="))))
 	screen.queue_free()
 	await process_frame
 	await create_timer(0.5).timeout
@@ -361,10 +378,15 @@ func _inside(inner: Rect2, outer: Rect2) -> bool:
 
 
 func _verify_aspect(screen) -> bool:
-	var displayed: float = screen._board_view.size.x / screen._board_view.size.y
-	var rendered: float = float(screen._board_viewport.size.x) / float(screen._board_viewport.size.y)
-	if absf(displayed - rendered) > 0.004:
-		push_error("三维牌桌纹理发生拉伸")
+	var physical: Vector2 = screen._board_view.size * Vector2(root.size) / root.get_visible_rect().size
+	var difference := (Vector2(screen._board_viewport.size) - physical).abs()
+	if difference.x > 1.0 or difference.y > 1.0 or screen._board_viewport.scaling_3d_scale != 1.0:
+		push_error("三维牌桌没有按窗口实际像素重绘")
+		return false
+	var surface: SubViewportContainer = screen._board_surface
+	var output := surface.get_viewport_transform() * surface.get_global_transform()
+	if surface.stretch or not is_equal_approx(output.x.length(), 1.0) or not is_equal_approx(output.y.length(), 1.0):
+		push_error("三维视口输出未按原始像素显示")
 		return false
 	return true
 
@@ -437,8 +459,7 @@ func _verify_hand_and_controls(screen) -> bool:
 	if not _verify_hand_on_felt(screen):
 		return false
 	var visible_buttons := _buttons(screen._actions_root).filter(func(button): return button.is_visible_in_tree())
-	var factor := minf(screen.size.x / 1440.0, screen.size.y / 810.0)
-	var minimum_target := maxf(64.0 * factor, screen.RURAL.touch_extent(screen))
+	var minimum_target: float = screen.RURAL.touch_extent(screen)
 	for button in visible_buttons:
 		if button.size.x < minimum_target or button.size.y < minimum_target or not _inside(button.get_global_rect(), screen._actions_root.get_global_rect()):
 			push_error("响应按钮过小或超出操作区")

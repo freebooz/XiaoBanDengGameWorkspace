@@ -74,9 +74,10 @@ func _run() -> void:
 	app.queue_free()
 	await process_frame
 	_check_http_callbacks()
+	_check_lobby_wallet_notifications()
 	await process_frame
 	await process_frame
-	if failures.is_empty(): print("MAHJONG_WALLET_SYNC_OK settlement=true actual_delta=true same_epoch_zero=true stale_board=false next_round=true unknown=true http_session_guard=true")
+	if failures.is_empty(): print("MAHJONG_WALLET_SYNC_OK settlement=true actual_delta=true same_epoch_zero=true stale_board=false next_round=true unknown=true http_session_guard=true lobby_invalidation=true reconnect=true")
 	quit(0 if failures.is_empty() else 1)
 
 func _wallet_response(request: HTTPRequest, amount: Variant, account := "wallet-host") -> void:
@@ -132,4 +133,33 @@ func _check_http_callbacks() -> void:
 	history["kind"] = "friend"
 	var row: Dictionary = app._history_summary(history)
 	_check(row.get("egg_delta") == -30 and row.get("score") == -70, "History retains actual egg delta separately from the game score")
+	app.queue_free()
+
+
+func _check_lobby_wallet_notifications() -> void:
+	var app := HttpFixture.new()
+	root.add_child(app)
+	app._account = {"account_id":"wallet-host", "display_name":"田埂阿牛"}
+	app._session_token = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	app._session_server = "https://127.0.0.1:1"
+	app._show_lobby()
+	var old_request: HTTPRequest = app._egg_request
+	app._on_lobby_packet(JSON.stringify({"type":"mahjong_wallet_changed", "account_id":"other"}))
+	_check(app._egg_request == old_request, "Another account's wallet notification cannot invalidate this player")
+	app._on_lobby_packet(JSON.stringify({"type":"mahjong_wallet_changed", "account_id":"wallet-host"}))
+	var refreshed := is_instance_valid(app._egg_request) and app._egg_request != old_request
+	_check(refreshed, "An own-account notification must replace an earlier wallet request")
+	if not refreshed:
+		app.queue_free()
+		return
+	_wallet_response(old_request, 100)
+	_wallet_response(app._egg_request, 125)
+	var balance := app.find_child("MahjongEggBalanceButton", true, false) as Button
+	_check(app._egg_balance == 125 and balance != null and balance.text == "鸡蛋 125", "Lobby should refresh the visible balance without reopening")
+	app._lobby_synced = false
+	app._on_lobby_state({"status":"waiting", "kind":"friend", "room_id":"6812", "player_account_ids":["wallet-host"]}, [])
+	_check(is_instance_valid(app._egg_request), "Initial lobby snapshot after reconnect must recover a missed wallet event")
+	if is_instance_valid(app._egg_request): _wallet_response(app._egg_request, 150)
+	var room_balance := app.find_child("MahjongRoomEggBalance", true, false) as Label
+	_check(room_balance != null and room_balance.is_visible_in_tree() and room_balance.text == "鸡蛋 150", "Waiting room should display the refreshed own balance")
 	app.queue_free()

@@ -140,6 +140,66 @@ if ($buildAndroid) { $files += 'templates/android_release.apk' }
 if ($LASTEXITCODE -ne 0) { throw 'Could not extract matching export templates.' }
 
 $utf8 = [Text.UTF8Encoding]::new($false)
+if ($buildAndroid) {
+    # Keep the manifest's mipmap/icon reference and all density variants. Override only the
+    # API 26 drawable with a bitmap so AdaptiveIconDrawable cannot add a mask or a black base.
+    $templateApk = Join-Path $templates 'android_release.apk'
+    $aapt = Get-ChildItem -LiteralPath (Join-Path $AndroidSdk 'build-tools') -Directory |
+        Where-Object Name -Match '^\d+\.\d+\.\d+$' |
+        Sort-Object { [version]$_.Name } -Descending |
+        ForEach-Object { Join-Path $_.FullName 'aapt2.exe' } |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    $androidJar = Get-ChildItem -LiteralPath (Join-Path $AndroidSdk 'platforms') -Directory |
+        Where-Object Name -Match '^android-\d+$' |
+        Sort-Object { [int]($_.Name -replace '^android-') } -Descending |
+        ForEach-Object { Join-Path $_.FullName 'android.jar' } |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    if (-not $aapt -or -not $androidJar) { throw 'Android SDK aapt2 and platform android.jar are required for the transparent launcher icon.' }
+    $templatePackage = (& $aapt dump packagename $templateApk | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $templatePackage -notmatch '^[a-zA-Z0-9_.]+$') { throw 'Cannot read the Android template package.' }
+    $templateResources = @(& $aapt dump resources $templateApk)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot read the Android template resources.' }
+    $launcherResources = @($templateResources | Select-String '^\s*resource (0x[0-9a-fA-F]{8}) mipmap/(icon|icon_foreground)\s*$')
+    if ($launcherResources.Count -ne 2) { throw 'Android template launcher resource IDs do not match the expected density layout.' }
+    $launcherWork = Join-Path $profile 'launcher-resources'
+    $launcherSrc = Join-Path $launcherWork 'res'
+    New-Item -ItemType Directory -Path (Join-Path $launcherSrc 'mipmap-anydpi-v26'),(Join-Path $launcherSrc 'values') -Force | Out-Null
+    $launcherXml = 'res/mipmap-anydpi-v26/icon.xml'
+    [IO.File]::WriteAllText((Join-Path $launcherWork $launcherXml), '<bitmap xmlns:android="http://schemas.android.com/apk/res/android" android:src="@mipmap/icon_foreground"/>', $utf8)
+    [IO.File]::WriteAllText((Join-Path $launcherSrc 'values/launcher.xml'), '<resources><item type="mipmap" name="icon_foreground">@null</item></resources>', $utf8)
+    $launcherManifest = Join-Path $launcherWork 'AndroidManifest.xml'
+    [IO.File]::WriteAllText($launcherManifest, ('<manifest package="' + $templatePackage + '"/>'), $utf8)
+    $resourceIds = Join-Path $launcherWork 'ids.txt'
+    $resourceIdLines = foreach ($name in $launcherResources) {
+        $id = $name.Matches[0]
+        "$($templatePackage):mipmap/$($id.Groups[2].Value) = $($id.Groups[1].Value)"
+    }
+    [IO.File]::WriteAllLines($resourceIds, [string[]]$resourceIdLines, $utf8)
+    $compiledLauncher = Join-Path $launcherWork 'compiled.zip'
+    $launcherApk = Join-Path $launcherWork 'launcher.apk'
+    & $aapt compile --dir $launcherSrc -o $compiledLauncher
+    if ($LASTEXITCODE -ne 0) { throw 'Could not compile the transparent Android launcher bitmap.' }
+    & $aapt link --manifest $launcherManifest -I $androidJar --stable-ids $resourceIds -o $launcherApk $compiledLauncher
+    if ($LASTEXITCODE -ne 0) { throw 'Could not link the transparent Android launcher bitmap.' }
+    $launcherZip = [IO.Compression.ZipFile]::OpenRead($launcherApk)
+    try {
+        $bitmapXml = $launcherZip.GetEntry($launcherXml)
+        if (-not $bitmapXml) { throw 'Compiled transparent launcher drawable is missing.' }
+        $templateZip = [IO.Compression.ZipFile]::Open($templateApk, [IO.Compression.ZipArchiveMode]::Update)
+        try {
+            $oldDrawable = $templateZip.GetEntry($launcherXml)
+            if (-not $oldDrawable) { throw 'Android template adaptive drawable is missing.' }
+            $oldDrawable.Delete()
+            $newDrawable = $templateZip.CreateEntry($launcherXml)
+            $sourceStream = $bitmapXml.Open()
+            try {
+                $targetStream = $newDrawable.Open()
+                try { $sourceStream.CopyTo($targetStream) } finally { $targetStream.Dispose() }
+            } finally { $sourceStream.Dispose() }
+        } finally { $templateZip.Dispose() }
+    } finally { $launcherZip.Dispose() }
+}
+
 $projectFile = Join-Path $project 'project.godot'
 $settings = [IO.File]::ReadAllText($projectFile)
 $serverOrigin = $Server.GetLeftPart([UriPartial]::Authority)
@@ -150,15 +210,18 @@ if ($buildAndroid) {
 }
 $settings = [regex]::Replace($settings, '(?m)^network/default_server_url="[^"\r\n]*"\r?\n', '')
 $originSetting = 'network/default_server_url=' + (ConvertTo-Json $serverOrigin -Compress) + "`n"
+if ($buildAndroid -and $isDevelopmentDomainTest) {
+    $originSetting += "testing/log_mahjong_viewport=true`n"
+}
 if ($settings.Contains('[xiaobandeng]')) { $settings = $settings.Replace('[xiaobandeng]', ("[xiaobandeng]`n" + $originSetting)) }
 else { $settings += "`n[xiaobandeng]`n" + $originSetting }
 $presetsFile = Join-Path $project 'export_presets.cfg'
-$presets = [IO.File]::ReadAllText($presetsFile)
+$presets = [IO.File]::ReadAllText($presetsFile).Replace("`r`n", "`n")
 $presets = [regex]::Replace($presets, '(?m)^version/code=\d+$', "version/code=$VersionCode")
 $presets = [regex]::Replace($presets, '(?m)^version/name="[^"]*"$', ('version/name="' + $Version + '"'))
 if ($AndroidTestSuffix) {
     $presets = [regex]::Replace($presets, '(?m)^(package/unique_name="[^"]+)(")$', ('$1.' + $AndroidTestSuffix + '$2'))
-    $presets = [regex]::Replace($presets, '(?m)^package/name="[^"]*"$', ('package/name="小板凳麻将 ' + $Version + ' 内测"'))
+    $presets = [regex]::Replace($presets, '(?m)^package/name="[^"]*"$', 'package/name="小板凳麻将"')
 }
 $extraResources = @()
 if ($hasCoach) {
@@ -277,6 +340,14 @@ try {
         $apk = Join-Path $output 'XiaoBanDengMahjong.apk'
         & $engine --headless --path $project --export-release 'Android（安卓移动版）' $apk --log-file (Join-Path $output 'android-export.log') | Out-Null
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $apk)) { throw 'Android export failed.' }
+        $product = Get-Content -LiteralPath (Join-Path $project 'product.json') -Raw | ConvertFrom-Json
+        $packageName = [string]$product.android_package
+        if ($AndroidTestSuffix) { $packageName += ".$AndroidTestSuffix" }
+        $badging = & $aapt dump badging $apk
+        $identity = "^package: name='$([regex]::Escape($packageName))' versionCode='$VersionCode' versionName='$([regex]::Escape($Version))'( |$)"
+        if ($LASTEXITCODE -ne 0 -or -not ($badging -match $identity)) {
+            throw "Exported Android manifest does not match $packageName $Version ($VersionCode)."
+        }
         $packages += $apk
     }
     if ($hasCoach) {
