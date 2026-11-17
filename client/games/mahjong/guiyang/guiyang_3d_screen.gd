@@ -734,6 +734,9 @@ func _layout_response_actions() -> void:
 	var area := _usable_modal_area().grow(-ACTION_BUTTON_GAP)
 	area.position.y = maxf(area.position.y, _header.get_rect().end.y + ACTION_BUTTON_GAP)
 	area.end.y = _own_hand_top() - ACTION_HAND_GAP
+	if not area.has_area():
+		_actions_root.hide()
+		return
 	var preferred_x := _board_view.get_rect().get_center().x
 	if not _hand_models.is_empty():
 		var hand_x := (_hand_models[0].position.x + _hand_models[-1].position.x) * 0.5
@@ -1459,7 +1462,7 @@ func _render_seats() -> void:
 		# CJK fonts have a taller line box than their point size. Fit the real
 		# metrics so Godot never clips the entire balance line on compact cards.
 		var balance_font := quantity.get_theme_font("font")
-		var balance_size := roundi(31 * factor)
+		var balance_size := maxi(10, roundi(31 * factor))
 		var balance_width := text_edge - quantity.position.x
 		var egg_extent := Vector2(20, 25) * factor
 		var egg_gap := 4.0 * factor
