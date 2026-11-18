@@ -52,11 +52,12 @@ func _verify_felt_coverage(board: Board, label: String) -> void:
 	var local_ray := Vector3(center.x, center.y, center.z) / center.w
 	var rendered_ray := (board._camera.get_camera_transform().basis * local_ray).normalized()
 	var pitch := rad_to_deg(asin(-rendered_ray.y))
-	_check(absf(pitch - 45.0) <= 0.1, "%s rendered centre must look down at 45 degrees (got %.2f)" % [label, pitch])
+	_check(absf(pitch - 35.0) <= 0.1, "%s rendered centre must look down at 35 degrees (got %.2f)" % [label, pitch])
 	var pick_ray := board._camera.project_ray_normal(Vector2(board._board_viewport.size) * 0.5)
 	_check(pick_ray.is_equal_approx(rendered_ray), "%s picking and rendering must agree at the screen centre" % label)
-	var horizontal_tangent := tan(deg_to_rad(board._camera.fov * 0.5)) * Vector2(board._board_viewport.size).aspect()
-	_check(is_equal_approx(horizontal_tangent, 36.0 / (2.0 * 50.0)), "%s must preserve a 50 mm lens on a 36 mm horizontal gate" % label)
+	var projection := board._camera.get_camera_projection()
+	var focal_mm := 18.0 * minf(projection.x.x, projection.y.y)
+	_check(is_equal_approx(focal_mm, 45.0), "%s must preserve a 45 mm lens on the 36 mm long edge of the film gate" % label)
 
 	var plane := Plane(Vector3.UP, bounds.end.y)
 	var width := board._board_viewport.size.x

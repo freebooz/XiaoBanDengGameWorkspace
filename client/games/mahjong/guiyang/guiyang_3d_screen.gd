@@ -43,9 +43,9 @@ const ACTION_BUTTON_GAP := 8.0
 const ACTION_HAND_GAP := 8.0
 const ACTION_FONT_SIZE := 24
 const DINGQUE_SUITS := {"wan":"万", "tong":"筒", "tiao":"条"}
-const CAMERA_PITCH_DEGREES := 45.0
+const CAMERA_PITCH_DEGREES := 35.0
 const CAMERA_SENSOR_WIDTH_MM := 36.0
-const CAMERA_FOCAL_LENGTH_MM := 50.0
+const CAMERA_FOCAL_LENGTH_MM := 45.0
 const CAMERA_TARGET := Vector3(0.0, 0.0, 0.0144)
 const TILE_SIZE := TILE_MODEL.SIZE
 const TILE_BODY_BOUNDS := AABB(Vector3(-TILE_SIZE.x * 0.5, 0.0, -TILE_SIZE.z * 0.5), TILE_SIZE)
@@ -880,8 +880,9 @@ func _fit_camera() -> void:
 		return
 
 	var view := Transform3D(_camera.global_basis, CAMERA_TARGET).affine_inverse()
-	var tan_x := CAMERA_SENSOR_WIDTH_MM / (2.0 * CAMERA_FOCAL_LENGTH_MM)
-	var tan_y := tan_x / aspect
+	# The long edge of the film gate is horizontal in landscape and vertical in portrait.
+	var tan_y := CAMERA_SENSOR_WIDTH_MM / (2.0 * CAMERA_FOCAL_LENGTH_MM * maxf(1.0, aspect))
+	var tan_x := tan_y * aspect
 	var far := view * Vector3(0.0, TILE_SIZE.z, -HAND_ROW_RADIUS)
 	var near_depth := HAND_PIVOT_DEPTH + TILE_SIZE.y if _is_spectating() else PLAY_AREA_NEAR_DEPTH
 	var near_edge := view * Vector3(0.0, 0.0, near_depth)
