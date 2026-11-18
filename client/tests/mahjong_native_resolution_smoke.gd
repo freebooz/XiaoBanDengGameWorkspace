@@ -47,8 +47,14 @@ func _verify_felt_coverage(board: Board, label: String) -> void:
 	_check(frame == null or not frame.is_visible_in_tree(), "%s must not render the table frame" % label)
 	_check(board._board_view.get_rect().is_equal_approx(Rect2(Vector2.ZERO, board.size)),
 		"%s must render the felt behind the entire window, including the header" % label)
-	var pitch := rad_to_deg(asin(board._camera.global_basis.z.normalized().y))
-	_check(absf(pitch - 60.0) <= 0.1, "%s camera pitch must be 60 degrees (got %.2f)" % [label, pitch])
+	# The rendering projection can move the screen centre away from the node's forward axis.
+	var center := board._camera.get_camera_projection().inverse() * Vector4(0, 0, 0, 1)
+	var local_ray := Vector3(center.x, center.y, center.z) / center.w
+	var rendered_ray := (board._camera.get_camera_transform().basis * local_ray).normalized()
+	var pitch := rad_to_deg(asin(-rendered_ray.y))
+	_check(absf(pitch - 45.0) <= 0.1, "%s rendered centre must look down at 45 degrees (got %.2f)" % [label, pitch])
+	var pick_ray := board._camera.project_ray_normal(Vector2(board._board_viewport.size) * 0.5)
+	_check(pick_ray.is_equal_approx(rendered_ray), "%s picking and rendering must agree at the screen centre" % label)
 	var horizontal_tangent := tan(deg_to_rad(board._camera.fov * 0.5)) * Vector2(board._board_viewport.size).aspect()
 	_check(is_equal_approx(horizontal_tangent, 36.0 / (2.0 * 50.0)), "%s must preserve a 50 mm lens on a 36 mm horizontal gate" % label)
 

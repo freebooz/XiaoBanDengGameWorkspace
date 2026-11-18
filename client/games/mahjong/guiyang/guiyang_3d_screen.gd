@@ -43,7 +43,7 @@ const ACTION_BUTTON_GAP := 8.0
 const ACTION_HAND_GAP := 8.0
 const ACTION_FONT_SIZE := 24
 const DINGQUE_SUITS := {"wan":"万", "tong":"筒", "tiao":"条"}
-const CAMERA_PITCH_DEGREES := 60.0
+const CAMERA_PITCH_DEGREES := 45.0
 const CAMERA_SENSOR_WIDTH_MM := 36.0
 const CAMERA_FOCAL_LENGTH_MM := 50.0
 const CAMERA_TARGET := Vector3(0.0, 0.0, 0.0144)
@@ -932,36 +932,27 @@ func _fit_player_hand_camera(aspect: float) -> void:
 		nearest_z = maxf(nearest_z, point.z)
 
 	var board_height := _board_view.size.y
-	var opposite := _seat_rect(2)
-	var top := maxf(_play_area.position.y, opposite.end.y) + 8.0 * opposite.size.y / SEAT_CARD_SIZE.y
 	# Keep a full badge row below the resting hand, including at fractional native pixel scales.
 	var pixel_scale := maxf((get_viewport_transform() * get_global_transform()).y.length(), 0.01)
 	var bottom := floorf((size.y - _safe.w - COACH_OVERLAY.LABEL_HEIGHT - COACH_OVERLAY.LABEL_GAP) * pixel_scale - 1.0) / pixel_scale
-	var top_ndc := 1.0 - 2.0 * top / board_height
 	var bottom_ndc := 1.0 - 2.0 * bottom / board_height
-	var far := view * _pieces_root.to_global(Vector3(0.0, TILE_SIZE.z, -HAND_ROW_RADIUS))
 
 	var tangent := CAMERA_SENSOR_WIDTH_MM / (2.0 * CAMERA_FOCAL_LENGTH_MM * aspect)
-	var hand_fraction := FULL_HAND_COUNT / (FULL_HAND_COUNT + 2.0 * HAND_SIDE_MARGIN_TILES)
+	# Use the existing row spacing to frame a reference hand, independent of melds and the live tile count.
+	var half_span := _concealed_row_start(0, 1) - _concealed_row_start(0, FULL_HAND_COUNT)
+	var hand_width := 2.0 * half_span + TILE_SIZE.x
 	var safe_fraction := 1.0 - 2.0 * maxf(_safe.x, _safe.z) / _board_view.size.x
-	var half_height := FULL_HAND_COUNT * TILE_SIZE.x / (2.0 * aspect * maxf(0.01, minf(hand_fraction, safe_fraction)))
-	# A full hand determines distance even when the actual hand contains fewer tiles.
-	# Shift the frame vertically to place that hand against the bottom safe edge.
-	var far_height := half_height + (nearest_z - far.z) * tangent
-	var shift := 0.0
-	for point in corners:
-		var near_height := half_height + (nearest_z - point.z) * tangent
-		shift = minf(shift, (point.y - far.y - bottom_ndc * near_height + top_ndc * far_height) / (far_height - near_height))
+	var frame_width := maxf(hand_width + 2.0 * HAND_SIDE_MARGIN_TILES * TILE_SIZE.x, hand_width / maxf(0.01, safe_fraction))
+	var distance := nearest_z + frame_width / (2.0 * aspect * tangent)
 	var vertical_offset := INF
 	for point in corners:
-		vertical_offset = minf(vertical_offset, point.y - (bottom_ndc - shift) * (half_height + (nearest_z - point.z) * tangent))
-	_camera.position = CAMERA_TARGET + _camera.basis.z * (nearest_z + half_height / tangent)
+		vertical_offset = minf(vertical_offset, point.y - bottom_ndc * (distance - point.z) * tangent)
+	# Translate the camera to frame the hand while its centre ray retains the specified pitch.
 	_camera.set_perspective(rad_to_deg(2.0 * atan(tangent)), _camera.near, _camera.far)
-	if shift < -0.001:
-		_camera.set_frustum(2.0 * _camera.near * tangent, Vector2(0.0, -shift * tangent * _camera.near), _camera.near, _camera.far)
+	_camera.position = CAMERA_TARGET + _camera.basis.z * distance
 	_camera.h_offset = row.origin.x
 	_camera.v_offset = vertical_offset
-	_camera_world_per_pixel = 2.0 * (half_height + (nearest_z - row.origin.z) * tangent) / board_height
+	_camera_world_per_pixel = 2.0 * (distance - row.origin.z) * tangent / board_height
 
 
 func _on_native_projection_resized() -> void:
