@@ -98,9 +98,17 @@ func _verify_full_hand_framing(board: Board) -> void:
 	var pixels := (board.get_viewport_transform() * board.get_global_transform()).y.length()
 	var bottom_px := (safe_area.end.y - bounds.end.y) * pixels
 	var bottom_tiles := (safe_area.end.y - bounds.end.y) / tile_width
-	var expected_margin := maxf(board.size.x / 16.0, maxf(board._safe.x, board._safe.z))
-	_check(absf(bounds.position.x - expected_margin) * pixels < 2.0 and absf(board.size.x - bounds.end.x - expected_margin) * pixels < 2.0
-		and safe_area.encloses(bounds), "Fourteen physical tiles should leave one tile width on each side: %.3f / %.3f" % [left, right])
+	var minimum_margin := maxf(board.size.x * 2.97 / (14.0 + 2.0 * 2.97), maxf(board._safe.x, board._safe.z))
+	var north_top := INF
+	for tile: Node3D in board._pieces_root.find_children("MahjongConcealedHand2_*", "Node3D", false, false):
+		if tile.is_queued_for_deletion(): continue
+		var north := board._projected_tile_rect(tile, &"TileBody")
+		_check(safe_area.encloses(north), "The entire north hand must be within the safe frame")
+		north_top = minf(north_top, north.position.y)
+	var margin_px := (bounds.position.x - minimum_margin) * pixels
+	_check(margin_px >= -2.0 and absf(bounds.position.x - (board.size.x - bounds.end.x)) * pixels < 2.0
+		and (margin_px < 2.0 or (north_top - safe_area.position.y) * pixels <= 2.0)
+		and safe_area.encloses(bounds), "Both rows must fit with centred south margins: %.3f / %.3f" % [left, right])
 	var label_space := (board.COACH_OVERLAY.LABEL_HEIGHT + board.COACH_OVERLAY.LABEL_GAP) * pixels
 	_check(bottom_px >= label_space - 0.01 and bottom_px <= label_space + 3.0,
 		"Resting hand must leave room for a complete shanten label below it: %.2f native pixels" % bottom_px)

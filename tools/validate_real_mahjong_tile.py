@@ -1,4 +1,4 @@
-"""Independent Blender saved-file checks for the imported Mahjong50 tile."""
+"""Independently measure the native 56 mm tile and validate its saved materials."""
 from pathlib import Path
 import json, hashlib
 import bpy, bmesh
@@ -13,7 +13,9 @@ def validate(label):
     assert {o.name for o in meshes}=={'TileBody','TileFace'}, (label,'canonical meshes', [o.name for o in meshes])
     points=[o.matrix_world@v.co for o in meshes for v in o.data.vertices]
     dims=[max(v[i] for v in points)-min(v[i] for v in points) for i in range(3)]
-    assert all(abs(a-b)<1e-6 for a,b in zip(dims,(.036,.050,.026))), (label,'actual source dimensions',dims)
+    assert all(abs(a-b)<1e-6 for a,b in zip(dims,(.039,.056,.028))), (label,'actual source dimensions',dims)
+    for obj in meshes:
+        assert (obj.matrix_world.to_scale() - Vector((1,1,1))).length < 1e-6, (label, 'non-unit mesh scale', obj.name)
     assert abs(min(v.z for v in points))<1e-6, (label,'bottom origin')
     face=bpy.data.objects['TileFace']
     assert len(face.data.polygons)==2 and all(p.normal.z>.999 for p in face.data.polygons), (label,'face-up front')
@@ -28,8 +30,8 @@ def validate(label):
             if key in normals:
                 assert (normals[key]-normal).length<2e-4, (label,'diagonal front shading seam',key)
             normals[key]=normal.copy()
-            assert abs(uv.data[li].uv.x-(v.x+.01575)/.0315)<2e-5, (label,'mirrored front U')
-            assert abs(uv.data[li].uv.y-(v.y+.02275)/.0455)<2e-5, (label,'upside-down front V')
+            assert abs(uv.data[li].uv.x-(v.x/.034125+.5))<2e-5, (label,'mirrored front U')
+            assert abs(uv.data[li].uv.y-(v.y/.05096+.5))<2e-5, (label,'upside-down front V')
     # Independent geometric weld proves front and body close a single shell.
     bm=bmesh.new()
     for o in meshes:
@@ -67,6 +69,7 @@ index=json.loads((RUNTIME/'textures/mahjong_face_atlas.json').read_text(encoding
 assert len(index['tiles'])==34 and len(set(t['name'] for t in index['tiles']))==34
 assert (RUNTIME/'textures/T_Mahjong50_FaceAtlas_BaseColor.png').is_file()
 manifest=json.loads((RUNTIME/'model_manifest.json').read_text(encoding='utf-8'))
+assert manifest['tile_dimensions_mm'] == [39,56,28] and manifest['tile_dimension_order'] == ['width','height','thickness']
 for path in (RUNTIME/'mahjong_tile.glb',ROOT/'artifacts/mahjong_models/mahjong_tile.blend'):
     entry=manifest['files'][path.name]
     assert entry['bytes']==path.stat().st_size and entry['sha256']==hashlib.sha256(path.read_bytes()).hexdigest(), ('stale asset manifest',path.name)

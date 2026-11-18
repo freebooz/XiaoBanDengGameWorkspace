@@ -167,13 +167,14 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 		if not is_meld and not is_discard:
 			hands.append(tile)
 			var relative := 0 if screen._hand_models.has(tile) else int(str(tile.name).trim_prefix("MahjongConcealedHand").split("_")[0])
-			_check(tile.global_basis.y.is_equal_approx(Vector3.BACK.rotated(Vector3.UP, relative * PI * 0.5))
-				and is_equal_approx(_body_bounds(tile).size.y, 0.056), "All four hands must stand 56 mm tall facing their owner")
+			var inclination := deg_to_rad(30.0) if relative == 0 else 0.0
+			var face_normal := Vector3(0.0, sin(inclination), cos(inclination)).rotated(Vector3.UP, relative * PI * 0.5)
+			_check(tile.global_basis.y.is_equal_approx(face_normal), "Only the south hand should tilt 30 degrees toward the camera")
 			if relative != 0 or not screen._hand_models.has(tile) or screen._hand_ids[screen._hand_models.find(tile)] != screen._selected_id:
 				var dial_center: Vector3 = screen._wind_dial.global_position
 				var measured: float = (_body_bounds(tile).get_center() - dial_center).dot(Vector3.BACK.rotated(Vector3.UP, relative * PI * 0.5))
 				hand_radii[relative] = snappedf(measured, 0.00001)
-				_check(absf(measured - 0.356) < 0.0001, "Resting tile body at seat %d has the wrong radius: %.5f m" % [relative, measured])
+				_check(absf(measured - 0.300) < 0.0001, "Resting tile body at seat %d has the wrong radius: %.5f m" % [relative, measured])
 			continue
 		var bounds := _body_bounds(tile)
 		for other: Node3D in physical_bounds:
@@ -186,7 +187,7 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 			var local: Vector3 = tile.position.rotated(Vector3.UP,-float(relative)*PI*.5)
 			if relative == 0:
 				own_meld_edge = maxf(own_meld_edge, local.x + screen.TILE_SIZE.x * tile.scale.x * 0.5)
-			var row_offset: float = (screen.HAND_ROW_RADIUS - local.z) / (screen.TILE_SIZE.z + screen.MELD_ROW_GAP)
+			var row_offset: float = (screen.MELD_ROW_RADIUS - local.z) / (screen.TILE_SIZE.z + screen.MELD_ROW_GAP)
 			_check(row_offset >= -0.001 and absf(row_offset - roundf(row_offset)) < 0.001, "Declared melds must stay in complete readable rows")
 			var hand_start: float = screen._concealed_row_start(relative, screen._seat_concealed_count(relative))
 			_check(local.x < hand_start,"Meld is not left of its remaining hand")

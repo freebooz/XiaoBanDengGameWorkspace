@@ -2,17 +2,11 @@ extends RefCounted
 ## Construct the same physical mesh and engraved face in the game and its previews.
 
 const SCENE := preload("res://modules/games/mahjong/guiyang/assets/models/mahjong_tile.glb")
-const SIZE := Vector3(0.039, 0.028, 0.056)
-const GEOMETRY_SCALE := SIZE / Vector3(0.036, 0.026, 0.050)
+const SIZE := Vector3(0.039, 0.028, 0.056) # Authored TileBody bounds in metres (width, thickness, height).
 
 
 static func build(materials: RefCounted, tile: Dictionary, concealed := false, tabletop := false) -> Node3D:
-	var model := Node3D.new()
-	var geometry := SCENE.instantiate() as Node3D
-	geometry.name = "TileGeometry56mm"
-	# Convert the imported mesh to its physical dimensions once for every view.
-	geometry.scale *= GEOMETRY_SCALE
-	model.add_child(geometry)
+	var model := SCENE.instantiate() as Node3D
 	var face := model.find_child("TileFace", true, false) as MeshInstance3D
 	if face != null:
 		# The solid body already casts this tile's contact shadow. The thin

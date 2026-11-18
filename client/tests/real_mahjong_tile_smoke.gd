@@ -2,6 +2,7 @@ extends SceneTree
 ## Native GLB/color-channel/PBR checks and a runtime product close-up.
 
 const TILE_SCENE = preload("res://modules/games/mahjong/guiyang/assets/models/mahjong_tile.glb")
+const MODEL = preload("res://modules/games/mahjong/guiyang/real_tile_model.gd")
 const MATERIALS = preload("res://modules/games/mahjong/guiyang/real_tile_materials.gd")
 
 func _initialize() -> void:
@@ -19,7 +20,7 @@ func _run() -> void:
 	var face := prototype.find_child("TileFace", true, false) as MeshInstance3D
 	assert(body != null and face != null and prototype.find_child("TileBack", true, false) == null)
 	var bounds := body.get_aabb()
-	assert(absf(bounds.size.x - 0.036) < 0.000001 and absf(bounds.size.y - 0.026) < 0.000001 and absf(bounds.size.z - 0.050) < 0.000001)
+	assert(bounds.size.is_equal_approx(Vector3(0.039, 0.028, 0.056)))
 	var colors: PackedColorArray = body.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
 	var minimum := 1.0
 	var maximum := 0.0
@@ -28,6 +29,12 @@ func _run() -> void:
 		maximum = maxf(maximum, color.r)
 	assert(minimum < 0.01 and maximum > 0.99, "Authored green mask must be COLOR_0")
 	prototype.free()
+	var live := MODEL.build(materials, {"suit":"wan","rank":5})
+	stage.add_child(live)
+	for part in ["TileBody", "TileFace"]:
+		var mesh := live.find_child(part, true, false) as MeshInstance3D
+		assert(mesh.global_basis.is_equal_approx(Basis.IDENTITY), "The native size must survive the full scene hierarchy")
+	live.free()
 	var first_texture: Texture2D
 	for suit in ["wan", "tiao", "tong"]:
 		for rank in range(1, 10):
@@ -40,7 +47,7 @@ func _run() -> void:
 			assert(is_same(first_texture, mat.albedo_texture), "Tiles must share atlas, not copy 27 textures")
 	assert(materials.face({}).albedo_texture == null)
 	assert(materials.face({"suit":"wan","rank":10}).albedo_texture == null)
-	print("REAL_MAHJONG_NATIVE_PBR_OK source_dimensions=36x50x26 mask_COLOR0=true shared_27_faces=true hidden_face_blank=true")
+	print("REAL_MAHJONG_NATIVE_PBR_OK height_width_thickness_mm=56x39x28 unit_scale=true mask_COLOR0=true shared_27_faces=true hidden_face_blank=true")
 	var env_node := WorldEnvironment.new()
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
@@ -74,7 +81,7 @@ func _run() -> void:
 	for index in range(4):
 		var tile := TILE_SCENE.instantiate() as Node3D
 		stage.add_child(tile)
-		tile.position = [Vector3(-0.055,0,0.005),Vector3(0,0,-0.015),Vector3(0.055,0,0.005),Vector3(0.005,0.026,-0.08)][index]
+		tile.position = [Vector3(-0.055,0,0.005),Vector3(0,0,-0.015),Vector3(0.055,0,0.005),Vector3(0.005,MODEL.SIZE.y,-0.08)][index]
 		tile.rotation_degrees.y = [-9,2,8,-7][index]
 		(tile.find_child("TileBody", true, false) as MeshInstance3D).material_override = materials.body()
 		(tile.find_child("TileFace", true, false) as MeshInstance3D).material_override = materials.face([{"suit":"wan","rank":5},{"suit":"tiao","rank":9},{"suit":"tong","rank":1},{}][index])

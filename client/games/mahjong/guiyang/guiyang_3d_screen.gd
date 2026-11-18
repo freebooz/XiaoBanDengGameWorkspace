@@ -49,8 +49,11 @@ const CAMERA_FOCAL_LENGTH_MM := 40.0
 const CAMERA_TARGET := Vector3(0.0, 0.0, 0.0144)
 const TILE_SIZE := TILE_MODEL.SIZE
 const TILE_BODY_BOUNDS := AABB(Vector3(-TILE_SIZE.x * 0.5, 0.0, -TILE_SIZE.z * 0.5), TILE_SIZE)
-const HAND_ROW_RADIUS := 0.30 + TILE_SIZE.z
+const MELD_ROW_RADIUS := 0.356
+const ROW_INSET := 0.028 # One 56-size tile thickness in metres.
+const HAND_ROW_RADIUS := MELD_ROW_RADIUS - 2.0 * ROW_INSET
 const HAND_STANDING_ANGLE := PI * 0.5
+const SOUTH_HAND_ANGLE := PI / 3.0 # The face normal points 30 degrees above the table toward the camera.
 # The flat model pivots on its back. After standing it up, its thickness extends toward its owner.
 const HAND_PIVOT_DEPTH := HAND_ROW_RADIUS - TILE_SIZE.y * 0.5
 const HAND_PIVOT_HEIGHT := TILE_SIZE.z * 0.5
@@ -62,7 +65,7 @@ const OPPONENT_MELD_SEPARATION := 0.054
 const SEAT_CARD_SIZE := Vector2(178, 76)
 const OWN_HAND_LIFT := 0.020
 const FULL_HAND_COUNT := 14
-const HAND_SIDE_MARGIN_TILES := 1.0
+const HAND_SIDE_MARGIN_TILES := 2.97
 const PLAY_AREA_NEAR_DEPTH := HAND_ROW_RADIUS + TILE_SIZE.z * 0.5
 
 var product: Dictionary = {}
@@ -85,6 +88,7 @@ var _last_send_error: Error = OK
 var _state: Dictionary = {}
 var _textures: Dictionary = {}
 var _tile_materials := TILE_MATERIALS.new()
+var _south_hand_rest_height := 0.0
 var _selected_id := 0
 var _auto_played := false
 var _status: Label
@@ -611,12 +615,12 @@ func _own_hand_top() -> float:
 
 func _own_tile_pose(along: float, lift: float) -> Transform3D:
 	# The GLB origin sits on the bottom of its body, in the middle of its footprint.
-	var basis := Basis(Vector3.RIGHT, HAND_STANDING_ANGLE)
+	var basis := Basis(Vector3.RIGHT, SOUTH_HAND_ANGLE)
 	return _pieces_root.global_transform * Transform3D(basis, _own_tile_position(along, lift))
 
 
 func _own_tile_position(along: float, lift: float) -> Vector3:
-	return Vector3(along, HAND_PIVOT_HEIGHT + lift, HAND_PIVOT_DEPTH)
+	return Vector3(along, _south_hand_rest_height + lift, HAND_ROW_RADIUS - TILE_SIZE.y * 0.5 * sin(SOUTH_HAND_ANGLE))
 
 
 func _own_tile_rect(along: float, lift: float) -> Rect2:
@@ -922,37 +926,43 @@ func _fit_camera() -> void:
 
 
 func _fit_player_hand_camera(aspect: float) -> void:
-	# Measure the standing tile in camera axes. The 14-tile reference stays fixed as tiles are played.
 	var view := Transform3D(_camera.global_basis, CAMERA_TARGET).affine_inverse()
 	var row := view * _own_tile_pose(0.0, 0.0)
-	var corners := PackedVector3Array()
-	var nearest_z := -INF
-	for i in 8:
-		var point := row * TILE_BODY_BOUNDS.get_endpoint(i)
-		corners.append(point)
-		nearest_z = maxf(nearest_z, point.z)
+	var north_pose := Transform3D(Basis.from_euler(Vector3(HAND_STANDING_ANGLE, PI, 0.0)),
+		_seat_table_position(2, 0.0, HAND_PIVOT_HEIGHT, HAND_PIVOT_DEPTH))
+	var north_row := view * _pieces_root.global_transform * north_pose
 
 	var board_height := _board_view.size.y
 	# Keep a full badge row below the resting hand, including at fractional native pixel scales.
 	var pixel_scale := maxf((get_viewport_transform() * get_global_transform()).y.length(), 0.01)
 	var bottom := floorf((size.y - _safe.w - COACH_OVERLAY.LABEL_HEIGHT - COACH_OVERLAY.LABEL_GAP) * pixel_scale - 1.0) / pixel_scale
+	var top_ndc := 1.0 - 2.0 * (_safe.y + 1.0 / pixel_scale) / board_height
 	var bottom_ndc := 1.0 - 2.0 * bottom / board_height
-
 	var tangent := CAMERA_SENSOR_WIDTH_MM / (2.0 * CAMERA_FOCAL_LENGTH_MM * aspect)
+	var nearest_z := -INF
+	var south_limit := INF
+	var north_limit := -INF
+	# Project both standing rows against the top and bottom edges of the viewing frustum.
+	for i in 8:
+		var corner := TILE_BODY_BOUNDS.get_endpoint(i)
+		var south := row * corner
+		var north := north_row * corner
+		nearest_z = maxf(nearest_z, south.z)
+		south_limit = minf(south_limit, south.y + bottom_ndc * south.z * tangent)
+		north_limit = maxf(north_limit, north.y + top_ndc * north.z * tangent)
 	# Use the existing row spacing to frame a reference hand, independent of melds and the live tile count.
 	var half_span := _concealed_row_start(0, 1) - _concealed_row_start(0, FULL_HAND_COUNT)
 	var hand_width := 2.0 * half_span + TILE_SIZE.x
 	var safe_fraction := 1.0 - 2.0 * maxf(_safe.x, _safe.z) / _board_view.size.x
 	var frame_width := maxf(hand_width + 2.0 * HAND_SIDE_MARGIN_TILES * TILE_SIZE.x, hand_width / maxf(0.01, safe_fraction))
-	var distance := nearest_z + frame_width / (2.0 * aspect * tangent)
-	var vertical_offset := INF
-	for point in corners:
-		vertical_offset = minf(vertical_offset, point.y - bottom_ndc * (distance - point.z) * tangent)
+	var width_distance := nearest_z + frame_width / (2.0 * aspect * tangent)
+	var height_distance := (north_limit - south_limit) / (maxf(0.01, top_ndc - bottom_ndc) * tangent)
+	var distance := maxf(width_distance, height_distance)
 	# Translate the camera to frame the hand while its centre ray retains the specified pitch.
 	_camera.set_perspective(rad_to_deg(2.0 * atan(tangent)), _camera.near, _camera.far)
 	_camera.position = CAMERA_TARGET + _camera.basis.z * distance
 	_camera.h_offset = row.origin.x
-	_camera.v_offset = vertical_offset
+	_camera.v_offset = south_limit - bottom_ndc * distance * tangent
 	_camera_world_per_pixel = 2.0 * (distance - row.origin.z) * tangent / board_height
 
 
@@ -992,6 +1002,14 @@ func _build_3d_table() -> void:
 	_pieces_root = Node3D.new()
 	_pieces_root.name = "ThreeDimensionalTiles"
 	world.add_child(_pieces_root)
+	# Use the mesh's rounded contact edge to rest the tilted south row on the felt.
+	var sample := TILE_MODEL.build(_tile_materials, {}, true)
+	_pieces_root.add_child(sample)
+	var body := sample.find_child("TileBody", true, false) as MeshInstance3D
+	var tilted := Transform3D(Basis(Vector3.RIGHT, SOUTH_HAND_ANGLE), Vector3.ZERO) * sample.global_transform.affine_inverse() * body.global_transform
+	for vertex in body.mesh.get_faces():
+		_south_hand_rest_height = maxf(_south_hand_rest_height, -(tilted * vertex).y)
+	sample.free()
 	_tile_focus = TILE_FOCUS.new()
 	world.add_child(_tile_focus)
 	_tile_focus.set_quality(_quality)
@@ -1707,7 +1725,7 @@ func _tile_path(tile: Dictionary) -> String:
 func _tile_model(tile: Dictionary, location: Vector3, relative: int = 0, concealed: bool = false, tabletop := false) -> Node3D:
 	var model := TILE_MODEL.build(_tile_materials, tile, concealed, tabletop)
 	model.position = location
-	var pitch := HAND_STANDING_ANGLE
+	var pitch := SOUTH_HAND_ANGLE if relative == 0 else HAND_STANDING_ANGLE
 	if tabletop: pitch = PI if concealed else 0.0
 	model.rotation = Vector3(pitch, float(relative) * PI * 0.5, 0.0)
 	_pieces_root.add_child(model)
@@ -1724,6 +1742,7 @@ func _render_opponent_hands() -> void:
 		for index in range(count):
 			var along := hand_start + float(index) * TILE_SIZE.x
 			var position := _seat_table_position(relative, along, HAND_PIVOT_HEIGHT, HAND_PIVOT_DEPTH)
+			if relative == 0: position = _own_tile_position(along, 0.0)
 			var model := _tile_model({},position,relative,true)
 			model.name="MahjongConcealedHand%d_%d"%[relative,index]
 
@@ -1739,7 +1758,7 @@ func _meld_layout(relative: int) -> Dictionary:
 	var widest := 0
 	if seat < seats.size() and seats[seat] is Array:
 		var remaining_width := _seat_concealed_count(relative) * TILE_SIZE.x
-		var capacity := clampi(floori((2.0 * HAND_ROW_RADIUS - remaining_width - OPPONENT_MELD_SEPARATION) / TILE_SIZE.x), 4, 12)
+		var capacity := clampi(floori((2.0 * MELD_ROW_RADIUS - remaining_width - OPPONENT_MELD_SEPARATION) / TILE_SIZE.x), 4, 12)
 		var row := 0
 		var used := 0
 		for meld in seats[seat].slice(0, 4):
@@ -1791,7 +1810,7 @@ func _render_discards() -> void:
 		# Leave enough room for the perpendicular rivers at each corner without changing a tile's size.
 		var adjacent_columns := maxi(river_columns[(seat + 1) % 4], river_columns[(seat + 3) % 4])
 		var inner_edge := 0.114 if training_mode else maxf(0.112, adjacent_columns * TILE_SIZE.x * 0.5 - RIVER_SIDE_OFFSET + RIVER_CORNER_GAP)
-		var first_depth := inner_edge + TILE_SIZE.z * 1.5
+		var first_depth := inner_edge + TILE_SIZE.z * 1.5 - ROW_INSET
 		for index in range(count):
 			var row := int(index / columns)
 			var col := index % columns
@@ -1829,7 +1848,7 @@ func _render_melds() -> void:
 				continue
 			var tiles: Array = meld.tiles
 			var origin: Vector2i = layout.origins[index]
-			var depth := HAND_ROW_RADIUS - origin.y * (TILE_SIZE.z + MELD_ROW_GAP)
+			var depth := MELD_ROW_RADIUS - origin.y * (TILE_SIZE.z + MELD_ROW_GAP)
 			var concealed: bool = (relative != 0 or _is_spectating()) and meld.get("kind") == "an_gang"
 			# Every seat reads its exposed sets from its own left, just ahead of
 			# its remaining concealed row. Rotate both rows with the same seat basis.
