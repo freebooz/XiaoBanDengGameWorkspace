@@ -48,7 +48,7 @@ func _verify_felt_coverage(board: Board, label: String) -> void:
 	_check(board._board_view.get_rect().is_equal_approx(Rect2(Vector2.ZERO, board.size)),
 		"%s must render the felt behind the entire window, including the header" % label)
 	var pitch := rad_to_deg(asin(board._camera.global_basis.z.normalized().y))
-	_check(absf(pitch - 50.0) <= 0.1, "%s camera pitch must be 50 degrees (got %.2f)" % [label, pitch])
+	_check(absf(pitch - 60.0) <= 0.1, "%s camera pitch must be 60 degrees (got %.2f)" % [label, pitch])
 	var horizontal_tangent := tan(deg_to_rad(board._camera.fov * 0.5)) * Vector2(board._board_viewport.size).aspect()
 	_check(is_equal_approx(horizontal_tangent, 36.0 / (2.0 * 50.0)), "%s must preserve a 50 mm lens on a 36 mm horizontal gate" % label)
 

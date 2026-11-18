@@ -79,7 +79,6 @@ func _draw() -> void:
 	if not badge_rect.has_area():
 		return
 	var font := get_theme_default_font()
-	var font_size := clampi(roundi(badge_rect.size.y - 12.0), 12, 19)
 	var fill := StyleBoxFlat.new()
 	fill.bg_color = badge_color
 	var diameter := minf(badge_rect.size.x, badge_rect.size.y)
@@ -92,39 +91,17 @@ func _draw() -> void:
 		fill.set_border_width_all(1)
 		fill.border_color = RECOMMENDED
 	draw_style_box(fill, badge_rect)
-	if shanten_value >= 0 and badge_rect.size.x >= 44.0 and badge_rect.size.y >= 28.0:
-		var heading_size := 9
-		var half_width := badge_rect.size.x * 0.5
-		for column in range(2):
-			var center_x := badge_rect.position.x + half_width * (column + 0.5)
-			var heading := "向听" if column == 0 else "进张"
-			var value := str(shanten_value if column == 0 else ukeire_value)
-			var heading_x := center_x - font.get_string_size(heading, HORIZONTAL_ALIGNMENT_LEFT, -1, heading_size).x * 0.5
-			draw_string(font, Vector2(heading_x, badge_rect.position.y + 10), heading, HORIZONTAL_ALIGNMENT_LEFT, -1, heading_size, text_color)
-			var number_size := font_size
-			while number_size > 10 and font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, number_size).x > half_width - 4:
-				number_size -= 1
-			var value_x := center_x - font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, number_size).x * 0.5
-			draw_string(font, Vector2(value_x, badge_rect.end.y - 3), value, HORIZONTAL_ALIGNMENT_LEFT, -1, number_size, text_color)
-	else:
-		var caption := text
-		var text_width := maxf(1.0, badge_rect.size.x - 0.6 * diameter)
-		font_size = mini(17, floori(badge_rect.size.y - 2.0))
-		while font_size > 10 and font.get_height(font_size) > badge_rect.size.y - 1.0:
-			font_size -= 1
-		if shanten_value >= 0:
-			var described := "向听%d 进张%d" % [shanten_value, ukeire_value]
-			if font.get_string_size(described, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x <= text_width:
-				caption = described
-		while font_size > 10 and font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > text_width:
-			font_size -= 1
-		_draw_compact(font, font_size, caption)
+	var text_width := maxf(1.0, badge_rect.size.x - 0.6 * diameter)
+	var font_size := mini(17, floori(badge_rect.size.y - 2.0))
+	while font_size > 10 and (font.get_height(font_size) > badge_rect.size.y - 1.0 or font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > text_width):
+		font_size -= 1
+	_draw_compact(font, font_size)
 	if high_risk:
 		draw_circle(Vector2(size.x - 6.0, 6.0), 3.0, HIGH_RISK, true, -1.0, true)
 
 
-func _draw_compact(font: Font, font_size: int, caption: String) -> void:
+func _draw_compact(font: Font, font_size: int) -> void:
 	var line := badge_rect.get_center()
 	line.y += (font.get_ascent(font_size) - font.get_descent(font_size)) * 0.5
-	line.x -= font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x * 0.5
-	draw_string(font, line, caption, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, text_color)
+	line.x -= font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x * 0.5
+	draw_string(font, line, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, text_color)
