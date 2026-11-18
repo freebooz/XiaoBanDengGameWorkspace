@@ -130,7 +130,8 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 	if screen._frames_player_hand():
 		var bottom: float = screen._own_tile_rect(0.0, 0.0).end.y
 		var gap: float = (screen.size.y - screen._safe.w - bottom) * screen.get_viewport_transform().get_scale().y
-		_check(absf(gap - 6.0) < 1.1 and far_edge.y >= band_top, "Local hand must clear the bottom safe edge and keep the far row below its avatar")
+		var label_space: float = (screen.COACH_OVERLAY.LABEL_HEIGHT + screen.COACH_OVERLAY.LABEL_GAP) * screen.get_viewport_transform().get_scale().y
+		_check(gap >= label_space - 0.01 and gap <= label_space + 3.0 and far_edge.y >= band_top - 0.1, "Camera must leave the label row below the hand and keep the far row below its avatar")
 	else:
 		_check(band_center.distance_to(full_center) <= 1.0 or (absf(hand_center_y-social_center_y) <= 1.0 and absf(band_center.x-view.get_center().x) <= 1.0), "Playable table must stay centered in the available band")
 		_check(far_edge.y >= band_top and near_play_edge.y <= view.end.y, "Near playing edge and far hand must fit the safe layout band")
@@ -172,7 +173,7 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 				var dial_center: Vector3 = screen._wind_dial.global_position
 				var measured: float = (_body_bounds(tile).get_center() - dial_center).dot(Vector3.BACK.rotated(Vector3.UP, relative * PI * 0.5))
 				hand_radii[relative] = snappedf(measured, 0.00001)
-				_check(absf(measured - 0.48) < 0.0001, "Resting tile body at seat %d has the wrong radius: %.5f m" % [relative, measured])
+				_check(absf(measured - 0.356) < 0.0001, "Resting tile body at seat %d has the wrong radius: %.5f m" % [relative, measured])
 			continue
 		var bounds := _body_bounds(tile)
 		for other: Node3D in physical_bounds:
@@ -200,7 +201,7 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 			var count := 0
 			for entry in screen._state.discards:
 				if int(entry.seat) == int(identity[0]) and not entry.get("claimed", false): count += 1
-			var columns := maxi(8, ceili(count / 3.0))
+			var columns := clampi(ceili(count / 2.0), 8, 12)
 			var row := int(discard_index / columns)
 			var local: Vector3 = tile.position.rotated(Vector3.UP,-float(relative)*PI*.5)
 			var physical_length := bounds.size.z if relative%2==0 else bounds.size.x

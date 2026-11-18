@@ -82,7 +82,10 @@ func _draw() -> void:
 	var font_size := clampi(roundi(badge_rect.size.y - 12.0), 12, 19)
 	var fill := StyleBoxFlat.new()
 	fill.bg_color = badge_color
-	fill.set_corner_radius_all(5)
+	var diameter := minf(badge_rect.size.x, badge_rect.size.y)
+	fill.set_corner_radius_all(ceili(diameter * 0.5))
+	fill.corner_detail = 10
+	fill.anti_aliasing = true
 	if recommended:
 		# Recommendation belongs to the label below the tile. Keep the entire
 		# tile free of 2D rectangles; its own PBR material shows selection.
@@ -104,15 +107,24 @@ func _draw() -> void:
 			var value_x := center_x - font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, number_size).x * 0.5
 			draw_string(font, Vector2(value_x, badge_rect.end.y - 3), value, HORIZONTAL_ALIGNMENT_LEFT, -1, number_size, text_color)
 	else:
-		while font_size > 10 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > badge_rect.size.x - 4:
+		var caption := text
+		var text_width := maxf(1.0, badge_rect.size.x - 0.6 * diameter)
+		font_size = mini(17, floori(badge_rect.size.y - 2.0))
+		while font_size > 10 and font.get_height(font_size) > badge_rect.size.y - 1.0:
 			font_size -= 1
-		_draw_compact(font, font_size)
+		if shanten_value >= 0:
+			var described := "向听%d 进张%d" % [shanten_value, ukeire_value]
+			if font.get_string_size(described, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x <= text_width:
+				caption = described
+		while font_size > 10 and font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > text_width:
+			font_size -= 1
+		_draw_compact(font, font_size, caption)
 	if high_risk:
 		draw_circle(Vector2(size.x - 6.0, 6.0), 3.0, HIGH_RISK, true, -1.0, true)
 
 
-func _draw_compact(font: Font, font_size: int) -> void:
+func _draw_compact(font: Font, font_size: int, caption: String) -> void:
 	var line := badge_rect.get_center()
 	line.y += (font.get_ascent(font_size) - font.get_descent(font_size)) * 0.5
-	line.x -= font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x * 0.5
-	draw_string(font, line, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, text_color)
+	line.x -= font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x * 0.5
+	draw_string(font, line, caption, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, text_color)

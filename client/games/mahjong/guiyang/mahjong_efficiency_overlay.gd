@@ -6,7 +6,7 @@ const DETAIL := preload("res://modules/games/mahjong/guiyang/mahjong_efficiency_
 const NUMERALS := ["一", "二", "三", "四", "五", "六", "七", "八", "九"]
 const SUITS := ["万", "筒", "条"]
 const SUIT_IDS := ["wan", "tong", "tiao"]
-const LABEL_HEIGHT := 32.0
+const LABEL_HEIGHT := 32.0 * 2.0 / 3.0
 const LABEL_GAP := 4.0
 
 var tile_materials: RefCounted

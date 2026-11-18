@@ -51,20 +51,28 @@ func _run() -> void:
 	board._select_tile(7)
 	if badge != null:
 		_check(badge.recommended and badge.selected, "Selection and recommendation must remain distinguishable on the same tile")
+	var table_poses := {}
+	for model: Node3D in board._pieces_root.get_children():
+		table_poses[model] = model.global_transform
 	for dimensions in [Vector2i(1440,810), Vector2i(1800,810), Vector2i(1440,900), Vector2i(1440,1080)]:
 		root.content_scale_size = Vector2i.ZERO
 		root.size = dimensions
 		await process_frame
 		await process_frame
 		board._layout_ui()
+		for model: Node3D in table_poses:
+			_check(model.global_transform.is_equal_approx(table_poses[model]), "Refitting the camera must leave every tile's pose unchanged")
 		for id in board._coach_overlay._badges:
 			var item: Control = board._coach_overlay._badges[id]
 			var label := Rect2(item.position + item.badge_rect.position, item.badge_rect.size)
 			_check(Rect2(Vector2.ZERO, board.size).encloses(label), "Labels must remain in bounds at " + str(dimensions))
+			_check(is_equal_approx(label.size.y, 64.0 / 3.0), "Each capsule must be two thirds of the original label height")
 			for model in board._hand_models:
 				var face: Rect2 = board._projected_tile_rect(model)
 				face.position += board._board_view.position
 				_check(not label.intersects(face), "Labels cannot cover any tile face")
+				if board._frames_player_hand():
+					_check(label.position.y >= board._projected_tile_rect(model, &"TileBody").end.y, "All phone capsules must fit below the hand")
 	# Incoming visible tiles change the effective count using snapshot events only.
 	packet.epoch = 2
 	packet.discards = [{"seat":1,"tile":{"id":20,"suit":"tiao","rank":4},"claimed":false}]

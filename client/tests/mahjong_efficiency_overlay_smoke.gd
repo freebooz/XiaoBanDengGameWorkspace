@@ -55,6 +55,7 @@ func _run() -> void:
 			var badge: Control = overlay.get_node("MahjongEfficiencyBadge%d" % id)
 			var global_badge: Rect2 = Rect2(badge.position + badge.badge_rect.position, badge.badge_rect.size)
 			var face: Rect2 = tiles[id - 1].rect
+			_expect(is_equal_approx(global_badge.size.y, 64.0 / 3.0), "Badge height must be two thirds of its original 32 units")
 			_expect(badge.mouse_filter == Control.MOUSE_FILTER_IGNORE, "badge must not intercept touch")
 			_expect(Rect2(Vector2.ZERO, viewport_size).encloses(global_badge), "badge stays in screen")
 			_expect(not previous.intersects(global_badge), "adjacent compact badges stay separate")

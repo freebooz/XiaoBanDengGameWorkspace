@@ -50,7 +50,7 @@ func _verify_felt_coverage(board: Board, label: String) -> void:
 	var pitch := rad_to_deg(asin(board._camera.global_basis.z.normalized().y))
 	_check(absf(pitch - 50.0) <= 0.1, "%s camera pitch must be 50 degrees (got %.2f)" % [label, pitch])
 	var horizontal_tangent := tan(deg_to_rad(board._camera.fov * 0.5)) * Vector2(board._board_viewport.size).aspect()
-	_check(is_equal_approx(horizontal_tangent, 36.0 / (2.0 * 40.0)), "%s must preserve a 40 mm lens on a 36 mm horizontal gate" % label)
+	_check(is_equal_approx(horizontal_tangent, 36.0 / (2.0 * 50.0)), "%s must preserve a 50 mm lens on a 36 mm horizontal gate" % label)
 
 	var plane := Plane(Vector3.UP, bounds.end.y)
 	var width := board._board_viewport.size.x
@@ -83,7 +83,6 @@ func _verify_full_hand_framing(board: Board) -> void:
 	_check(is_equal_approx(span, 0.546), "The 14-tile hand must span 546 mm at every aspect ratio")
 	var safe_area := Rect2(board._safe.x, board._safe.y, board.size.x - board._safe.x - board._safe.z, board.size.y - board._safe.y - board._safe.w)
 	if safe_area.size.aspect() < 1.67: return
-	_check(absf(board._camera.position.distance_to(board.CAMERA_TARGET) - 2.802157 * 2.0 / 3.0) <= 0.002, "The camera must be one third closer to the table at the fixed 40 mm focal length")
 	var bounds := board._projected_tile_rect(board._hand_models[0], &"TileBody")
 	for model: Node3D in board._hand_models: bounds = bounds.merge(board._projected_tile_rect(model, &"TileBody"))
 	var tile_width := bounds.size.x / 14.0
@@ -92,8 +91,12 @@ func _verify_full_hand_framing(board: Board) -> void:
 	var pixels := (board.get_viewport_transform() * board.get_global_transform()).y.length()
 	var bottom_px := (safe_area.end.y - bounds.end.y) * pixels
 	var bottom_tiles := (safe_area.end.y - bounds.end.y) / tile_width
-	_check(absf(left - right) < 0.07 and safe_area.encloses(bounds), "The original-size hand must be centered and fully visible")
-	_check(absf(bottom_px - 6.0) <= 2.0, "Own hand must sit at the bottom safe edge: %.1f px" % bottom_px)
+	var expected_margin := maxf(board.size.x / 16.0, maxf(board._safe.x, board._safe.z))
+	_check(absf(bounds.position.x - expected_margin) * pixels < 2.0 and absf(board.size.x - bounds.end.x - expected_margin) * pixels < 2.0
+		and safe_area.encloses(bounds), "Fourteen physical tiles should leave one tile width on each side: %.3f / %.3f" % [left, right])
+	var label_space := (board.COACH_OVERLAY.LABEL_HEIGHT + board.COACH_OVERLAY.LABEL_GAP) * pixels
+	_check(bottom_px >= label_space - 0.01 and bottom_px <= label_space + 3.0,
+		"Resting hand must leave room for a complete shanten label below it: %.2f native pixels" % bottom_px)
 	var selected := board._selected_id
 	for index in [0, 13]:
 		var resting: Transform3D = board._hand_models[index].global_transform

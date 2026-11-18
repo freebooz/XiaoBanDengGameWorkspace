@@ -45,24 +45,24 @@ const ACTION_FONT_SIZE := 24
 const DINGQUE_SUITS := {"wan":"万", "tong":"筒", "tiao":"条"}
 const CAMERA_PITCH_DEGREES := 50.0
 const CAMERA_SENSOR_WIDTH_MM := 36.0
-const CAMERA_FOCAL_LENGTH_MM := 40.0
-const CAMERA_DISTANCE_METRES := 1.868105 # Two thirds of the previous 2.802157 m gameplay framing.
+const CAMERA_FOCAL_LENGTH_MM := 50.0
 const CAMERA_TARGET := Vector3(0.0, 0.0, 0.0144)
 const TILE_SIZE := TILE_MODEL.SIZE
 const TILE_BODY_BOUNDS := AABB(Vector3(-TILE_SIZE.x * 0.5, 0.0, -TILE_SIZE.z * 0.5), TILE_SIZE)
-const HAND_ROW_RADIUS := 0.48
+const HAND_ROW_RADIUS := 0.30 + TILE_SIZE.z
 const HAND_STANDING_ANGLE := PI * 0.5
 # The flat model pivots on its back. After standing it up, its thickness extends toward its owner.
 const HAND_PIVOT_DEPTH := HAND_ROW_RADIUS - TILE_SIZE.y * 0.5
 const HAND_PIVOT_HEIGHT := TILE_SIZE.z * 0.5
 const DISCARD_COLUMNS := 8
-const RIVER_CORNER_GAP := 0.010
+const RIVER_CORNER_GAP := 0.006
+const RIVER_SIDE_OFFSET := 0.074
 const MELD_ROW_GAP := 0.009
 const OPPONENT_MELD_SEPARATION := 0.054
 const SEAT_CARD_SIZE := Vector2(178, 76)
 const OWN_HAND_LIFT := 0.020
 const FULL_HAND_COUNT := 14
-const HAND_BOTTOM_PIXELS := 6.0
+const HAND_SIDE_MARGIN_TILES := 1.0
 const PLAY_AREA_NEAR_DEPTH := HAND_ROW_RADIUS + TILE_SIZE.z * 0.5
 
 var product: Dictionary = {}
@@ -934,16 +934,19 @@ func _fit_player_hand_camera(aspect: float) -> void:
 	var board_height := _board_view.size.y
 	var opposite := _seat_rect(2)
 	var top := maxf(_play_area.position.y, opposite.end.y) + 8.0 * opposite.size.y / SEAT_CARD_SIZE.y
-	var pixel_scale := (get_viewport_transform() * get_global_transform()).y.length()
-	var bottom := size.y - _safe.w - HAND_BOTTOM_PIXELS / maxf(pixel_scale, 0.01)
+	# Keep a full badge row below the resting hand, including at fractional native pixel scales.
+	var pixel_scale := maxf((get_viewport_transform() * get_global_transform()).y.length(), 0.01)
+	var bottom := floorf((size.y - _safe.w - COACH_OVERLAY.LABEL_HEIGHT - COACH_OVERLAY.LABEL_GAP) * pixel_scale - 1.0) / pixel_scale
 	var top_ndc := 1.0 - 2.0 * top / board_height
 	var bottom_ndc := 1.0 - 2.0 * bottom / board_height
 	var far := view * _pieces_root.to_global(Vector3(0.0, TILE_SIZE.z, -HAND_ROW_RADIUS))
 
 	var tangent := CAMERA_SENSOR_WIDTH_MM / (2.0 * CAMERA_FOCAL_LENGTH_MM * aspect)
-	var half_height := (CAMERA_DISTANCE_METRES - nearest_z) * tangent
-	# Keep the longer focal length as the screen widens. A shifted projection can
-	# frame both rows without moving the eye closer and exaggerating perspective.
+	var hand_fraction := FULL_HAND_COUNT / (FULL_HAND_COUNT + 2.0 * HAND_SIDE_MARGIN_TILES)
+	var safe_fraction := 1.0 - 2.0 * maxf(_safe.x, _safe.z) / _board_view.size.x
+	var half_height := FULL_HAND_COUNT * TILE_SIZE.x / (2.0 * aspect * maxf(0.01, minf(hand_fraction, safe_fraction)))
+	# A full hand determines distance even when the actual hand contains fewer tiles.
+	# Shift the frame vertically to place that hand against the bottom safe edge.
 	var far_height := half_height + (nearest_z - far.z) * tangent
 	var shift := 0.0
 	for point in corners:
@@ -952,7 +955,7 @@ func _fit_player_hand_camera(aspect: float) -> void:
 	var vertical_offset := INF
 	for point in corners:
 		vertical_offset = minf(vertical_offset, point.y - (bottom_ndc - shift) * (half_height + (nearest_z - point.z) * tangent))
-	_camera.position = CAMERA_TARGET + _camera.basis.z * CAMERA_DISTANCE_METRES
+	_camera.position = CAMERA_TARGET + _camera.basis.z * (nearest_z + half_height / tangent)
 	_camera.set_perspective(rad_to_deg(2.0 * atan(tangent)), _camera.near, _camera.far)
 	if shift < -0.001:
 		_camera.set_frustum(2.0 * _camera.near * tangent, Vector2(0.0, -shift * tangent * _camera.near), _camera.near, _camera.far)
@@ -989,7 +992,7 @@ func _build_3d_table() -> void:
 	_stage = STAGE_SCRIPT.new()
 	world.add_child(_stage)
 	var pitch := deg_to_rad(CAMERA_PITCH_DEGREES)
-	_camera = _stage.configure(2.0, CAMERA_TARGET + Vector3(0, sin(pitch), cos(pitch)) * CAMERA_DISTANCE_METRES, CAMERA_TARGET, true, 30.0)
+	_camera = _stage.configure(2.0, CAMERA_TARGET + Vector3(0, sin(pitch), cos(pitch)), CAMERA_TARGET, true, 30.0)
 	TABLE_THEME.configure_stage(_stage, _quality)
 	world.add_child(TABLE_THEME.create_felt_surface())
 	_wind_dial = WIND_DIAL.new()
@@ -1744,7 +1747,7 @@ func _meld_layout(relative: int) -> Dictionary:
 	var widest := 0
 	if seat < seats.size() and seats[seat] is Array:
 		var remaining_width := _seat_concealed_count(relative) * TILE_SIZE.x
-		var capacity := clampi(floori((0.69 - remaining_width - OPPONENT_MELD_SEPARATION) / TILE_SIZE.x), 4, 8)
+		var capacity := clampi(floori((2.0 * HAND_ROW_RADIUS - remaining_width - OPPONENT_MELD_SEPARATION) / TILE_SIZE.x), 4, 12)
 		var row := 0
 		var used := 0
 		for meld in seats[seat].slice(0, 4):
@@ -1788,19 +1791,20 @@ func _render_discards() -> void:
 				per_seat[seat].append(raw.get("tile", {}))
 	var river_columns: Array[int] = []
 	for river: Array in per_seat:
-		river_columns.append(14 if training_mode else maxi(DISCARD_COLUMNS, ceili(river.size() / 3.0)))
+		river_columns.append(14 if training_mode else clampi(ceili(river.size() / 2.0), DISCARD_COLUMNS, 12))
 	for seat in range(4):
 		var relative := _relative_seat(seat)
 		var count: int = per_seat[seat].size()
 		var columns := river_columns[seat]
 		# Leave enough room for the perpendicular rivers at each corner without changing a tile's size.
 		var adjacent_columns := maxi(river_columns[(seat + 1) % 4], river_columns[(seat + 3) % 4])
-		var first_depth := 0.17 if training_mode else (adjacent_columns * TILE_SIZE.x + TILE_SIZE.z) * 0.5 + RIVER_CORNER_GAP
+		var inner_edge := 0.114 if training_mode else maxf(0.112, adjacent_columns * TILE_SIZE.x * 0.5 - RIVER_SIDE_OFFSET + RIVER_CORNER_GAP)
+		var first_depth := inner_edge + TILE_SIZE.z * 1.5
 		for index in range(count):
 			var row := int(index / columns)
 			var col := index % columns
 			var visible_columns := mini(columns, count - row * columns) if training_mode else columns
-			var along := (col - (visible_columns - 1) * 0.5) * TILE_SIZE.x
+			var along := (col - (visible_columns - 1) * 0.5) * TILE_SIZE.x + (0.0 if training_mode else RIVER_SIDE_OFFSET)
 			var depth := first_depth + row * TILE_SIZE.z
 			var position := _seat_table_position(relative, along, 0.0015, depth)
 			var model := _tile_model(per_seat[seat][index], position, relative, false, true)
