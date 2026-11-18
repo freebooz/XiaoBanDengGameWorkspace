@@ -29,15 +29,23 @@ func _run() -> void:
 	screen._state={"room_id":"2468","status":"playing","phase":"turn","your_seat":0,"turn":0,"dealer":2,"players":["me","right","opponent","left"],"hand":hand,"hand_counts":[14,13,13,13],"scores":[0,120,-60,-60],"egg_counts":[100,0,125,null],"player_names":["贵阳牌友","稻香大叔","乡村老张","板凳阿梅"],"connected_seats":[true,true,true,true],"melds":[[],[],[],[]],"discards":[],"remaining":52,"options":[{"type":"play"}]}
 	screen._render()
 	await process_frame
-	_check(screen._hand_models[0].rotation_degrees.x >= 75, "Reference own hand must stand upright")
-	for tile in screen._pieces_root.get_children():
-		if tile is Node3D and not screen._hand_models.has(tile):
-			_check(absf(tile.rotation_degrees.x - 90) < 0.01, "Concealed side/opponent hands must stand upright")
+	for tile: Node3D in screen._pieces_root.get_children():
+		var seat := 0 if screen._hand_models.has(tile) else int(str(tile.name).trim_prefix("MahjongConcealedHand").get_slice("_", 0))
+		var outward := Vector3.BACK.rotated(Vector3.UP, seat * PI * 0.5)
+		_check(tile.global_basis.y.is_equal_approx(outward) and tile.global_basis.z.is_equal_approx(Vector3.DOWN),
+			"Each hand must stand vertically with its face toward its own seat: %s" % tile.name)
 	_verify_tile_bounds(screen)
 	screen._deadline_tick=Time.get_ticks_msec()+12000
 	screen._update_clock()
-	_check(int(screen._remaining_number.text) in [11,12], "Center shows authoritative turn seconds, not wall remaining")
-	_check("余牌 52" in screen._header.text and "房间2468" in screen._header.text)
+	_check(int(screen._remaining_number.text) in [11,12], "The portrait shows the authoritative turn seconds")
+	for seat in 4:
+		screen._state.turn = seat
+		screen._update_context_labels()
+		_check(screen._avatar_portraits[seat].get_global_rect().has_point(screen._remaining_number.get_global_rect().get_center()), "Countdown must follow the current player's portrait")
+	screen._state.turn = 0
+	screen._update_context_labels()
+	_check(screen._header.text == "贵阳捉鸡 · 房间 2468" and screen._wall_number.text == "余牌 52")
+	_check(screen._round_number.text == "第1局" and screen._round_number.get_global_rect().end.y <= screen._wall_number.get_global_rect().position.y + 0.01)
 	_check("888888" not in screen._header.text and "/8" not in screen._header.text and "28ms" not in screen._header.text)
 	_check(screen._wind_dial._dealer == 2 and screen._wind_dial._dealer != int(screen._state.turn), "The 3D dial highlights the dealer independently of the current turn")
 	var expected := ["100", "0", "125", "—"]
@@ -56,6 +64,17 @@ func _run() -> void:
 	_check(not screen._play_button.disabled)
 	screen._state["phase"]="reaction"
 	screen._state["turn"]=1
+	screen._state["rule_set_id"]="basic_108"
+	var winning_discard := {"id":199,"suit":"wan","rank":1}
+	var claim := {"seat":1,"tile":winning_discard,"claimed":false}
+	var ready_hand: Array[Dictionary] = []
+	for group in [["tiao", [8, 8, 8]], ["wan", [2, 3]], ["tong", [1, 2, 3, 5, 5]], ["tiao", [1, 2, 3]]]:
+		for rank in group[1]:
+			ready_hand.append({"id":ready_hand.size()+1,"suit":group[0],"rank":rank})
+	screen._state["hand"]=ready_hand
+	screen._state["hand_counts"]=[13,13,13,13]
+	screen._state["last_discard"]=winning_discard
+	screen._state["discards"]=[claim]
 	screen._state["options"]=[{"type":"hu"},{"type":"pass"}]
 	screen._render()
 	_check(not screen._response_buttons["hu"].disabled and screen._response_buttons["chi"].disabled)
@@ -69,15 +88,18 @@ func _run() -> void:
 	for seat in range(4):
 		for index in range(5):
 			public_discards.append({"seat":seat,"tile":{"id":100+seat*10+index,"suit":["wan","tong","tiao"][index%3],"rank":index%9+1},"claimed":false})
+	public_discards.append(claim)
 	screen._state["discards"]=public_discards
 	screen._state["melds"]=[[{"kind":"peng","tiles":[{"id":300,"suit":"tong","rank":4},{"id":301,"suit":"tong","rank":4},{"id":302,"suit":"tong","rank":4}]}],[],[],[]]
+	screen._state["hand"]=ready_hand.slice(3)
+	screen._state["hand_counts"]=[10,13,13,13]
 	screen._state["options"]=[{"type":"hu"},{"type":"pass"}]
 	screen._render()
 	_check(screen._response_buttons["hu"].get_meta("legal_emphasis",false))
 	await process_frame
 	_verify_public_melds(screen, 3)
 	# Four completed kongs leave two concealed tiles. Check all sixteen
-	# public faces in the continuous seat-left lane, then restore the preview.
+	# public faces in the seat-left rows, then restore the preview.
 	var preview_state: Dictionary = screen._state.duplicate(true)
 	var kongs: Array = []
 	for group in range(4):
@@ -107,7 +129,7 @@ func _run() -> void:
 				if root.get_texture().get_image().save_png(argument.trim_prefix("--screen-out=")) != OK:
 					quit(2)
 					return
-	print("MAHJONG_CLUB_REFERENCE_OK upright_hands=true center_deadline=true true_session=true selection_material=true stable_mic=true legal_hu_only=true public_meld_faces=16")
+	print("MAHJONG_CLUB_REFERENCE_OK readable_hands=true center_deadline=true true_session=true selection_material=true stable_mic=true legal_hu_only=true public_meld_faces=16")
 	screen.queue_free()
 	await process_frame
 	await process_frame

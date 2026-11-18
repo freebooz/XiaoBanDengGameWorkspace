@@ -89,6 +89,7 @@ type Game struct {
 	Winners             []int
 	WinFrom             int
 	WinKind             string
+	ClaimedWinTile      *Tile `json:",omitempty"`
 	Scores              [4]int
 	ScoreBreakdown      *ScoreBreakdown   `json:",omitempty"`
 	ScoreLedger         []ScoreTransfer   `json:",omitempty"`
@@ -644,6 +645,9 @@ func (g *Game) settle(winners []int, from int, kind string) {
 	winningTile := g.PendingTile
 	if from < 0 {
 		winningTile, _ = g.findTile(winners[0], g.LastDrawnID)
+	} else if winningTile.ID > 0 {
+		claimed := winningTile
+		g.ClaimedWinTile = &claimed
 	}
 	if g.PendingKind == "bu_gang" && from >= 0 {
 		for index, held := range g.Hands[from] {
@@ -869,8 +873,12 @@ func (g *Game) boardFor(seat int) PublicBoardSnapshot {
 	return board
 }
 
-// SnapshotFor 不序列化其它玩家暗牌；暗杠也只显示四张牌背。
+// SnapshotFor serves a seated player. Other concealed hands are revealed at
+// settlement only. Concealed kongs stay masked for everyone except their owner.
 func (g *Game) SnapshotFor(seat int) map[string]any {
+	if seat < 0 || seat >= len(g.Players) || g.Players[seat] == "" {
+		return map[string]any{}
+	}
 	options := g.Options(seat)
 	if options == nil {
 		options = []ActionOption{}
@@ -906,8 +914,14 @@ func (g *Game) SnapshotFor(seat int) map[string]any {
 	if breakdown := g.SettlementScoreBreakdown(); breakdown != nil {
 		snapshot["score_breakdown"] = breakdown
 	}
+	if g.Phase == PhaseFinished {
+		snapshot["settlement_hands"] = g.settlementHands()
+	}
 	if details := g.SettlementHuDetails(); len(details) > 0 {
 		snapshot["hu_details"] = details
+		if rows := settlementFanBreakdown(details); len(rows) > 0 {
+			snapshot["fan_breakdown"] = rows
+		}
 	}
 	if ready := g.SettlementReadySeats(); ready != nil {
 		snapshot["ready_seats"] = ready

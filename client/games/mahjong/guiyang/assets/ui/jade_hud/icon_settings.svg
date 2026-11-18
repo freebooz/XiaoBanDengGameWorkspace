@@ -1,11 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><defs>
-<linearGradient id="gold" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
-<stop stop-color="#fff2b4"/><stop offset=".16" stop-color="#ffe0a0"/><stop offset=".38" stop-color="#bd8139"/><stop offset=".55" stop-color="#77471c"/><stop offset=".78" stop-color="#c98a44"/><stop offset=".9" stop-color="#ffdf97"/><stop offset="1" stop-color="#95602e"/>
-</linearGradient>
-<linearGradient id="inside" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
-<stop stop-color="#fffadc" stop-opacity=".60"/><stop offset=".38" stop-color="#d6bc82" stop-opacity=".08"/><stop offset=".76" stop-color="#7e4b24" stop-opacity=".16"/><stop offset="1" stop-color="#ffce83" stop-opacity=".63"/>
-</linearGradient>
-<linearGradient id="goldIcon" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
-<stop stop-color="#fff7cd"/><stop offset="1" stop-color="#ebbc6b"/>
-</linearGradient>
-</defs><g fill="none" stroke="#17110a" stroke-opacity=".62" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round" transform="translate(0 1)"><path d="M13 3h6l.8 4 2.5 1.4 3.8-1.4 3 5.2-3 2.6v2.8l3 2.6-3 5.2-3.8-1.4-2.5 1.4-.8 4h-6l-.8-4-2.5-1.4-3.8 1.4-3-5.2 3-2.6v-2.8l-3-2.6 3-5.2 3.8 1.4 2.5-1.4z"/><circle cx="16" cy="16.2" r="4.4"/></g><g fill="none" stroke="url(#goldIcon)" stroke-width="2.35" stroke-linejoin="round" stroke-linecap="round"><path d="M13 3h6l.8 4 2.5 1.4 3.8-1.4 3 5.2-3 2.6v2.8l3 2.6-3 5.2-3.8-1.4-2.5 1.4-.8 4h-6l-.8-4-2.5-1.4-3.8 1.4-3-5.2 3-2.6v-2.8l-3-2.6 3-5.2 3.8 1.4 2.5-1.4z"/><circle cx="16" cy="16.2" r="4.4"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 32 32">
+  <path fill="white" fill-rule="evenodd" d="
+    M13.3 1h5.4l.7 3.3 2.5 1 2.8-1.8 3.8 3.8-1.8 2.8 1 2.5 3.3.7v5.4l-3.3.7-1 2.5 1.8 2.8-3.8 3.8-2.8-1.8-2.5 1-.7 3.3h-5.4l-.7-3.3-2.5-1-2.8 1.8-3.8-3.8 1.8-2.8-1-2.5-3.3-.7v-5.4l3.3-.7 1-2.5-1.8-2.8 3.8-3.8 2.8 1.8 2.5-1Z
+    M16 10.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 1 1 0-11Z"/>
+</svg>

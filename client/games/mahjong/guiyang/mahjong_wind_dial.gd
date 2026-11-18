@@ -2,8 +2,10 @@ extends Node3D
 ## A table-space wind dial. Seat indices are absolute and the near plate is seat 0 relative to the viewer.
 
 const TIMBER := preload("res://modules/games/mahjong/guiyang/assets/ui/series/battle_wood.png")
-const WINDS := ["东", "南", "西", "北"]
+const WINDS := ["南", "东", "北", "西"] # Near, right, far and left in the displayed table.
 const TIMER_SURFACE_Y := 0.031
+const PROFILE_HEIGHT_SCALE := 0.72
+const FOOTPRINT_SCALE := 0.72
 const CIRCLE_SEGMENTS := 96
 
 var _viewer := 0
@@ -16,6 +18,7 @@ var _dealer_gold: StandardMaterial3D
 
 func _ready() -> void:
 	name = "MahjongWindDial3D"
+	scale = Vector3(1.0, PROFILE_HEIGHT_SCALE, 1.0) * FOOTPRINT_SCALE
 	_build()
 	_apply_winds()
 
@@ -37,7 +40,7 @@ func _build() -> void:
 	wood.clearcoat = 0.31
 	wood.clearcoat_roughness = 0.35
 	var brass := _material(Color("#ffbd68"), 0.29, 0.41)
-	var well := _material(Color("#3b2317"), 0.56)
+	var well := _material(Color("#101010"), 0.62)
 	_ivory = _material(Color("#ffe7bc"), 0.39)
 	_dealer_gold = _material(Color("#ffca30"), 0.32)
 	_dealer_gold.emission_enabled = true
@@ -98,7 +101,7 @@ func _build() -> void:
 func _apply_winds() -> void:
 	for relative in range(_plates.size()):
 		var seat := (_viewer + relative) % WINDS.size()
-		_winds[relative].text = WINDS[seat]
+		_winds[relative].text = WINDS[relative]
 		_plates[relative].material_override = _dealer_gold if _dealer == seat else _ivory
 
 

@@ -52,17 +52,20 @@ func _run() -> void:
 	for outcome in ["loss", "win", "draw"]:
 		var settlement := SETTLEMENT.new()
 		host.add_child(settlement)
-		settlement.setup({"outcome":outcome, "rows":[{"own":true,"seat":0,"name":"稻香阿婆","result":"未胡","egg_delta":-10,"score":-10}]}, func(): pass, func(): pass, func(): pass)
+		var method := "杠上花" if outcome == "win" else "点炮" if outcome == "loss" else "流局"
+		settlement.setup({"outcome":outcome, "round_caption":"房间3481  ·  第 3 局结算",
+			"rows":[{"own":true,"seat":0,"name":"稻香阿婆","result":method,"status":method,"method":method,
+				"winner":outcome == "win","egg_delta":-10,"score":-10}]}, func(): pass, func(): pass, func(): pass)
 		for extent in [Vector2(350, 650), Vector2(720, 470), Vector2(1050, 550)]:
 			settlement.size = extent
 			for frame in 6: await process_frame
-			var result: Label = settlement.get("_result")
-			var badge: Control = settlement.get("_badge")
-			var actual_font := result.get_theme_font("font")
-			var font_size := result.get_theme_font_size("font_size")
-			var outline := result.get_theme_constant("outline_size") * 2
-			_expect(actual_font.get_string_size(result.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x + outline + 16 <= badge.size.x, "Settlement outcome must not truncate: " + result.text + " at " + str(extent))
-			_expect(actual_font.get_height(font_size) + outline + 17 <= badge.size.y, "Settlement outcome line height must fit the actual badge")
+			var row := settlement.find_child("MahjongSettlementRow0",true,false)
+			var room := settlement.find_child("MahjongSettlementRoundCaption",true,false)
+			for caption: Label in [row._method, room]:
+				var actual_font := caption.get_theme_font("font")
+				var font_size := caption.get_theme_font_size("font_size")
+				_expect(actual_font.get_string_size(caption.text,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x <= caption.size.x+1, "Settlement caption must fit at " + str(extent) + " " + caption.text)
+				_expect(actual_font.get_height(font_size) <= caption.size.y+1, "Settlement caption height must fit at " + str(extent))
 		settlement.queue_free()
 		await process_frame
 	host.queue_free()

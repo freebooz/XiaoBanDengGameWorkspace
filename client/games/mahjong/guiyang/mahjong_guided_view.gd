@@ -6,7 +6,7 @@ const NATIVE_VIEW := preload("res://modules/game_framework/tabletop3d/native_3d_
 signal back_requested
 
 const RURAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_theme.gd")
-const TILE_SCENE := preload("res://modules/games/mahjong/guiyang/assets/models/mahjong_tile.glb")
+const TILE_MODEL := preload("res://modules/games/mahjong/guiyang/real_tile_model.gd")
 const TILE_MATERIALS := preload("res://modules/games/mahjong/guiyang/real_tile_materials.gd")
 const ACTION_LABELS := {"discard": "打出", "peng": "碰", "gang": "杠", "hu": "胡", "pass": "过"}
 const LESSONS := [
@@ -228,13 +228,9 @@ func _render_tiles(tiles: Array) -> void:
 		_pieces.remove_child(child)
 		child.queue_free()
 	for index in range(tiles.size()):
-		var model := TILE_SCENE.instantiate() as Node3D
+		var model := TILE_MODEL.build(_materials, tiles[index])
 		model.position = Vector3((float(index) - (tiles.size() - 1) * 0.5) * 0.055, 0.008 if _selected == index else 0.0, 0)
 		_pieces.add_child(model)
-		var face := model.find_child("TileFace", true, false) as MeshInstance3D
-		if face != null: face.material_override = _materials.face(tiles[index])
-		var body := model.find_child("TileBody", true, false) as MeshInstance3D
-		if body != null: body.material_override = _materials.body()
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 

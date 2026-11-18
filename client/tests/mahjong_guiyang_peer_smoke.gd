@@ -353,6 +353,9 @@ func _verify_deal(round_number: int) -> bool:
 		push_error("invalid initial seat, rules or match metadata for peer %d" % _peer)
 		return false
 	var phase := "dingque" if _zunyi else "turn"
+	if state.has("settlement_hands") or state.has("fan_breakdown"):
+		push_error("A live deal must not publish settlement hands or fan details")
+		return false
 	if state.get("phase") != phase or not game._array("discards").is_empty() or int(state.get("remaining", -1)) != 55:
 		push_error("peer %d did not receive the untouched 108-tile initial deal" % _peer)
 		return false
@@ -502,6 +505,9 @@ func _verify_settlement(round_number: int) -> bool:
 	var scores := game._array("scores") as Array
 	if not _same_table(state) or not is_instance_valid(panel) or not panel.is_visible_in_tree() or scores.size() != 4 or _app._recent.size() != round_number:
 		return false
+	if not _hands_match_display(game._array("settlement_hands"), panel):
+		push_error("Four settlement hand rows must show the faces from the final server snapshot")
+		return false
 	if _zunyi and not _zunyi_ledger_matches(state, scores): return false
 	var result: Dictionary = _app._recent[0]
 	if result.get("match_id") != _match_id or result.get("kind") != "friend" or int(result.get("score")) != int(scores[_seat]): return false
@@ -518,6 +524,23 @@ func _verify_settlement(round_number: int) -> bool:
 		var screenshot := "settlement.png" if round_number == 1 else "settlement_next_round.png"
 		return await _capture(screenshot) and _receipt(captured, true)
 	return await _until(func(): return FileAccess.file_exists(_file(captured)), "host captured settlement")
+
+
+func _hands_match_display(hands: Array, panel: Control) -> bool:
+	if hands.size() != 4: return false
+	for seat in 4:
+		var hand: Variant = hands[seat]
+		var strip := panel.find_child("MahjongSettlementHand%d" % seat, true, false)
+		if not hand is Array or hand.is_empty() or strip == null: return false
+		var tiles: Array = strip.get("_tiles")
+		var start: int = tiles.size() - hand.size()
+		if start < 0: return false
+		for index in hand.size():
+			var source: Dictionary = hand[index]
+			var face: Dictionary = tiles[start + index]
+			if int(source.get("id", 0)) not in range(1, 109) or source.get("suit") != face.get("suit") or source.get("rank") != face.get("rank"):
+				return false
+	return true
 
 
 func _zunyi_ledger_matches(state: Dictionary, scores: Array) -> bool:
@@ -576,6 +599,19 @@ func _play_rematch() -> bool:
 	if not await _until(_drive_round, "round two settlement"): return false
 	if not await _verify_settlement(2): return false
 	_commands += first_commands
-	if not await _until(func(): return _button_ready(_named_button("MahjongSettlementLobbyButton")), "settlement leave-room button"): return false
-	if not _press(_named_button("MahjongSettlementLobbyButton"), "leave friend room after round two"): return false
+	var exit_button := "MahjongSettlementLobbyButton"
+	if _peer == 0:
+		if not _press(_named_button("MahjongSettlementRoomButton"), "return to retained friend room"): return false
+		if not await _until(func():
+			return _app._state == "room" and _app._match.get("previous_match_id") == _match_id and _button_ready(_named_button("MahjongReadyButton"))
+		, "manual readiness in the retained friend room"): return false
+		if _app._match.get("room_id") != _room or int(_app._match.get("seat_index", -1)) != _seat or int(_app._match.get("ready_players", -1)) != 0:
+			push_error("Returning to the room must retain the seat and leave all four players unready")
+			return false
+		if not _receipt("returned-unready", true): return false
+		exit_button = "MahjongLeaveButton"
+	else:
+		if not await _until(func(): return FileAccess.file_exists(_file("returned-unready")), "host returned without readying"): return false
+	if not await _until(func(): return _button_ready(_named_button(exit_button)), "leave-room button"): return false
+	if not _press(_named_button(exit_button), "leave friend room after round two"): return false
 	return await _until(func(): return _app._state == "lobby" and _app._match.get("status") == "idle", "return to lobby after leaving the retained room")

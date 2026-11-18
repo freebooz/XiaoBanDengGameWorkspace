@@ -100,6 +100,8 @@ func _run() -> void:
 	_expect(is_instance_valid(board) and board.is_queued_for_deletion() and app._state in ["lobby", "room"] and not app._lobby_message.is_empty(),
 		"牌桌完全未连通时，大厅的权威回退必须结束本次入桌")
 	_check_rematch(presets)
+	await _check_settlement_room_return(presets, false)
+	await _check_settlement_room_return(presets, true)
 	_check_lobby_recovery(presets)
 	_check_egg_balance(presets)
 	await _check_navigation(presets)
@@ -288,6 +290,48 @@ func _check_rematch(presets: Array) -> void:
 	other_hand.previous_match_id = "unrelated-hand"
 	_click_rematch(app, other_hand)
 	_expect(app.sent.is_empty(), "旧结算不可提交到另一局")
+	app.queue_free()
+
+
+func _check_settlement_room_return(presets: Array, room_arrives_first: bool) -> void:
+	var app := AppFixture.new()
+	root.add_child(app)
+	app._account = {"account_id":"host", "display_name":"测试牌友"}
+	app._lobby_synced = true
+	var previous := {"room_id":"0421", "kind":"friend", "status":"playing", "start":true, "completed_rounds":0, "seat_index":0}
+	var retained := {"room_id":"0421", "kind":"friend", "status":"matched", "start":false, "completed_rounds":1,
+		"previous_match_id":"finished-hand", "capacity":4, "player_account_ids":["host","a","b","c"], "ready_account_ids":[]}
+	app._match = (retained if room_arrives_first else previous).duplicate(true)
+	var board: Control = app._make_game(false, previous.duplicate(true))
+	app._auto_flow = true
+	board._handle_packet(JSON.stringify({"type":"mahjong_joined", "room_id":"0421", "match_id":"finished-hand", "your_seat":0}))
+	board._handle_packet(JSON.stringify({"type":"mahjong_state", "room_id":"0421", "match_id":"finished-hand", "kind":"friend",
+		"phase":"finished", "status":"finished", "your_seat":0, "winners":[], "scores":[0,0,0,0], "can_rematch":true}))
+	var wait_button := board.find_child("MahjongSettlementRoomButton", true, false) as Button
+	_expect(is_instance_valid(wait_button) and not wait_button.disabled, "好友房结算应提供返回房间按钮")
+	if not is_instance_valid(wait_button):
+		app.queue_free()
+		return
+	var other_actions: Array[String] = []
+	board.request_next_round.connect(func(): other_actions.append("ready"))
+	board.request_return_to_lobby.connect(func(): other_actions.append("leave"))
+	wait_button.pressed.emit()
+	board._return_now(true)
+	board._return_now()
+	_expect(other_actions.is_empty(), "返回房间后旧结算不能再提交续局或离开")
+	if not room_arrives_first:
+		_expect(app.sent.is_empty() and app._state == "lobby" and not app._finished_friend_return.is_empty(),
+			"旧对局仍在同步时应等待新房间，不发准备或离开命令")
+	app._on_lobby_state(retained, presets)
+	app._on_lobby_state(retained, presets)
+	await process_frame
+	_expect(app._state == "room" and app._match.room_id == "0421" and app.sent.is_empty(),
+		"返回房间应保留原房间和未准备状态，重复房间通知不提交命令")
+	var ready := app._lobby_view.find_child("MahjongReadyButton", true, false) as Button
+	_expect(is_instance_valid(ready) and not ready.disabled, "返回房间后本人仍可手动准备")
+	if is_instance_valid(ready):
+		ready.pressed.emit()
+		_expect(_sent_ready(app, 1), "仅在点击房内准备后提交本人的准备命令")
 	app.queue_free()
 
 

@@ -149,7 +149,6 @@ func _set_tiles(entries: Array[Dictionary]) -> void:
 		var model := TILE_MODEL.build(tile_materials, entry)
 		model.name = "MahjongEffectiveTile_%s_%d" % [entry.suit, entry.rank]
 		model.rotation_degrees = Vector3(76, -11, -5)
-		model.scale = Vector3.ONE * 1.04
 		_tile_root.add_child(model)
 		_models.append(model)
 		var count := _label(_tray, 15)

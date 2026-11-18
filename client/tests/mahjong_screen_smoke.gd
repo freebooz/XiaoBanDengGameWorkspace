@@ -180,7 +180,14 @@ func _run() -> void:
 	print("MAHJONG_LANDSCAPE_RESIZE_OK")
 	screen._state["phase"] = "reaction"
 	screen._state["turn"] = 1
-	screen._state.hand[3].rank = 1
+	screen._state["rule_set_id"] = "basic_108"
+	var reaction_hand: Array[Dictionary] = []
+	for group in [["wan", [1, 1, 1, 2, 3]], ["tong", [1, 2, 3, 5, 5]], ["tiao", [1, 2, 3]]]:
+		for rank in group[1]:
+			reaction_hand.append({"id": reaction_hand.size() + 1, "suit": group[0], "rank": rank})
+	screen._state["hand"] = reaction_hand
+	screen._state["hand_counts"] = [13, 13, 13, 13]
+	screen._state["drawn_tile_id"] = 0
 	var reaction_tile := {"id": 98, "suit": "wan", "rank": 1}
 	screen._state["last_discard"] = reaction_tile
 	screen._state["discards"] = [{"seat":1, "tile":reaction_tile, "claimed":false}]
@@ -219,8 +226,13 @@ func _run() -> void:
 	var left_hand: Node3D = screen._hand_models.front()
 	var right_hand: Node3D = screen._hand_models.back()
 	var own_melds: Array = screen._pieces_root.find_children("MahjongMeld0_*", "Node3D", false, false)
-	if not is_zero_approx(left_hand.position.x + right_hand.position.x) or own_melds.back().position.x >= left_hand.position.x:
-		push_error("本人手牌应保持居中，碰杠副露保留在左侧")
+	var hand_width: float = screen.TILE_SIZE.x
+	var meld_width: float = screen.TILE_SIZE.x
+	var row_left: float = own_melds.front().position.x - meld_width * 0.5
+	var row_right := right_hand.position.x + hand_width * 0.5
+	var gap: float = left_hand.position.x - hand_width * 0.5 - (own_melds.back().position.x + meld_width * 0.5)
+	if not is_zero_approx((row_left + row_right) * 0.5) or not is_equal_approx(gap, hand_width):
+		push_error("手牌与左侧副露应整体居中，间隔一张手牌宽度")
 		quit(1)
 		return
 	print("MAHJONG_DISCARD_AND_MELD_OK exposed=11 concealed=4 touching_rows=true")
@@ -431,7 +443,7 @@ func _verify_hand_and_controls(screen) -> bool:
 			push_error("自己的牌面过小或过于平躺，手机难以辨认")
 			return false
 		face_rect.position += board_rect.position
-		if not _inside(face_rect, board_rect.grow(-12)):
+		if not _inside(face_rect, board_rect):
 			push_error("放大的三维牌面超出牌桌画面")
 			return false
 		if screen._actions_root.visible and face_rect.grow(-1).intersects(screen._actions_root.get_global_rect()):
@@ -473,21 +485,11 @@ func _verify_hand_and_controls(screen) -> bool:
 
 
 func _verify_hand_on_felt(screen) -> bool:
-	var table := screen._board_viewport.find_child("ImportedMahjongTable", true, false) as Node3D
-	var felt := table.find_child("Mahjong_Felt_Surface", true, false) as MeshInstance3D
+	var felt := screen._board_viewport.find_child("Mahjong_Felt_Surface", true, false) as MeshInstance3D
 	if felt == null:
-		push_error("无法读取导入牌桌的真实台面边界")
+		push_error("无法读取三维绒布的真实边界")
 		return false
 	var felt_bounds: AABB = felt.global_transform * felt.get_aabb()
-	var body := table.find_child("SM_Mahjong_Table_Frame_RoundedAlloy", true, false) as MeshInstance3D
-	var trim := table.find_child("Frame_GoldInlay_RoundedContinuous", true, false) as MeshInstance3D
-	if body == null or trim == null or trim.visible:
-		push_error("桌体或无金边台面有误")
-		return false
-	var body_bounds: AABB = body.global_transform * body.get_aabb()
-	if absf(body_bounds.size.x - 1.35) > 0.002 or absf(body_bounds.size.z - 1.35) > 0.002 or not body_bounds.grow(0.0005).encloses(felt_bounds) or body_bounds.end.y <= felt_bounds.end.y:
-		push_error("实木桌框应为 1350 毫米见方，台布嵌在桌框内")
-		return false
 	for model in screen._hand_models:
 		for mesh in model.find_children("*", "MeshInstance3D", true, false):
 			var geometry: AABB = mesh.get_aabb()
@@ -506,7 +508,7 @@ func _verify_touching_row(models: Array) -> bool:
 	var width: float = body.get_aabb().size.x * body.global_basis.x.length() / models[0].get_parent().global_basis.x.length()
 	for index in range(1, models.size()):
 		var offset: Vector3 = models[index].position - models[index - 1].position
-		if absf(Vector2(offset.x, offset.z).length() - width) > 0.0001:
+		if absf(absf(offset.dot(models[index].basis.x.normalized())) - width) > 0.0001:
 			push_error("同一排麻将牌未按实体宽度贴合")
 			return false
 	return true

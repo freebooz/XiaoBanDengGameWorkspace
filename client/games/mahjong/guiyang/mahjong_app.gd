@@ -116,7 +116,7 @@ var _room_directory_error := ""
 var _public_rooms: Array = []
 var _spectator_supported := false
 var _pending_watch: Dictionary = {}
-var _watch_return_message := ""
+var _board_return_notice := ""
 var _presets: Array = []
 var _selected_rule: Dictionary = {}
 var _pending_lobby_id := ""
@@ -910,11 +910,17 @@ func _guest_identity_back() -> void:
 
 func _enter_guest_lobby() -> void:
 	if _state != "guest_identity" or not _has_account_session(): return
-	_show_lobby()
-	_start_lobby_connection()
+	_enter_authenticated_lobby()
 	if _guest_save_error != OK:
 		_lobby_message = "当前会话有效，本机无法保存，下次启动需要重新登录"
 		_render_lobby()
+
+
+func _enter_authenticated_lobby() -> void:
+	_show_lobby()
+	# The first private lobby snapshot may assign this account to a live table.
+	_enter_when_ready = true
+	_start_lobby_connection()
 
 
 func _open_settings() -> void:
@@ -1199,6 +1205,9 @@ func _on_lobby_packet(raw: String) -> void:
 	if decoded.parse(raw) != OK or not decoded.data is Dictionary: return
 	var packet: Dictionary = decoded.data
 	match str(packet.get("type","")):
+		"mahjong_match_cancelled":
+			if _state == "game" and is_instance_valid(_game):
+				_game.apply_match_cancellation(packet)
 		"mahjong_lobby_state":
 			if packet.get("state") is Dictionary and packet.get("presets") is Array:
 				_spectator_supported = bool(packet.get("spectator_supported", false))
@@ -1273,6 +1282,8 @@ func _on_lobby_state(state: Dictionary, presets: Array) -> void:
 		if _selected_rule.is_empty() and not _presets.is_empty() and _presets[0] is Dictionary:
 			_selected_rule = {"rule_set_id":str(_presets[0].get("rule_set_id","")),"rule_version":str(_presets[0].get("rule_version",""))}
 	if first:
+		if phase == "idle" and _pending_lobby_id.is_empty():
+			_enter_when_ready = false
 		_lobby_message = ""
 		_refresh_lobby_eggs()
 	if _state == "game" and is_instance_valid(_game):
@@ -1306,7 +1317,7 @@ func _apply_lobby_assignment() -> void:
 	if _auto_flow and phase=="idle" and not _auto_match_sent:
 		_auto_match_sent = true
 		call_deferred("_start_match")
-	elif _auto_flow and phase=="matched":
+	elif _auto_flow and phase=="matched" and str(_match.get("previous_match_id", "")).is_empty():
 		call_deferred("_ready_up")
 
 
@@ -1646,8 +1657,7 @@ func _finish_named_account(kind: String, server: String, identifier: String, res
 	_account = {"account_id": str(parsed.account_id), "display_name": str(parsed.get("display_name", "")), "kind": "named"}
 	_session_server = server
 	_session_token = token
-	_show_lobby()
-	_start_lobby_connection()
+	_enter_authenticated_lobby()
 
 
 func _expire_saved_session(server: String, token: String) -> void:
@@ -1871,9 +1881,14 @@ func _make_game(practice: bool, context: Dictionary) -> Variant:
 	game.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	game.session_expired.connect(_expire_live_session)
 	game.entry_cancelled.connect(func(message: String):
-		_lobby_message = message
-		if context.get("spectating", false): _watch_return_message = message)
+		if game == _game:
+			if not game.released_match_id.is_empty():
+				_return_from_released_match(game, message)
+				return
+			_lobby_message = message
+			_board_return_notice = message)
 	game.request_return_to_lobby.connect(_return_from_game.bind(game, false))
+	game.request_return_to_room.connect(_return_from_game.bind(game, true, false))
 	game.request_next_round.connect(_return_from_game.bind(game, true))
 	var source := [game, _wallet_session_generation, _session_server, str(_account.get("account_id", "")), _session_token]
 	if game.has_signal("match_finished"): game.match_finished.connect(_record_game_result.bindv(source))
@@ -2123,6 +2138,20 @@ func _on_history_page_response(result: int, code: int, _headers: PackedStringArr
 	_render_lobby()
 
 
+func _return_from_released_match(game: Control, message: String) -> void:
+	var stale := _match.get("status") == "playing" and _match.get("room_id") == game.match_context.get("room_id") \
+		and _match.get("previous_match_id") != game.released_match_id
+	if stale:
+		_match = {}
+		_lobby_synced = false
+	_enter_when_ready = false
+	_board_return_route.clear()
+	_board_return_notice = ""
+	_show_lobby()
+	if stale and _lobby_socket.is_open(): _on_lobby_open()
+	_present_error(message, "match_ended")
+
+
 func _return_to_lobby() -> void:
 	_enter_when_ready = false
 	var route := _board_return_route
@@ -2135,11 +2164,11 @@ func _return_to_lobby() -> void:
 			_training_to_abandon = str(_match.get("room_id",""))
 
 
-func _return_from_game(game: Control, keep_room: bool) -> void:
+func _return_from_game(game: Control, keep_room: bool, auto_ready: bool = true) -> void:
 	if game != _game: return
+	var notice := _board_return_notice
+	_board_return_notice = ""
 	if game.match_context.get("spectating", false):
-		var notice := _watch_return_message
-		_watch_return_message = ""
 		_return_to_lobby()
 		if not notice.is_empty(): _present_error(notice, "watch_ended")
 		return
@@ -2148,6 +2177,7 @@ func _return_from_game(game: Control, keep_room: bool) -> void:
 		_finished_friend_return = {
 			"room_id":str(game.match_context.get("room_id", "")), "match_id":match_id,
 			"rounds":int(game.match_context.get("completed_rounds", 0)) + 1, "leave":not keep_room,
+			"auto_ready":auto_ready,
 		}
 		_lobby_message = "正在同步好友房……"
 		if not keep_room:
@@ -2157,6 +2187,7 @@ func _return_from_game(game: Control, keep_room: bool) -> void:
 			# Relinquish the display before opening the waiting room or another board.
 			BATTLE_DISPLAY.leave(game, true)
 	_return_to_lobby()
+	if not notice.is_empty(): _present_error(notice, "entry_cancelled")
 	if not _finished_friend_return.is_empty() and _lobby_synced:
 		_apply_lobby_assignment()
 
@@ -2194,7 +2225,7 @@ func _resolve_finished_friend_return() -> bool:
 		return false
 	var own_id := str(_account.get("account_id", ""))
 	var players: Array = _match.get("player_account_ids", [])
-	if not same_round or own_id not in players:
+	if not same_round or own_id not in players or not _finished_friend_return.auto_ready:
 		_finished_friend_return.clear()
 		_lobby_message = ""
 		return false

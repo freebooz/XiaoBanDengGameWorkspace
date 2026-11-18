@@ -54,7 +54,8 @@ func _run() -> void:
 	game._handle_packet(JSON.stringify(snapshot))
 	_expect(game._pending_action, "在线状态快照错误解除在途操作")
 	game._handle_packet(JSON.stringify({"type":"mahjong_action_result","command_id":id,"ok":false,"message":"当前操作未生效"}))
-	_expect(not game._pending_action and game._selected_id==1 and "未生效" in game._status.text, "服务器拒绝后未恢复可重试选择")
+	_expect(not game._pending_action and game._selected_id==1 and game._tool_open=="notice" and "未生效" in game._notice_message, "服务器拒绝后应弹出原因并保留可重试选择")
+	(game.find_child("MahjongNoticeConfirm", true, false) as Button).pressed.emit()
 	game._on_play()
 	id = game.sent[-1].command_id
 	game._handle_packet(JSON.stringify({"type":"mahjong_action_result","command_id":id,"ok":true}))

@@ -1,339 +1,435 @@
 extends Panel
 
+const ART := preload("res://modules/games/mahjong/guiyang/mahjong_settlement_theme.gd")
+const PLAYER_ROW := preload("res://modules/games/mahjong/guiyang/mahjong_settlement_row.gd")
+const MATERIALS := preload("res://modules/games/mahjong/guiyang/real_tile_materials.gd")
+const SHARE := preload("res://modules/games/mahjong/guiyang/mahjong_settlement_share.gd")
 const RURAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_theme.gd")
 const MODAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_modal.gd")
-const SEAL_FONT := preload("res://modules/games/mahjong/guiyang/assets/ui/fonts/FandolKai-Regular.otf")
 
+var _data: Dictionary
+var _main := Control.new()
+var _header := Control.new()
+var _room_caption: Label
+var _tools := HBoxContainer.new()
+var _scroll := ScrollContainer.new()
+var _columns := BoxContainer.new()
+var _player_margin := MarginContainer.new()
+var _aside_margin := MarginContainer.new()
+var _players := VBoxContainer.new()
+var _aside := VBoxContainer.new()
+var _fan_card: Panel
+var _score_card: Panel
+var _fan_title: Label
+var _fan_lines := VBoxContainer.new()
+var _score_lines := VBoxContainer.new()
+var _actions := HBoxContainer.new()
+var _feedback: Label
+var _details: ColorRect
+var _details_button: Button
+var _active_seat := -1
+var _frame := ART.patch(ART.FRAME, Vector4(86, 3, 86, 142))
+var _banner_rect := Rect2()
+var _footer_height := 70.0
+var _action_rect := Rect2()
 
-class OutcomeSeal extends Control:
-	func _draw() -> void:
-		var center := size * 0.5
-		var radius := minf(size.x * 0.40, size.y * 0.48)
-		if radius <= 0.0: return
-		draw_set_transform(center, -0.13, Vector2(1.25, 0.92))
-		draw_circle(Vector2(2, 6), radius * 0.97, Color("#85140828"), true, -1, true)
-		draw_circle(Vector2.ZERO, radius * 0.90, Color("#b01b0d"), true, -1, true)
-		draw_arc(Vector2.ZERO, radius * 0.80, -2.5, 0.9, 54, Color("#da2c15"), radius * 0.25, true)
-		draw_arc(Vector2.ZERO, radius * 0.88, 0.58, 3.85, 50, Color("#c52513"), radius * 0.15, true)
-		draw_arc(Vector2.ZERO, radius * 0.95, 0.28, 3.75, 54, Color("#df3916"), radius * 0.066, true)
-		draw_arc(Vector2(0, 3), radius * 0.98, -3.0, -0.10, 48, Color("#be2614"), radius * 0.045, true)
-		draw_arc(Vector2(-4, 0), radius * 1.01, -3.4, -1.50, 36, Color("#d72812"), maxf(1, radius * 0.021), true)
-		draw_arc(Vector2(0, 1), radius * 1.04, -2.3, -0.37, 28, Color("#d03717"), maxf(1, radius * 0.012), true)
-		draw_arc(Vector2.ZERO, radius * 1.017, 0.50, 2.93, 40, Color("#ef5822"), maxf(1, radius * 0.024), true)
-		draw_arc(Vector2.ZERO, radius * 0.96, 0.73, 2.18, 30, Color("#ffb93b"), maxf(1, radius * 0.024), true)
-		draw_set_transform(Vector2.ZERO)
-
-
-var _middle: BoxContainer
-var _actions: BoxContainer
-var _heading: Label
-var _room: Label
-var _badge: Control
-var _result: Label
-var _indicator: TextureRect
-var _indicator_caption: Label
-var _score_cards: Array[PanelContainer] = []
-var _score_values: Array[Label] = []
-var _player_labels: Array[Label] = []
-var _secondary_labels: Array[Label] = []
-var _close: Button
-var _calligraphy: FontVariation
-
-
-func setup(data: Dictionary, leave: Callable, next_round: Callable, rules: Callable, dismiss := Callable()) -> void:
+func setup(data: Dictionary, leave: Callable, next_round: Callable, rules: Callable, dismiss := Callable(), return_room := Callable(), materials: RefCounted = null) -> void:
 	name = "MahjongSettlement"
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	oversampling_with_scale = CanvasItem.OVERSAMPLING_WITH_SCALE_ENABLED
 	add_theme_stylebox_override("panel", StyleBoxEmpty.new())
-	_calligraphy = FontVariation.new()
-	_calligraphy.base_font = SEAL_FONT
-	_calligraphy.variation_embolden = 0.62
-	var frame := MODAL.village_panel(self, Vector4(32, 22, 32, 28))
-	frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-	var body := VBoxContainer.new()
-	body.add_theme_constant_override("separation", 10)
-	frame.add_child(body)
-	_heading = MODAL.village_title(body, "本局结算", frame)
-	_heading.add_theme_font_override("font", _calligraphy)
-	_heading.get_parent().name = "MahjongSettlementBrandMark"
-	_room = _label(body, str(data.get("room", "")), 16, "muted")
-	_room.name = "MahjongSettlementRoom"
-	_room.tooltip_text = _room.text
-	_room.visible = not _room.text.is_empty()
-
-	var scroll := ScrollContainer.new()
-	scroll.name = "MahjongSettlementContent"
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.follow_focus = true
-	body.add_child(scroll)
-	_middle = BoxContainer.new()
-	_middle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_middle.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_middle.add_theme_constant_override("separation", 24)
-	scroll.add_child(_middle)
-	_add_outcome(_middle, data)
-	_add_scores(_middle, data.get("rows", []))
-
-	_actions = BoxContainer.new()
-	_actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	_actions.add_theme_constant_override("separation", 16)
-	body.add_child(_actions)
-	_add_button(_actions, "MahjongSettlementRulesButton", "查看规则", rules)
-	var rematch := bool(data.get("rematch", false))
-	if rematch:
-		_add_button(_actions, "MahjongNextRoundButton", "再来一局", next_round, true)
-	_add_button(_actions, "MahjongSettlementLobbyButton", str(data.get("return_caption", "返回大厅")), leave, not rematch)
-
+	_data = data
+	add_child(_main)
+	_main.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	_main.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_header.name = "MahjongSettlementBrandMark"
+	_header.accessibility_name = "小板凳乡村麻将 · 对局结算"
+	_header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_main.add_child(_header)
+	_room_caption = ART.label(_header, str(data.get("round_caption", data.get("room",""))), 19, ART.INK, HORIZONTAL_ALIGNMENT_CENTER)
+	_room_caption.name = "MahjongSettlementRoundCaption"
+	_main.add_child(_tools)
+	_tools.alignment = BoxContainer.ALIGNMENT_END
+	_details_button = _tool("MahjongSettlementDetailsButton", "明细", _open_details)
+	_tool("MahjongSettlementRulesButton", "规则", rules)
+	var retained := bool(data.get("rematch", false))
+	if retained and return_room.is_valid():
+		_tool("MahjongSettlementLobbyButton", "离房", leave).tooltip_text = "离开房间，返回大厅"
 	if dismiss.is_valid():
-		_close = Button.new()
-		_close.name = "MahjongSettlementCloseButton"
-		_close.z_index = 2
-		_close.tooltip_text = "关闭结算"
-		_close.accessibility_name = "关闭结算"
-		_close.pressed.connect(dismiss)
-		MODAL.close_button(_close)
-		add_child(_close)
-		_close.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		var close := _tool("MahjongSettlementCloseButton", "×", dismiss)
+		close.tooltip_text = "关闭结算，查看牌桌"
+		close.accessibility_name = close.tooltip_text
+
+	_scroll.name = "MahjongSettlementContent"
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.follow_focus = true
+	_main.add_child(_scroll)
+	_columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_scroll.add_child(_columns)
+	_players.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_players.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_players.add_theme_constant_override("separation", 2)
+	_player_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_player_margin.size_flags_stretch_ratio = 2.43
+	_columns.add_child(_player_margin)
+	_player_margin.add_child(_players)
+	var rows: Array = data.get("rows", [])
+	if materials == null: materials = MATERIALS.new()
+	for row: Dictionary in rows:
+		var player := PLAYER_ROW.new()
+		player.setup(row, materials)
+		player.pressed.connect(_select_seat.bind(int(row.seat)))
+		_players.add_child(player)
+	if rows.is_empty(): ART.label(_players, "暂无结算明细", 20, ART.MUTED, HORIZONTAL_ALIGNMENT_CENTER)
+	_aside.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_aside.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_aside_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_columns.add_child(_aside_margin)
+	_aside_margin.add_child(_aside)
+	_fan_card = _card(_fan_lines, "番型计算")
+	_fan_title = _fan_card.get_node("Plaque/Caption")
+	_score_card = _card(_score_lines, "本局得失")
+	for row: Dictionary in rows:
+		var score := int(row.score)
+		_add_line(_score_lines, "自己" if row.get("own",false) else str(row.name), "%+d 分" % score,
+			ART.GAIN if score > 0 else ART.LOSS if score < 0 else ART.MUTED, "MahjongSettlementScore%d" % int(row.seat), row.get("own",false), true)
+	var initial_seat := int(rows[0].seat) if not rows.is_empty() else -1
+	for row: Dictionary in rows:
+		if row.get("winner",false):
+			initial_seat = int(row.seat)
+			break
+	_select_seat(initial_seat)
+
+	_main.add_child(_actions)
+	_actions.alignment = BoxContainer.ALIGNMENT_CENTER
+	_actions.minimum_size_changed.connect(_place_actions, CONNECT_DEFERRED)
+	if retained: ART.action(_actions,"MahjongNextRoundButton","再来一局",0,next_round)
+	ART.action(_actions,"MahjongSettlementShareButton","分享战绩",1,_share)
+	if retained and return_room.is_valid():
+		ART.action(_actions,"MahjongSettlementRoomButton","返回房间",2,return_room)
+	else:
+		ART.action(_actions,"MahjongSettlementLobbyButton",str(data.get("return_caption","返回大厅")),2,leave)
+	_feedback = ART.label(_main,"",15,Color("#fff5d8"),HORIZONTAL_ALIGNMENT_CENTER)
+	_feedback.add_theme_stylebox_override("normal", ART.surface(Color("#49301aee"), Color("#efc27d"), 10, 1))
+	_feedback.hide()
+	_build_details()
 	resized.connect(_fit)
-	tree_entered.connect(_fit, CONNECT_DEFERRED | CONNECT_ONE_SHOT)
+	if is_inside_tree(): _fit.call_deferred()
+	else: tree_entered.connect(_fit, CONNECT_DEFERRED | CONNECT_ONE_SHOT)
 	_fit()
 
-
-func _fit() -> void:
-	var compact := size.x < 700.0
-	var narrow := size.x < 460.0
-	_middle.vertical = compact
-	_middle.add_theme_constant_override("separation", 8 if compact else 24)
-	_actions.vertical = size.x < 388.0
-	_actions.add_theme_constant_override("separation", 6 if narrow else 16)
-	var short := size.y < 470.0
-	_heading.add_theme_font_size_override("font_size", 31 if short else 40 if compact else 66)
-	var title_plaque := _heading.get_parent() as Control
-	title_plaque.custom_minimum_size = Vector2(clampf(size.x * 0.45, 158.0, 560.0), 50 if short else 63 if compact else 98)
-	_room.add_theme_font_size_override("font_size", 13 if short else 16)
-	_badge.custom_minimum_size.y = clampf(size.y * (0.143 if narrow else 0.21 if compact else 0.34 if short else 0.394), 86.0, 324.0)
-	_fit_outcome.call_deferred()
-	var tile_height := clampf(size.y * (0.12 if short else 0.15), 46.0, 55.0 if narrow else 100.0 if compact else 126.0)
-	if is_instance_valid(_indicator):
-		_indicator.custom_minimum_size = Vector2(tile_height * 0.77, tile_height)
-		_indicator_caption.add_theme_font_size_override("font_size", roundi(clampf(size.x * 0.031, 16.0, 39.0)))
-		(_indicator_caption.get_parent() as Control).custom_minimum_size.y = maxf(38.0, tile_height * 0.55)
-	var row_width := size.x - 76.0 if compact else (size.x - 120.0) * 0.55
-	for index in _score_cards.size():
-		var card := _score_cards[index]
-		card.custom_minimum_size.y = 57 if short or narrow else clampf(size.y * 0.117, 63.0, 86.0)
-		var surface := card.get_theme_stylebox("panel")
-		surface.set_content_margin(SIDE_LEFT, 14.0 if narrow else 42.0)
-		surface.set_content_margin(SIDE_RIGHT, 16.0 if narrow else 47.0)
-		surface.set_content_margin(SIDE_TOP, 6.0 if narrow else 10.0)
-		surface.set_content_margin(SIDE_BOTTOM, 8.0 if narrow else 13.0)
-		var points := _score_values[index]
-		var font := points.get_theme_font("font")
-		var point_size := 32 if compact or short else 51
-		while point_size > 18 and font.get_string_size(points.text, HORIZONTAL_ALIGNMENT_LEFT, -1, point_size).x > row_width * 0.38:
-			point_size -= 1
-		points.add_theme_font_size_override("font_size", point_size)
-	for player in _player_labels:
-		player.add_theme_font_size_override("font_size", 22 if short or compact else 28)
-	for detail in _secondary_labels:
-		detail.add_theme_font_size_override("font_size", 12 if narrow or short else 15)
-	var touch := RURAL.touch_extent(self) / get_global_transform().get_scale().y if is_inside_tree() else 0.0
-	for action: Button in _actions.get_children():
-		var is_next := action.name == &"MahjongNextRoundButton"
-		var button_width := 188.0 if _actions.vertical else (
-			(106.0 if is_next else 90.0) if narrow else
-			(150.0 if is_next else 118.0) if compact or short else (240.0 if is_next else 184.0))
-		var desired := 48.0 if short or compact else 60.0
-		action.custom_minimum_size = Vector2(button_width, maxf(touch, desired))
-		action.add_theme_font_size_override("font_size", 18 if narrow else 22 if compact or short else 30)
-		var margin := 7.0 if narrow else 22.0 if is_next else 14.0
-		for state in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
-			var surface := action.get_theme_stylebox(state)
-			surface.set_content_margin(SIDE_LEFT, margin)
-			surface.set_content_margin(SIDE_RIGHT, margin)
-	if is_instance_valid(_close):
-		var hit := MODAL.size_icon_button(_close, _close)
-		_close.offset_left = -hit - 14
-		_close.offset_right = -14
-		_close.offset_top = 4
-		_close.offset_bottom = hit + 4
-
-
-func _fit_outcome() -> void:
-	if not is_instance_valid(_result) or not is_instance_valid(_badge) or _badge.size.x <= 0 or _badge.size.y <= 0:
-		return
-	var font := _result.get_theme_font("font")
-	var outline := _result.get_theme_constant("outline_size") * 2.0
-	var shadow := absf(float(_result.get_theme_constant("shadow_offset_y")))
-	var available := _badge.size - Vector2(outline + 35.0, outline + shadow + 20.0)
-	var desired := roundi(clampf(_badge.size.y * 0.61, 16.0, 182.0))
-	while desired > 12 and (font.get_string_size(_result.text, HORIZONTAL_ALIGNMENT_LEFT, -1, desired).x > available.x or font.get_height(desired) > available.y):
-		desired -= 1
-	if desired != _result.get_theme_font_size("font_size"):
-		_result.add_theme_font_size_override("font_size", desired)
-
-
-func _add_outcome(parent: BoxContainer, data: Dictionary) -> void:
-	var column := VBoxContainer.new()
-	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	column.size_flags_stretch_ratio = 0.87
-	column.alignment = BoxContainer.ALIGNMENT_CENTER
-	column.add_theme_constant_override("separation", 7)
-	parent.add_child(column)
-	var outcome := str(data.get("outcome", "draw"))
-	var caption := str(data.get("outcome_title", "流局" if outcome == "draw" else "胡牌"))
-	_badge = OutcomeSeal.new()
-	_badge.resized.connect(_badge.queue_redraw)
-	_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(_badge)
-	_result = _label(_badge, caption, 55, "title")
-	_result.name = "MahjongSettlementOutcome"
-	_result.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_result.add_theme_font_override("font", _calligraphy)
-	_result.add_theme_color_override("font_color", Color("#fff195"))
-	_result.add_theme_color_override("font_outline_color", Color("#8c1c0b"))
-	_result.add_theme_constant_override("outline_size", 11)
-	_result.add_theme_constant_override("shadow_offset_y", 6)
-	_result.add_theme_color_override("font_shadow_color", Color("#670c09b0"))
-	_badge.resized.connect(_fit_outcome, CONNECT_DEFERRED)
-	var summary := _label(column, str(data.get("summary", "")), 15, "muted")
-	summary.name = "MahjongSettlementSummary"
-	summary.tooltip_text = summary.text
-	summary.visible = not summary.text.is_empty()
-	var indicator: Texture2D = data.get("indicator")
-	if indicator != null:
-		_add_indicator(column, indicator, str(data.get("indicator_title", "")))
-
-
-func _add_scores(parent: BoxContainer, rows: Array) -> void:
-	var scores := VBoxContainer.new()
-	scores.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scores.size_flags_stretch_ratio = 1.13
-	scores.alignment = BoxContainer.ALIGNMENT_CENTER
-	scores.add_theme_constant_override("separation", 9)
-	parent.add_child(scores)
-	for row: Dictionary in rows:
-		if bool(row.get("own", false)):
-			_add_score(scores, row)
-	for row: Dictionary in rows:
-		if not bool(row.get("own", false)):
-			_add_score(scores, row)
-	if rows.is_empty():
-		_label(scores, "暂无结算明细", 21, "muted")
-
-
-func _add_score(parent: VBoxContainer, row: Dictionary) -> void:
-	var seat_index := int(row.get("seat", -1))
-	var own := bool(row.get("own", false))
-	var panel := PanelContainer.new()
-	var insets := Vector4(42, 10, 47, 13)
-	var surface := MODAL.button_frame(MODAL.VILLAGE_GOLD, insets, Color("#fff1b4")) if own else MODAL.capsule_frame(insets)
-	panel.add_theme_stylebox_override("panel", surface)
-	parent.add_child(panel)
-	_score_cards.append(panel)
-	var line := HBoxContainer.new()
-	line.add_theme_constant_override("separation", 12)
-	panel.add_child(line)
-	var mark := _label(line, "●", 18, "success" if own else "muted")
-	mark.add_theme_color_override("font_color", Color("#367c23") if own else Color("#af987e"))
-	mark.add_theme_color_override("font_outline_color", Color("#fff6cd"))
-	mark.add_theme_constant_override("outline_size", 2)
-	mark.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
-	var caption := VBoxContainer.new()
-	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	caption.alignment = BoxContainer.ALIGNMENT_CENTER
-	caption.add_theme_constant_override("separation", 0)
-	line.add_child(caption)
-	var nickname := str(row.get("name", ""))
-	var player := _label(caption, nickname, 23)
-	player.add_theme_font_override("font", _calligraphy)
-	player.name = "MahjongSettlementPlayer%d" % seat_index
-	player.tooltip_text = nickname
-	player.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_player_labels.append(player)
-	var details_line := HBoxContainer.new()
-	details_line.add_theme_constant_override("separation", 8)
-	caption.add_child(details_line)
-	_add_row_detail(details_line, "MahjongSettlementResult%d" % seat_index, str(row.get("result", "—")))
-	if row.has("details"):
-		_add_row_detail(details_line, "MahjongSettlementBreakdown%d" % seat_index, str(row["details"]))
-	var extras := HBoxContainer.new()
-	extras.add_theme_constant_override("separation", 8)
-	caption.add_child(extras)
-	var delta: Variant = row.get("egg_delta")
-	var known := (delta is int or delta is float) and is_finite(float(delta)) and float(delta) == floorf(float(delta))
-	var counts_eggs := bool(row.get("counts_eggs", true))
-	var egg_text := "%+d 鸡蛋" % int(delta) if known else "— 鸡蛋" if counts_eggs else "不计鸡蛋"
-	var eggs := _add_row_detail(extras, "MahjongSettlementEggDelta%d" % seat_index, egg_text)
-	eggs.tooltip_text = "本局实际鸡蛋收支 " + egg_text if known else "鸡蛋结算记录暂不可用" if counts_eggs else "练习不计鸡蛋"
-	if row.has("series"):
-		_add_row_detail(extras, "MahjongSettlementSeries%d" % seat_index, str(row.series))
-	var score := int(row.get("score", 0))
-	var points := _label(line, "%+d 分" % score, 32)
-	points.add_theme_font_override("font", MODAL.village_font())
-	points.name = "MahjongSettlementScore%d" % seat_index
-	points.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	points.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
-	points.tooltip_text = "本局牌分 " + points.text
-	if score > 0:
-		points.add_theme_color_override("font_color", Color("#ba230f"))
-		points.add_theme_color_override("font_outline_color", Color("#fff0b2"))
-		points.add_theme_constant_override("outline_size", 3)
-	_score_values.append(points)
-
-
-func _add_row_detail(parent: HBoxContainer, id: String, value: String) -> Label:
-	var detail := _label(parent, value, 14, "muted")
-	detail.name = id
-	detail.tooltip_text = value
-	detail.add_theme_color_override("font_color", Color("#50301c"))
-	detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	detail.size_flags_stretch_ratio = maxf(1.0, float(value.length()))
-	_secondary_labels.append(detail)
-	return detail
-
-
-func _add_indicator(parent: VBoxContainer, texture: Texture2D, face: String) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", -8)
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	parent.add_child(row)
-	_indicator_caption = MODAL.village_title(row, "翻鸡指示牌")
-	_indicator_caption.add_theme_font_override("font", _calligraphy)
-	(_indicator_caption.get_parent() as Control).size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_indicator_caption.tooltip_text = face
-	_indicator = TextureRect.new()
-	_indicator.name = "MahjongSettlementIndicator"
-	_indicator.texture = texture
-	_indicator.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_indicator.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_indicator)
-
-
-func _label(parent: Control, value: String, font_size: int, role := "body") -> Label:
-	var label := Label.new()
-	label.text = value
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	MODAL.label(label, role)
-	label.add_theme_font_size_override("font_size", font_size)
-	parent.add_child(label)
-	return label
-
-
-func _add_button(parent: BoxContainer, id: String, value: String, action: Callable, primary := false) -> void:
+func _tool(id: String, caption: String, action: Callable) -> Button:
 	var button := Button.new()
 	button.name = id
-	button.text = value
-	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	button.text = caption
+	button.tooltip_text = caption
+	button.accessibility_name = caption
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	MODAL.village_button(button, primary)
-	button.add_theme_font_override("font", _calligraphy)
+	button.add_theme_font_override("font", ART.FONT)
+	for state in [&"normal",&"hover",&"pressed",&"hover_pressed"]:
+		var fill := Color("#79502de8") if state == &"normal" else Color("#936235")
+		button.add_theme_stylebox_override(state, ART.surface(fill,Color("#dbad71"),15,1))
+	for state in [&"font_color",&"font_hover_color",&"font_pressed_color",&"font_focus_color"]:
+		button.add_theme_color_override(state,Color("#fff0d0"))
+	button.add_theme_stylebox_override("focus",ART.surface(Color.TRANSPARENT,Color("#ffe49f"),15,2))
 	button.pressed.connect(action)
-	parent.add_child(button)
+	_tools.add_child(button)
+	return button
+
+func _card(lines: VBoxContainer, title: String) -> Panel:
+	var card := Panel.new()
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var paper := ART.surface(Color("#ffebcf"), Color("#cc985d"), 16, 2)
+	paper.shadow_color = Color("#79471932")
+	paper.shadow_size = 3
+	paper.shadow_offset = Vector2(0,2)
+	card.add_theme_stylebox_override("panel",paper)
+	_aside.add_child(card)
+	var plaque := ART.picture(card,ART.SCORE_PLAQUE if title == "本局得失" else ART.FAN_PLAQUE)
+	plaque.name = "Plaque"
+	plaque.accessibility_name = title
+	var heading := ART.label(plaque,title,22,Color("#fff2d7"),HORIZONTAL_ALIGNMENT_CENTER)
+	heading.name = "Caption"
+	heading.add_theme_font_override("font", ART.KAI)
+	heading.hide()
+	heading.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	card.add_child(lines)
+	lines.add_theme_constant_override("separation", 3)
+	card.resized.connect(_fit_card.bind(card,lines))
+	lines.minimum_size_changed.connect(_fit_card.bind(card,lines), CONNECT_DEFERRED)
+	return card
+
+func _fit_card(card: Panel, lines: VBoxContainer) -> void:
+	if card.size.x < 1: return
+	var unit := clampf(card.size.x/378.0, 0.60, 1.12)
+	var plaque := card.get_node("Plaque") as TextureRect
+	var label := plaque.get_node("Caption") as Label
+	var w := minf(card.size.x*0.74,228*unit)
+	var h := w * ART.PLAQUE.get_height() / ART.PLAQUE.get_width()
+	plaque.position = Vector2((card.size.x-w)*0.5,-h*0.28)
+	plaque.size = Vector2(w,h)
+	label.add_theme_font_size_override("font_size",clampi(roundi(h*0.60),16,32))
+	var pad := maxf(6, 14*unit)
+	var top := h*0.79
+	var available := maxf(1, card.size.y-top-pad)
+	var count := maxi(1,lines.get_child_count())
+	var desired := minf(available, count * (47 if lines == _score_lines else 44) * unit)
+	var font_size := clampi(roundi(minf(24*unit, (desired/count-3)*0.62)),12,28)
+	for chip: PanelContainer in lines.get_children():
+		var line := chip.get_child(0) as HBoxContainer
+		for node in line.get_children():
+			if node is Label:
+				var actual_size := roundi(font_size*1.18) if chip.has_meta("total") else font_size
+				if node.get_theme_font_size("font_size") != actual_size: node.add_theme_font_size_override("font_size",actual_size)
+			elif node is TextureRect: node.custom_minimum_size = Vector2(font_size*1.12,0)
+	lines.position = Vector2(pad, top+(available-desired)*0.5)
+	lines.size = Vector2(maxf(1,card.size.x-pad*2),desired)
+
+func _add_line(parent: VBoxContainer, title: String, value: String, ink: Color, id := "", highlight := false, score := false, total := false) -> void:
+	var chip := PanelContainer.new()
+	chip.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var surface: StyleBox = ART.patch(ART.BRUSH,Vector4(40,16,40,16)) if total else ART.surface(Color("#dce6a1") if highlight else Color("#f8dcb5"),Color.TRANSPARENT,10)
+	if total: chip.set_meta("total",true)
+	surface.set_content_margin(SIDE_LEFT,8)
+	surface.set_content_margin(SIDE_RIGHT,8)
+	chip.add_theme_stylebox_override("panel", surface)
+	parent.add_child(chip)
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 3)
+	chip.add_child(line)
+	var key := ART.label(line,title,17,Color("#fff5cc") if total else ART.INK)
+	if total:
+		line.alignment = BoxContainer.ALIGNMENT_CENTER
+		line.add_theme_constant_override("separation",8)
+		key.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	else: key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if score:
+		var icon := ART.picture(line, ART.EGG)
+		# Points and egg deltas can differ after wallet collection.
+		icon.tooltip_text = "本局牌分"
+	var number := ART.label(line,value,17,Color("#ffe770") if total else ink,HORIZONTAL_ALIGNMENT_RIGHT)
+	if not id.is_empty(): number.name = id
+	number.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	number.tooltip_text = "本局牌分  "+value if score else value
+
+func _select_seat(seat: int) -> void:
+	_active_seat = seat
+	for child in _fan_lines.get_children():
+		_fan_lines.remove_child(child)
+		child.queue_free()
+	var selected := {}
+	for row: Dictionary in _data.get("rows",[]):
+		if int(row.seat) == seat: selected = row
+	for player in _players.get_children():
+		if player is Button: player.set_selected(player.name == StringName("MahjongSettlementRow%d" % seat))
+	if selected.is_empty():
+		_add_line(_fan_lines,"暂无计分明细","",ART.MUTED)
+		return
+	var items: Array = selected.get("fan_items",[])
+	var has_fan := selected.has("fan_total")
+	_fan_title.text = "番型计算" if has_fan else "计分明细"
+	var plaque := _fan_title.get_parent() as TextureRect
+	plaque.texture = ART.FAN_PLAQUE if has_fan else ART.PLAQUE
+	plaque.accessibility_name = _fan_title.text
+	_fan_title.visible = not has_fan
+	if has_fan:
+		for item: Dictionary in items: _add_line(_fan_lines,str(item.name),"%d 番" % int(item.fan),ART.LOSS)
+	else:
+		for item: Dictionary in selected.get("score_items",[]):
+			_add_line(_fan_lines,str(item.name),"%+d 分" % int(item.points),ART.INK)
+		if _fan_lines.get_child_count() == 0: _add_line(_fan_lines,str(selected.get("status","本局牌分")),"",ART.MUTED)
+	var value := "%d 番" % int(selected.fan_total) if has_fan else "%+d 分" % int(selected.score)
+	_add_line(_fan_lines,"合计",value,ART.GAIN,"MahjongSettlementFanTotal",false,false,true)
+	_fan_card.size_flags_stretch_ratio = clampf((_fan_lines.get_child_count()+1.3)/5.1,0.74,1.35)
+	_fit_card(_fan_card,_fan_lines)
+	if is_node_ready(): _fit.call_deferred()
+
+func _build_details() -> void:
+	_details = ColorRect.new()
+	_details.name = "MahjongSettlementDetails"
+	_details.color = Color("#25190fc9")
+	_details.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_details)
+	_details.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	var sheet := PanelContainer.new()
+	sheet.name = "Sheet"
+	var paper := ART.surface(Color("#ffebcd"),Color("#ba8649"),14,2)
+	for side in [SIDE_LEFT,SIDE_TOP,SIDE_RIGHT,SIDE_BOTTOM]: paper.set_content_margin(side,12)
+	sheet.add_theme_stylebox_override("panel",paper)
+	_details.add_child(sheet)
+	var body := VBoxContainer.new()
+	sheet.add_child(body)
+	ART.label(body,"结算明细",23,ART.INK,HORIZONTAL_ALIGNMENT_CENTER)
+	var scroll := ScrollContainer.new()
+	scroll.name = "DetailScroll"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	_detail(list,"MahjongSettlementRoom",str(_data.get("room","")))
+	_detail(list,"MahjongSettlementOutcome",str(_data.get("outcome_title","流局" if _data.get("outcome","draw") == "draw" else "胡牌")))
+	_detail(list,"MahjongSettlementSummary",str(_data.get("summary","")))
+	if _data.get("indicator") is Texture2D:
+		var indicator_line := HBoxContainer.new()
+		list.add_child(indicator_line)
+		ART.label(indicator_line,"翻鸡指示牌  "+str(_data.get("indicator_title","")),17)
+		var tile := ART.picture(indicator_line,_data.indicator)
+		tile.name = "MahjongSettlementIndicator"
+		tile.custom_minimum_size = Vector2(30,40)
+	for row: Dictionary in _data.get("rows",[]):
+		var name_line := ART.label(list,str(row.name),18)
+		name_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail(list,"MahjongSettlementResult%d" % int(row.seat),str(row.get("result","")))
+		if row.has("details"): _detail(list,"MahjongSettlementBreakdown%d" % int(row.seat),str(row.details))
+		if row.has("series"): _detail(list,"MahjongSettlementSeries%d" % int(row.seat),str(row.series))
+	var close := ART.action(body,"MahjongSettlementDetailsClose","返回结算",2,_close_details)
+	close.custom_minimum_size = Vector2(150,44)
+	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	close.add_theme_font_size_override("font_size",17)
+	close.add_theme_constant_override("icon_max_width",19)
+	_details.hide()
+
+func _detail(parent: Control, id: String, value: String) -> void:
+	var line := ART.label(parent,value,16,ART.MUTED)
+	line.name = id
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	line.visible = not value.is_empty()
+
+func _open_details() -> void:
+	_main.focus_behavior_recursive = Control.FOCUS_BEHAVIOR_DISABLED
+	_details.show()
+	(_details.find_child("MahjongSettlementDetailsClose",true,false) as Button).grab_focus()
+
+func _close_details() -> void:
+	_details.hide()
+	_main.focus_behavior_recursive = Control.FOCUS_BEHAVIOR_INHERITED
+	_details_button.grab_focus()
+
+func navigation_snapshot() -> Dictionary:
+	var focus := get_viewport().gui_get_focus_owner()
+	return {"seat":_active_seat,"details":_details.visible,"scroll":_scroll.scroll_vertical,
+		"detail_scroll":(_details.find_child("DetailScroll",true,false) as ScrollContainer).scroll_vertical,
+		"focus":str(focus.name) if is_instance_valid(focus) and is_ancestor_of(focus) else ""}
+
+func restore_navigation(previous: Dictionary) -> void:
+	for row: Dictionary in _data.get("rows",[]):
+		if int(row.seat) == int(previous.seat):
+			_select_seat(int(row.seat))
+			break
+	if previous.details: _open_details()
+	if not str(previous.focus).is_empty():
+		var focus := find_child(str(previous.focus),true,false) as Control
+		if is_instance_valid(focus) and focus.is_visible_in_tree(): focus.grab_focus()
+	_scroll.set_deferred("scroll_vertical", previous.scroll)
+	_details.find_child("DetailScroll",true,false).set_deferred("scroll_vertical",previous.detail_scroll)
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if is_instance_valid(_details) and _details.visible and event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		_close_details()
+
+func _share() -> void:
+	var lines := PackedStringArray(["小板凳乡村麻将 · 对局结算",str(_data.get("round_caption",_data.get("room","")))])
+	for row: Dictionary in _data.get("rows",[]):
+		lines.append("%s  %+d 分  %s" % [row.name,int(row.score),str(row.get("result",""))])
+	_feedback.text = SHARE.share_text("\n".join(lines))
+	_feedback.visible = true
+	_fit()
+
+func _place_actions() -> void:
+	if _action_rect.has_area():
+		_actions.position = _action_rect.position
+		_actions.size = _action_rect.size
+
+func _fit() -> void:
+	if not is_instance_valid(_details) or size.x < 1 or size.y < 1: return
+	var narrow := size.x < 705
+	var portrait := size.y > size.x
+	var banner_scale := maxf(size.x / ART.HEADER.get_width(),0.60 if portrait else 0.40)
+	var banner_size := ART.HEADER.get_size() * banner_scale
+	_banner_rect = Rect2(Vector2((size.x-banner_size.x)*0.5,0),banner_size)
+	_header.position = Vector2.ZERO
+	_header.size = Vector2(size.x,banner_size.y)
+	_room_caption.position = _banner_rect.position + Vector2(500,104)*banner_scale
+	_room_caption.size = Vector2(387,45)*banner_scale
+	_room_caption.add_theme_font_size_override("font_size",clampi(roundi(24*banner_scale),12,29))
+	var real_touch := 0.0
+	if is_inside_tree(): real_touch = RURAL.touch_extent(self) / maxf(0.01,get_global_transform().y.length())
+	_footer_height = clampf(size.y*0.151,54,134)
+	if portrait: _footer_height = maxf(63, real_touch+20)
+	var action_h := maxf(real_touch,clampf(_footer_height*0.69,38,86))
+	_footer_height = maxf(_footer_height,action_h+14)
+	_frame.corner_scale = _footer_height/130.0
+	var pad := clampf(size.x*0.024,12,39)
+	var bottom_gap := clampf(size.y*0.019,4,18)
+	var y := _banner_rect.end.y + 1
+	_scroll.position = Vector2(pad,y)
+	_scroll.size = Vector2(maxf(1,size.x-2*pad),maxf(1,size.y-_footer_height-bottom_gap-y))
+	_columns.vertical = narrow
+	_player_margin.add_theme_constant_override("margin_top", 6 if narrow else clampi(roundi(size.y*0.022),9,22))
+	_aside_margin.add_theme_constant_override("margin_top",clampi(roundi(size.x*0.010),8,15))
+	_columns.add_theme_constant_override("separation", 16 if narrow else maxi(8,roundi(size.x*0.011)))
+	_aside.add_theme_constant_override("separation",clampi(roundi(size.y*0.03),14,24))
+	var projected_left := _scroll.size.x if narrow else (_scroll.size.x-14)*0.706
+	var stacked_rows := projected_left < 455
+	var min_row := 142 if stacked_rows else clampi(roundi(projected_left*0.104),58,98)
+	for row in _players.get_children():
+		if row is Button: row.custom_minimum_size.y = min_row
+	var aside_width := _scroll.size.x if narrow else _scroll.size.x*0.287
+	var line_h := clampf(aside_width*0.087,19,37)
+	var head_h := clampf(aside_width*0.112,27,48)
+	_fan_card.custom_minimum_size.y = head_h + _fan_lines.get_child_count()*line_h + 12
+	_score_card.custom_minimum_size.y = head_h + _score_lines.get_child_count()*line_h + 12
+	var gap := clampi(roundi(size.x*0.026),5,40) if not portrait else 4
+	_actions.add_theme_constant_override("separation",gap)
+	_action_rect = Rect2(pad,size.y-_footer_height+(_footer_height-action_h)*0.40,size.x-2*pad,action_h)
+	var count := _actions.get_child_count()
+	var button_w := minf(size.x*0.239,(_action_rect.size.x-(count-1)*gap)/maxi(1,count))
+	if narrow: button_w = minf(230,(_action_rect.size.x-(count-1)*gap)/maxi(1,count))
+	for button: Button in _actions.get_children():
+		button.custom_minimum_size = Vector2(floorf(button_w),action_h)
+		var font_size := clampi(roundi(minf(action_h*0.43,button_w*0.145)),13,36)
+		button.add_theme_font_size_override("font_size",font_size)
+		var icon_size := clampi(roundi(font_size*1.12),14,45)
+		button.add_theme_constant_override("icon_max_width",icon_size)
+		button.add_theme_constant_override("h_separation",maxi(2,roundi(font_size*0.20)))
+		var side := maxf(3,(button_w-(font_size*button.text.length()+icon_size+font_size*0.32))*0.5)
+		for state in [&"normal",&"hover",&"pressed",&"hover_pressed",&"disabled"]:
+			button.get_theme_stylebox(state).set_content_margin(SIDE_LEFT,side)
+			button.get_theme_stylebox(state).set_content_margin(SIDE_RIGHT,side)
+	_place_actions()
+	# The banner has open sky above the village on the right. On narrow screens
+	# reserve a row below the sign to keep every utility hit target reachable.
+	var utility_h := maxf(real_touch,clampf(32*banner_scale,30,37))
+	_tools.add_theme_constant_override("separation",4)
+	for tool: Button in _tools.get_children():
+		tool.custom_minimum_size = Vector2(maxf(utility_h,35*banner_scale),utility_h)
+		tool.add_theme_font_size_override("font_size",maxi(12,roundi(utility_h*0.46)))
+	_tools.size = _tools.get_combined_minimum_size()
+	if narrow:
+		_tools.position = Vector2(size.x-pad-_tools.size.x,_banner_rect.end.y)
+		_scroll.position.y += utility_h+4
+		_scroll.size.y = maxf(1,_scroll.size.y-utility_h-4)
+	else:
+		_tools.position = Vector2(size.x*0.86-_tools.size.x,0)
+	_feedback.position = Vector2(pad, _action_rect.position.y-27)
+	_feedback.size = Vector2(size.x-2*pad,25)
+	var sheet := _details.get_node("Sheet") as Control
+	sheet.size = Vector2(minf(580,size.x-24),minf(570,size.y-24))
+	sheet.position = (size-sheet.size)*0.5
+	queue_redraw()
+
+func _draw() -> void:
+	if not _banner_rect.has_area(): return
+	var start := _banner_rect.end.y-1
+	draw_style_box(_frame,Rect2(0,start,size.x,maxf(1,size.y-start)))
+	# On a phone, crop the village on both sides to keep the central title legible.
+	var dest := _banner_rect.intersection(Rect2(Vector2.ZERO,size))
+	var scale_factor := _banner_rect.size.x/ART.HEADER.get_width()
+	var region := Rect2((dest.position-_banner_rect.position)/scale_factor,dest.size/scale_factor)
+	draw_texture_rect_region(ART.HEADER,dest,region)

@@ -56,14 +56,18 @@ func present(tiles: Array, results: Dictionary, selected_id: int, detail_area :=
 	_snapshot_note = snapshot_note
 	var last_rank := 1
 	var label_top := 0.0
+	var highest_tile := INF
 	for tile in tiles:
 		var rect: Rect2 = tile.get("rect", Rect2())
 		if not rect.has_area():
 			continue
 		label_top = maxf(label_top, tile.get("bottom", rect.end.y) + LABEL_GAP)
+		highest_tile = minf(highest_tile, tile.get("top", rect.position.y))
 		var result: Variant = results.get(int(tile.get("id", 0)))
 		if _valid_efficiency(result):
 			last_rank = maxi(last_rank, _rank(result))
+	if detail_area.has_area() and label_top + LABEL_HEIGHT > detail_area.end.y:
+		label_top = highest_tile - LABEL_HEIGHT - LABEL_GAP
 	var used := {}
 	for tile_index in range(tiles.size()):
 		var tile: Dictionary = tiles[tile_index]

@@ -10,7 +10,7 @@ static func build(materials: RefCounted, tile: Dictionary, concealed := false, t
 	var model := Node3D.new()
 	var geometry := SCENE.instantiate() as Node3D
 	geometry.name = "TileGeometry56mm"
-	# Table layout can rescale the model root without changing the real tile size.
+	# Convert the imported mesh to its physical dimensions once for every view.
 	geometry.scale *= GEOMETRY_SCALE
 	model.add_child(geometry)
 	var face := model.find_child("TileFace", true, false) as MeshInstance3D

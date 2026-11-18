@@ -42,7 +42,51 @@ func RestoreCheckpoint(data []byte, rules RuleSet) (*Game, error) {
 	g.Rules = rules
 	g.actionSequence, g.actionEvents = checkpoint.Sequence, checkpoint.Events
 	g.replay = checkpoint.Replay
+	if g.Phase == PhaseFinished && len(g.Winners) > 0 && g.WinFrom >= 0 && g.ClaimedWinTile == nil {
+		if tile := g.legacyClaimedWinTile(); tile.ID > 0 {
+			g.ClaimedWinTile = &tile
+		}
+	}
 	return g, nil
+}
+
+// Older checkpoints did not keep the winning tile after clearing the claim
+// window. In a robbed kong under a points-only preset, the fourth tile left
+// the feeder's hand without entering any hand, meld or discard pile.
+func (g *Game) legacyClaimedWinTile() Tile {
+	if g.RobbedTile != nil {
+		return *g.RobbedTile
+	}
+	accounted := map[int]bool{g.FlippedJi.ID: true}
+	for seat, hand := range g.Hands {
+		for _, tile := range hand {
+			accounted[tile.ID] = true
+		}
+		for _, meld := range g.Melds[seat] {
+			for _, tile := range meld.Tiles {
+				accounted[tile.ID] = true
+			}
+		}
+	}
+	if n := len(g.Discards); n > 0 {
+		last := g.Discards[n-1]
+		if last.Claimed && last.Seat == g.WinFrom && !accounted[last.Tile.ID] {
+			return last.Tile
+		}
+	}
+	for _, discard := range g.Discards {
+		accounted[discard.Tile.ID] = true
+	}
+	var missing Tile
+	for _, tile := range g.Wall[:g.NextWall] {
+		if !accounted[tile.ID] {
+			if missing.ID != 0 {
+				return Tile{}
+			}
+			missing = tile
+		}
+	}
+	return missing
 }
 
 func (g *Game) validTrialCheckpoint(rules RuleSet) bool {

@@ -93,6 +93,8 @@ func TestLocalNamedSelfDrawWithoutKong(t *testing.T) {
 			if got := g.SettlementScoreBreakdown(); got == nil || got.Hu != [4]int{3 * test.fan, -test.fan, -test.fan, -test.fan} {
 				t.Fatalf("invalid local scoring breakdown: %+v", got)
 			}
+			assertSettlementHands(t, g, Tile{})
+			assertFanRows(t, g, snapshotFanRow{0, []snapshotFanItem{{test.name, test.fan - 1}, {"自摸", 1}}, test.fan})
 		})
 	}
 }
@@ -134,6 +136,7 @@ func TestLocalOpeningWinUsesActualDealerAndFirstDraw(t *testing.T) {
 			if !slices.Equal(g.SettlementHuDetails(), []HuDetail{want}) || g.NextDealer() != test.seat {
 				t.Fatalf("incorrect opening settlement: %+v, next dealer %d", g.SettlementHuDetails(), g.NextDealer())
 			}
+			assertFanRows(t, g, snapshotFanRow{test.seat, []snapshotFanItem{{test.pattern, test.fan - 1}, {"自摸", 1}}, test.fan})
 		})
 	}
 }
@@ -194,6 +197,8 @@ func TestLocalDrawChecksReadyAndRemovesKongCharge(t *testing.T) {
 	if got := g.SettlementScoreBreakdown(); got == nil || got.Gang != [4]int{} || got.Ji != [4]int{} || got.Hu != [4]int{} || got.ChaJiao != g.Scores {
 		t.Fatalf("draw scoring breakdown: %+v", got)
 	}
+	assertSettlementHands(t, g, Tile{})
+	assertFanRows(t, g, snapshotFanRow{1, []snapshotFanItem{{"七对", 7}}, 7})
 	checkpoint, err := g.MarshalCheckpoint()
 	if err != nil {
 		t.Fatal(err)
@@ -378,6 +383,8 @@ func TestLocalKongWinKindsAndBurnedExtras(t *testing.T) {
 			if g.FlippedJi != (Tile{}) || g.JiCounts != [4]int{} {
 				t.Fatalf("special count must not flip chicken: %v %v", g.FlippedJi, g.JiCounts)
 			}
+			method := map[string]snapshotFanItem{"gang_shang_hua": {"杠上花", 2}, "re_pao": {"热炮", 2}, "qiang_gang": {"抢杠胡", 1}}[test.name]
+			assertFanRows(t, g, snapshotFanRow{seat, []snapshotFanItem{{"平胡", 1}, method}, 1 + method.Fan})
 		})
 	}
 }

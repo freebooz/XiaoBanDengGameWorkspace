@@ -3,11 +3,11 @@ extends RefCounted
 
 const TABLE_THEME := preload("res://modules/games/mahjong/guiyang/mahjong_table_theme.gd")
 const RURAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_theme.gd")
+const MODAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_modal.gd")
 const NINE_PATCH := preload("res://modules/foundation/ui/aspect_nine_patch_style.gd")
 const ART := "res://modules/games/mahjong/guiyang/assets/ui/jade_hud/"
 const RICE_HUD := "res://modules/games/mahjong/guiyang/assets/ui/rice_field_hud/"
 const TOOL := preload(RICE_HUD + "walnut.png")
-const SEAT := preload(RICE_HUD + "seat_cream.png")
 const CHIP := preload(RICE_HUD + "walnut_badge.png")
 const ONLINE := preload(RICE_HUD + "online.png")
 const EGG := preload(RICE_HUD + "egg.svg")
@@ -33,11 +33,23 @@ const REACTION_FINISH := {
 	"pass": preload(RICE_HUD + "action_pass.png"),
 	"play": preload(RICE_HUD + "action_play.png"),
 }
+const ICON_RING := preload(ART + "table_icon_ring.svg")
 const ICONS := {
+	"rules": preload(ART + "icon_rules.svg"),
+	"settings": preload(ART + "icon_settings.svg"),
+	"leave": preload(ART + "icon_leave.svg"),
 	"chat": preload(ART + "icon_chat.svg"),
 	"emote": preload(ART + "icon_emote.svg"),
 	"mic": preload(ART + "icon_mic.svg"),
 	"muted": preload(ART + "icon_muted.svg"),
+}
+const ICON_COLORS := {
+	&"icon_normal_color": Color("#d8c9a7"),
+	&"icon_hover_color": Color("#e8dbb9"),
+	&"icon_focus_color": Color("#e8dbb9"),
+	&"icon_pressed_color": Color("#c4b38e"),
+	&"icon_hover_pressed_color": Color("#c4b38e"),
+	&"icon_disabled_color": Color("#bdb39ba6"),
 }
 const BUTTON_TINTS := {
 	"normal": Color.WHITE,
@@ -141,16 +153,6 @@ static func fit_room_heading(control: Label, preferred_size := 0, size_reduction
 	control.tooltip_text = control.text
 
 
-static func seat(active: bool = false) -> StyleBoxTexture:
-	var box := _slice(SEAT)
-	box.modulate_color = Color.WHITE if active else Color("#fff4dd")
-	return box
-
-
-static func seat_name() -> StyleBoxTexture:
-	return _slice(TOOL)
-
-
 static func presence_dot(online: bool = true) -> StyleBoxTexture:
 	var box := _slice(ONLINE if online else SOCIAL)
 	box.modulate_color = Color.WHITE if online else Color("#a09682")
@@ -171,6 +173,14 @@ static func wind(active: bool = false) -> StyleBoxTexture:
 
 static func icon(kind: String) -> Texture2D:
 	return ICONS.get(kind)
+
+
+static func hud_button(button: Button, kind: String, description: String) -> void:
+	MODAL.icon_button(button, icon(kind), description, ICON_RING)
+	for state in ICON_COLORS:
+		button.add_theme_color_override(state, ICON_COLORS[state])
+	# Reuse the fitted circular rim when keyboard focus is drawn over the active state.
+	button.add_theme_stylebox_override("focus", button.get_theme_stylebox("hover"))
 
 
 static func portrait_ring() -> Texture2D:

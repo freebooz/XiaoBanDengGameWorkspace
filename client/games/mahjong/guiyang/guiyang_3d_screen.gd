@@ -2,6 +2,7 @@ extends Control
 ## 贵阳麻将实时桌面：只提交动作意图，暗牌、牌墙、胡牌判定均来自服务端。
 
 signal request_return_to_lobby
+signal request_return_to_room
 signal entry_cancelled(message: String)
 signal request_next_round
 signal match_finished(result: Dictionary)
@@ -12,7 +13,6 @@ const ART := "res://modules/games/mahjong/guiyang/assets/"
 const TRANSPORT := preload("res://modules/games/mahjong/guiyang/mahjong_transport.gd")
 const STAGE_SCRIPT = preload("res://modules/game_framework/tabletop3d/tabletop_stage.gd")
 const NATIVE_VIEW := preload("res://modules/game_framework/tabletop3d/native_3d_view.gd")
-const TABLE_SCENE = preload("res://modules/games/mahjong/guiyang/assets/models/mahjong_table.glb")
 const TILE_MODEL := preload("res://modules/games/mahjong/guiyang/real_tile_model.gd")
 const MAHJONG_CORE := preload("res://modules/game_framework/tile/mahjong_core.gd")
 const TILE_MATERIALS = preload("res://modules/games/mahjong/guiyang/real_tile_materials.gd")
@@ -21,10 +21,7 @@ const RURAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_theme.
 const MODAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_modal.gd")
 const SETTLEMENT := preload("res://modules/games/mahjong/guiyang/mahjong_settlement_view.gd")
 const SETTINGS := preload("res://modules/games/mahjong/guiyang/mahjong_settings_view.gd")
-const RICE_FIELD_PAVILION := preload(ART + "ui/jade_hud/rice_field_pavilion.webp")
-const BATTLE_BRAND := preload(ART + "ui/login_rural/sign.png")
 const WIND_DIAL := preload("res://modules/games/mahjong/guiyang/mahjong_wind_dial.gd")
-const BACKDROP_FOCUS := preload("res://modules/games/mahjong/guiyang/mahjong_backdrop_focus.gdshader")
 const PRESENCE_SHADER := preload("res://modules/games/mahjong/guiyang/mahjong_presence.gdshader")
 const TABLE_THEME := preload("res://modules/games/mahjong/guiyang/mahjong_table_theme.gd")
 const TILE_FOCUS := preload("res://modules/games/mahjong/guiyang/mahjong_tile_focus.gd")
@@ -41,29 +38,32 @@ const CHAT_TEXTS := ["大家好，很高兴一起玩！", "快点吧，我等到
 const EMOTE_IDS := ["smile", "laugh", "thumbs_up", "cry", "angry"]
 const EMOTE_TEXTS := ["微笑", "大笑", "点赞", "流泪", "生气"]
 const RESPONSE_KINDS := ["chi", "peng", "gang", "hu", "pass"]
+const ACTION_BUTTON_SIZE := Vector2(125.0, 56.0)
+const ACTION_BUTTON_GAP := 8.0
+const ACTION_HAND_GAP := 8.0
+const ACTION_FONT_SIZE := 24
 const DINGQUE_SUITS := {"wan":"万", "tong":"筒", "tiao":"条"}
-const TABLE_SCALE := 0.90 # 1.50 m GLB, 1.35 m at runtime.
-const TABLE_BOUNDS := AABB(Vector3(-0.753, -0.060, -0.753), Vector3(1.506, 0.076, 1.506))
+const CAMERA_PITCH_DEGREES := 50.0
+const CAMERA_SENSOR_WIDTH_MM := 36.0
+const CAMERA_FOCAL_LENGTH_MM := 40.0
+const CAMERA_DISTANCE_METRES := 1.868105 # Two thirds of the previous 2.802157 m gameplay framing.
 const CAMERA_TARGET := Vector3(0.0, 0.0, 0.0144)
-const TILE_WORLD_SCALE := 0.72
 const TILE_SIZE := TILE_MODEL.SIZE
-const OWN_HAND_SCALE := 2.39
-const OPPONENT_HAND_SCALE := 1.70
-const DISCARD_SCALE := 1.65
-const DISCARD_ROW_DEPTH := TILE_SIZE.z * DISCARD_SCALE
-const DISCARD_ORIGIN_DEPTH := 0.30 + DISCARD_ROW_DEPTH
-const DISCARD_COLUMNS := 8 # 24 discards fit three rows behind the inward-shifted own hand.
-const PRACTICE_DISCARD_COLUMNS := 14
-const PRACTICE_DISCARD_SCALE := 1.10
-const PRACTICE_DISCARD_ORIGIN_DEPTH := 0.25 # Clear the central wind dial.
-const MELD_SCALE := 1.70
-const MELD_ROW_DEPTH := DISCARD_ORIGIN_DEPTH + 3.0 * DISCARD_ROW_DEPTH + (DISCARD_ROW_DEPTH + TILE_SIZE.z * MELD_SCALE) * 0.5 + 0.00875
-const OPPONENT_MELD_SEPARATION := 0.115 # Keeps side meld faces distinct from upright tile backs.
+const TILE_BODY_BOUNDS := AABB(Vector3(-TILE_SIZE.x * 0.5, 0.0, -TILE_SIZE.z * 0.5), TILE_SIZE)
+const HAND_ROW_RADIUS := 0.48
+const HAND_STANDING_ANGLE := PI * 0.5
+# The flat model pivots on its back. After standing it up, its thickness extends toward its owner.
+const HAND_PIVOT_DEPTH := HAND_ROW_RADIUS - TILE_SIZE.y * 0.5
+const HAND_PIVOT_HEIGHT := TILE_SIZE.z * 0.5
+const DISCARD_COLUMNS := 8
+const RIVER_CORNER_GAP := 0.010
+const MELD_ROW_GAP := 0.009
+const OPPONENT_MELD_SEPARATION := 0.054
 const SEAT_CARD_SIZE := Vector2(178, 76)
-const OWN_HAND_TILT_DEGREES := 82.0
-const OWN_HAND_BASE_Y := 0.073 # 56 mm tilted body: preserve the former clearance above the felt.
-const OWN_HAND_DEPTH := 0.765 - TILE_SIZE.x * OWN_HAND_SCALE
-const OWN_HAND_LIFT := 0.028
+const OWN_HAND_LIFT := 0.020
+const FULL_HAND_COUNT := 14
+const HAND_BOTTOM_PIXELS := 6.0
+const PLAY_AREA_NEAR_DEPTH := HAND_ROW_RADIUS + TILE_SIZE.z * 0.5
 
 var product: Dictionary = {}
 var match_context: Dictionary = {}
@@ -100,19 +100,23 @@ var _play_button: Button
 var _settlement_panel: Panel
 var _settlement_reopen: Button
 var _settlement_dismissed := false
+var _settlement_content: Dictionary = {}
+var _finished_round_key := ""
+var _notice_title := ""
+var _notice_message := ""
 var _tool_opener: WeakRef
 var _tool_surface: PanelContainer
 var _tool_title: Label
 var _settings_view: Panel
-var _pavilion: TextureRect
-static var _pavilion_mipmaps: ImageTexture
 var _board_view: NATIVE_VIEW
 var _board_surface: SubViewportContainer
 var _board_viewport: SubViewport
+var _play_area := Rect2()
 var _stage: Node3D
 var _camera: Camera3D
 var _camera_impact: Tween
 var _camera_displacement := Vector2.ZERO
+var _camera_world_per_pixel := 0.0
 var _pieces_root: Node3D
 var _tile_focus: Node3D
 var _hand_models: Array[Node3D] = []
@@ -124,6 +128,8 @@ var preference_file := QUALITY_FILE
 var _header: Label
 var _remaining_panel: Panel
 var _remaining_number: Label
+var _round_number: Label
+var _wall_number: Label
 var _toolbar: Control
 var _side_tools: Control
 var _response_buttons: Dictionary = {}
@@ -165,7 +171,6 @@ var _command_serial := 0
 var _command_prefix := Crypto.new().generate_random_bytes(12).hex_encode()
 var _clock_animation: Tween
 var _reported_match := ""
-var _brand_logo: TextureRect
 var _selected_outline: Control
 var _wind_dial: Node3D
 var _safe := Vector4i.ZERO
@@ -298,17 +303,33 @@ func _texture(path: String) -> Texture2D:
 
 func _show_recording(recording: bool) -> void:
 	if not is_instance_valid(_own_mic): return
-	for state in [&"icon_normal_color", &"icon_hover_color", &"icon_pressed_color", &"icon_focus_color"]:
-		_own_mic.add_theme_color_override(state, Color("#ffe689") if recording else Color.WHITE)
+	_own_mic.self_modulate = Color("#ffda80") if recording else Color.WHITE
 
 
 func _layout_compass() -> void:
-	if not is_instance_valid(_wind_dial) or not _camera.is_inside_tree(): return
-	var center := _project_to_board(_wind_dial.get_timer_position()) + _board_view.position
-	_remaining_panel.position = center - _remaining_panel.size * 0.5
-	var far_seat := _seat_rect(2)
-	var gap := far_seat.size.x * 0.07
-	_turn_label.position = Vector2(far_seat.position.x - gap - _turn_label.size.x, far_seat.get_center().y - _turn_label.size.y * 0.5)
+	if not is_instance_valid(_round_number) or not is_instance_valid(_wind_dial) or not _camera.is_inside_tree(): return
+	var well := _projected_dial(0.0709)
+	var extent := well.size * Vector2(0.90, 0.80)
+	_remaining_panel.size = extent
+	_remaining_panel.position = well.get_center() - extent * 0.5
+	var line_size := Vector2(extent.x, extent.y * 0.5)
+	var font := _round_number.get_theme_font("font")
+	var point_size := maxi(1, floori(line_size.y))
+	while point_size > 1 and (font.get_height(point_size) > line_size.y or font.get_string_size("余牌 108", HORIZONTAL_ALIGNMENT_CENTER, -1, point_size).x > extent.x):
+		point_size -= 1
+	for line: Label in [_round_number, _wall_number]:
+		line.add_theme_font_size_override("font_size", point_size)
+		line.position = Vector2.ZERO if line == _round_number else Vector2(0, line_size.y)
+		line.size = line_size
+
+
+func _projected_dial(radius: float) -> Rect2:
+	var center: Vector3 = _wind_dial.get_timer_position()
+	var bounds := Rect2(_project_to_board(center), Vector2.ZERO)
+	for axis in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK]:
+		bounds = bounds.expand(_project_to_board(center + _wind_dial.global_basis * (axis * radius)))
+	bounds.position += _board_view.position
+	return bounds
 
 
 func _update_compass_winds() -> void:
@@ -348,39 +369,14 @@ func _button(parent: Node, value: String, x: float, y: float, width: float, heig
 
 func _build_static_ui() -> void:
 	var backdrop := ColorRect.new()
-	backdrop.color = Color("#b87d40")
+	backdrop.color = TABLE_THEME.FELT_COLOR
 	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(backdrop)
-	_pavilion = TextureRect.new()
-	_pavilion.name = "MahjongVillagePavilion"
-	_pavilion.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if _pavilion_mipmaps == null:
-		var image := RICE_FIELD_PAVILION.get_image()
-		image.generate_mipmaps()
-		_pavilion_mipmaps = ImageTexture.create_from_image(image)
-	_pavilion.texture = _pavilion_mipmaps
-	_pavilion.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	var backdrop_focus := ShaderMaterial.new()
-	backdrop_focus.shader = BACKDROP_FOCUS
-	_pavilion.material = backdrop_focus
-	_pavilion.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_pavilion.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	add_child(_pavilion)
-	_pavilion.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_3d_table()
-	_brand_logo = TextureRect.new()
-	_brand_logo.name = "MahjongTableBrandMark"
-	_brand_logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var brand_atlas := AtlasTexture.new()
-	brand_atlas.atlas = BATTLE_BRAND
-	brand_atlas.region = Rect2(BATTLE_BRAND.get_image().get_used_rect())
-	_brand_logo.texture = brand_atlas
-	_brand_logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_brand_logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT
-	add_child(_brand_logo)
 	_header = _label(self,"正在连接牌桌",8,0,720,40,23,Color("#ffd36a"))
 	_header.name = "MahjongRoomHeading"
+	_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_header.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	_header.add_theme_font_override("font", RURAL.title_font())
 	_header.add_theme_constant_override("outline_size", 2)
@@ -394,7 +390,7 @@ func _build_static_ui() -> void:
 		var tool: String = ["rules","settings","leave"][index]
 		var button := _button(_toolbar,"",0,0,48,48,_open_tool.bind(tool))
 		button.name = "MahjongTool_" + tool
-		MODAL.icon_button(button, MODAL.icon("back" if tool == "leave" else tool), ["规则", "设置", "离开牌桌"][index])
+		BATTLE_ART.hud_button(button, tool, ["规则", "设置", "离开牌桌"][index])
 	_quality_option = OptionButton.new()
 	for title in ["低画质","中画质","高画质"]: _quality_option.add_item(title)
 	CHROME.skin_button(_quality_option)
@@ -407,8 +403,24 @@ func _build_static_ui() -> void:
 	_remaining_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_remaining_panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
 	add_child(_remaining_panel)
-	_remaining_number = _label(_remaining_panel,"—",0,0,80,52,42,Color("#ffe6a1"))
+	_round_number = _label(_remaining_panel,"局数 —",0,0,0,0,16,Color("#ffe6a1"))
+	_wall_number = _label(_remaining_panel,"余牌 —",0,0,0,0,16,TABLE_THEME.CREAM)
+	for line in [_round_number, _wall_number]:
+		line.autowrap_mode = TextServer.AUTOWRAP_OFF
+		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		line.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		line.clip_text = true
+		line.add_theme_font_override("font", RURAL.title_font())
+	_remaining_number = _label(self,"—",0,0,80,52,18,Color("#ffe6a1"))
 	_remaining_number.name = "MahjongAuthoritativeCountdown"
+	_remaining_number.hide()
+	_remaining_number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_remaining_number.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_remaining_number.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var clock_style := RURAL.frame(Color("#233027"), Color("#b69a63"), 8, 1)
+	clock_style.set_content_margin_all(0.0)
+	clock_style.shadow_size = 0
+	_remaining_number.add_theme_stylebox_override("normal", clock_style)
 	var dial_font := FontVariation.new()
 	dial_font.base_font = RURAL.title_font()
 	dial_font.variation_embolden = 0.7
@@ -416,9 +428,11 @@ func _build_static_ui() -> void:
 	_remaining_number.add_theme_color_override("font_outline_color", Color("#663015"))
 	_remaining_number.add_theme_constant_override("outline_size", 3)
 	_turn_label = _label(self,"正在入座",0,0,270,27,16,Color("#edd59a"))
+	_turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_turn_label.add_theme_constant_override("outline_size", 4)
 	_turn_label.add_theme_color_override("font_outline_color", Color("#342517"))
 	_status = _label(self,"正在连接牌桌……",0,0,600,34,18,TABLE_THEME.CREAM)
+	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_status.add_theme_constant_override("outline_size", 2)
 	_status.add_theme_color_override("font_outline_color", Color("#231507"))
 	_status.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -427,6 +441,7 @@ func _build_static_ui() -> void:
 	_seat_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_seat_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_seat_root)
+	move_child(_remaining_number, _seat_root.get_index())
 	_self_voice_layer = Control.new()
 	_self_voice_layer.name = "MahjongStableSelfVoice"
 	_self_voice_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -434,7 +449,7 @@ func _build_static_ui() -> void:
 	add_child(_self_voice_layer)
 	_own_mic = _button(_self_voice_layer,"",0,0,48,48,func():pass)
 	_own_mic.name = "MahjongOwnSeatMic"
-	MODAL.icon_button(_own_mic, BATTLE_ART.icon("mic"), "发送语音")
+	BATTLE_ART.hud_button(_own_mic, "mic", "发送语音")
 	_own_mic.button_down.connect(_voice_down)
 	_own_mic.button_up.connect(_voice_up)
 	_own_mic.tooltip_text = "训练无联网语音" if training_mode else "按住录音，松开发送；最长 5 秒"
@@ -456,12 +471,10 @@ func _build_static_ui() -> void:
 	_actions_root.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	_actions_root.hide()
 	add_child(_actions_root)
-	_play_button = _button(_actions_root,"打出",0,0,125,56,_on_play)
+	_play_button = _action_button("打出", _on_play, "play")
 	_play_button.name = "MahjongPlaySelectedTile"
-	BATTLE_ART.lacquer(_play_button, "play")
-	_play_button.add_theme_font_size_override("font_size",24)
 	if training_mode:
-		_training_restart = _button(_actions_root, "再练一局", 0, 0, 153, 56, _start_training, true)
+		_training_restart = _action_button("再练一局", _start_training)
 		_training_restart.name = "MahjongPracticeRestartButton"
 		_training_restart.hide()
 	_social_root = Control.new()
@@ -474,10 +487,7 @@ func _build_static_ui() -> void:
 	add_child(_side_tools)
 	var chat := _button(_side_tools,"",0,0,48,48,_open_tool.bind("chat"))
 	chat.name = "MahjongChat"
-	var emote := _button(_side_tools,"",0,0,48,48,_open_tool.bind("emote"))
-	emote.name = "MahjongEmote"
-	MODAL.icon_button(chat, BATTLE_ART.icon("chat"), "快捷聊天")
-	MODAL.icon_button(emote, BATTLE_ART.icon("emote"), "发送表情")
+	BATTLE_ART.hud_button(chat, "chat", "快捷语与表情")
 	_action_effects = Control.new()
 	_action_effects.name = "MahjongConfirmedActionEffects"
 	_action_effects.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -504,26 +514,22 @@ func _layout_ui() -> void:
 	var horizontal_inset := _horizontal_screen_pixels(10.0)
 	var top := float(_safe.y)
 	var bottom := height - _safe.w
-	# Crop any excess below the camera view so the distant scenery stays visible on wide phones.
-	_pavilion.offset_bottom = maxf(0.0, width / RICE_FIELD_PAVILION.get_size().aspect() - height)
-	# In a tall resizable window the width limits the landscape game. Keep
-	# its render area centered instead of leaving an unused buffer above it.
+	# Keep the play and HUD anchors in a landscape area inside the full-screen felt.
 	var board_top := top + 60 * factor
 	var board_height := minf(bottom - board_top, usable_width / 1.25)
-	_board_view.position = Vector2(_safe.x, (board_top + bottom - board_height) * 0.5)
-	_board_view.size = Vector2(usable_width, board_height)
+	_play_area = Rect2(_safe.x, (board_top + bottom - board_height) * 0.5, usable_width, board_height)
 	var tool_width := icon_extent
 	var tool_height := icon_extent
 	var tool_gap := maxf(8.0 * factor, icon_extent / 8.0)
 	var toolbar_width := tool_width * _toolbar.get_child_count() + tool_gap * (_toolbar.get_child_count() - 1)
-	var bar_width := maxf(1.0, minf(490.0*factor, usable_width - 2.0 * (toolbar_width + 18*factor)))
-	_brand_logo.position = Vector2(_safe.x + horizontal_inset,top + 4*factor)
-	_brand_logo.size = Vector2(270,121)*factor
-	_header.position = Vector2(_safe.x + (usable_width-bar_width)*0.5, top + 12*factor)
+	var opposite_seat := _seat_rect(2)
+	_header.position = Vector2(_safe.x + horizontal_inset, opposite_seat.position.y)
+	var bar_width := maxf(1.0, opposite_seat.position.x - _header.position.x - 12.0 * factor)
 	_header.size = Vector2(bar_width, minf(tool_height, maxf(44.0 * factor, icon_extent * 0.67)))
-	_header.set_meta("room_heading_max_width", usable_width - 2.0 * (toolbar_width + 18*factor))
-	BATTLE_ART.fit_room_heading(_header, roundi(28*factor), 2, 3)
+	BATTLE_ART.fit_room_heading(_header, roundi(29 * factor))
 	_toolbar.position = Vector2(width-_safe.z-toolbar_width-15*factor,top + 12*factor)
+	if _toolbar.position.x < opposite_seat.end.x + 8.0 * factor:
+		_toolbar.position.y = opposite_seat.end.y + 8.0 * factor
 	_toolbar.size = Vector2(toolbar_width,tool_height)
 	for index in range(_toolbar.get_child_count()):
 		var tool := _toolbar.get_child(index) as Button
@@ -532,24 +538,26 @@ func _layout_ui() -> void:
 		tool.size = Vector2(tool_width,tool_height)
 	_quality_option.position = Vector2.ZERO
 	_quality_option.size = Vector2(180,48)
-	_remaining_panel.size = Vector2(90,64)*factor
-	_remaining_number.position = Vector2.ZERO
-	_remaining_number.size = _remaining_panel.size
-	_remaining_number.add_theme_font_size_override("font_size",roundi(48*factor))
-	_turn_label.size = Vector2(158,26)*factor
-	_turn_label.add_theme_font_size_override("font_size",roundi(17*factor))
-	_status.size = Vector2(284,31)*factor
-	_status.position = Vector2(width - _safe.z - 312*factor, bottom - 38*factor)
+	_status.size = Vector2(bar_width, 31.0 * factor)
 	_status.add_theme_font_size_override("font_size",roundi(14*factor))
 	var social_extent := icon_extent
-	_side_tools.position = Vector2(_safe.x + horizontal_inset,bottom-social_extent-11*factor)
-	_side_tools.size = Vector2(social_extent * 2 + tool_gap,social_extent)
+	var social_right := width - _safe.z - horizontal_inset
+	var stack_social := _frames_player_hand()
+	var tool_step := (Vector2.DOWN if stack_social else Vector2.RIGHT) * (social_extent + tool_gap)
+	_side_tools.size = Vector2.ONE * social_extent
+	_own_mic.position = Vector2(social_right - social_extent, bottom - social_extent - 11.0 * factor)
+	_side_tools.position = _own_mic.position - tool_step
+	_sync_viewport_size()
+	var own_seat := _seat_rect(0)
+	_turn_label.position = Vector2(own_seat.position.x, own_seat.end.y + 4.0 * factor)
+	_turn_label.size = Vector2(own_seat.size.x, 26.0 * factor)
+	_turn_label.add_theme_font_size_override("font_size", roundi(17.0 * factor))
+	_status.position = Vector2(_header.position.x, _turn_label.get_rect().end.y + 2.0 * factor)
 	for index in range(_side_tools.get_child_count()):
 		var tool := _side_tools.get_child(index) as Button
-		tool.position = Vector2(index*(social_extent+tool_gap),0)
+		tool.position = index * tool_step
 		MODAL.size_icon_button(tool, self)
 		tool.size = Vector2.ONE * social_extent
-	_sync_viewport_size()
 	_layout_compass()
 	_render_seats()
 	_layout_own_mic()
@@ -571,22 +579,18 @@ func _horizontal_screen_pixels(pixels: float) -> float:
 
 func _seat_rect(relative: int) -> Rect2:
 	var factor := minf(size.x/1440.0,size.y/810.0)
-	var bottom := _board_view.get_rect().end.y
 	var box := SEAT_CARD_SIZE * factor
 	var horizontal_inset := _horizontal_screen_pixels(10.0)
 	var left := _safe.x + horizontal_inset
 	var right := size.x - _safe.z - horizontal_inset - box.x
-	var side_y := maxf(_safe.y + 132.0*factor, _board_view.position.y + _board_view.size.y * 0.32)
+	var side_y := _safe.y + (size.y - _safe.y - _safe.w - box.y) * 0.5
 	match relative:
 		0:
-			# The local seat shares the left seat's leading edge and stays
-			# above the fixed social row, independently of the live hand.
-			var dock_bottom := minf(bottom - 53.0 * factor, _side_tools.position.y - 8.0 * factor)
-			return Rect2(Vector2(left, dock_bottom - box.y), box)
+			return Rect2(Vector2(left, _header.get_rect().end.y + 4.0 * factor), box)
 		1: return Rect2(Vector2(right,side_y),box)
 		2:
-			var far_y := maxf(_safe.y + 69.0 * factor, _header.get_rect().end.y + 6.0 * factor)
-			return Rect2(Vector2(_board_view.get_rect().get_center().x - box.x * 0.5, far_y), box)
+			var far_y := _safe.y + 12.0 * factor
+			return Rect2(Vector2(_play_area.get_center().x - box.x * 0.5, far_y), box)
 	return Rect2(Vector2(left,side_y),box)
 
 
@@ -595,23 +599,37 @@ func _uses_tablet_layout() -> bool:
 	return available_height > 0.0 and (size.x - _safe.x - _safe.z) / available_height <= 1.60
 
 
+func _frames_player_hand() -> bool:
+	return not _is_spectating() and (size.x - _safe.x - _safe.z) >= 1.67 * maxf(1.0, size.y - _safe.y - _safe.w)
+
+
 func _own_hand_top() -> float:
 	if not is_instance_valid(_pieces_root) or not is_instance_valid(_camera) or not _camera.is_inside_tree():
-		return _board_view.get_rect().end.y - 140.0 * minf(size.x / 1440.0, size.y / 810.0)
-	# Use the full raised tile envelope so selection and melds never move the HUD.
-	var body := AABB(-TILE_SIZE * 0.5, TILE_SIZE)
-	var basis := Basis(Vector3.RIGHT, deg_to_rad(OWN_HAND_TILT_DEGREES)).scaled(Vector3.ONE * OWN_HAND_SCALE)
-	var pose := _pieces_root.global_transform * Transform3D(basis, Vector3(0.0, OWN_HAND_BASE_Y + OWN_HAND_LIFT, OWN_HAND_DEPTH))
-	var top := INF
-	for corner in range(8):
-		top = minf(top, _project_to_board(pose * body.get_endpoint(corner)).y)
-	return _board_view.position.y + top
+		return _play_area.end.y - 140.0 * minf(size.x / 1440.0, size.y / 810.0)
+	return _board_view.position.y + _own_tile_rect(0.0, OWN_HAND_LIFT).position.y
+
+
+func _own_tile_pose(along: float, lift: float) -> Transform3D:
+	# The GLB origin sits on the bottom of its body, in the middle of its footprint.
+	var basis := Basis(Vector3.RIGHT, HAND_STANDING_ANGLE)
+	return _pieces_root.global_transform * Transform3D(basis, _own_tile_position(along, lift))
+
+
+func _own_tile_position(along: float, lift: float) -> Vector3:
+	return Vector3(along, HAND_PIVOT_HEIGHT + lift, HAND_PIVOT_DEPTH)
+
+
+func _own_tile_rect(along: float, lift: float) -> Rect2:
+	var pose := _own_tile_pose(along, lift)
+	var rect := Rect2(_project_to_board(pose * TILE_BODY_BOUNDS.position), Vector2.ZERO)
+	for corner in range(1, 8):
+		rect = rect.expand(_project_to_board(pose * TILE_BODY_BOUNDS.get_endpoint(corner)))
+	return rect
 
 
 func _layout_hand_controls() -> void:
 	if _exiting or not is_instance_valid(_camera) or not _camera.is_inside_tree(): return
-	var factor := minf(size.x/1440.0,size.y/810.0)
-	_layout_response_actions(factor)
+	_layout_response_actions()
 	_layout_own_mic()
 	_layout_compass()
 	_layout_coach()
@@ -648,9 +666,10 @@ func _layout_coach() -> void:
 	for index in range(_hand_models.size()):
 		var model := _hand_models[index]
 		var rect := _projected_tile_rect(model)
-		var bottom := maxf(rect.end.y, _projected_tile_rect(model, &"TileBody").end.y)
+		var body := _projected_tile_rect(model, &"TileBody")
+		var bottom := maxf(rect.end.y, body.end.y)
 		rect.position += board_origin
-		tiles.append({"id": _hand_ids[index], "rect": rect, "bottom": board_origin.y + bottom})
+		tiles.append({"id": _hand_ids[index], "rect": rect, "top":board_origin.y + body.position.y, "bottom": board_origin.y + bottom})
 	var snapshot_note := ""
 	if not _actions_ready(): snapshot_note = "最近一次同步的牌局数据；重连后更新。"
 	elif _pending_action: snapshot_note = "当前为服务器已确认的数据；动作确认后更新。"
@@ -711,107 +730,116 @@ func _apply_coach_auto_selection(source_key: Array, results: Dictionary) -> void
 	_render_hand_only()
 
 
-func _layout_response_actions(factor: float) -> void:
+func _layout_response_actions() -> void:
 	var buttons: Array[Button] = []
 	for kind in RESPONSE_KINDS:
 		var button: Button = _response_buttons.get(kind)
-		if is_instance_valid(button) and button.visible: buttons.append(button)
+		if is_instance_valid(button) and button.visible:
+			buttons.append(button)
 	for button in _dingque_buttons.values():
-		if button.visible: buttons.append(button)
-	if _play_button.visible: buttons.append(_play_button)
-	if is_instance_valid(_training_restart) and _training_restart.visible: buttons.append(_training_restart)
+		if button.visible:
+			buttons.append(button)
+	if _play_button.visible:
+		buttons.append(_play_button)
+	if is_instance_valid(_training_restart) and _training_restart.visible:
+		buttons.append(_training_restart)
 	_actions_root.visible = not buttons.is_empty()
-	if buttons.is_empty(): return
+	if buttons.is_empty():
+		return
 
-	var touch := maxf(48.0 * _modal_pixel_scale(), RURAL.touch_extent(self))
-	var gap := maxf(4.0, 9.0 * factor)
-	var bounds := _usable_modal_area().grow(-gap)
-	if not bounds.has_area(): return
-	var floor_y := minf(bounds.end.y, _own_hand_top() - gap)
-	var ceiling_y := maxf(bounds.position.y, _header.get_rect().end.y + gap)
-	var area := Rect2(Vector2(bounds.position.x, ceiling_y), Vector2(bounds.size.x, maxf(1.0, floor_y - ceiling_y)))
-	var button_height := maxf(53.0 * factor, touch)
-	var minimum_width := maxf(65.0 * factor, touch)
-	for button in buttons:
-		var font_size := maxf(16.0, (24.0 if button == _response_buttons.get("pass") else 31.0) * factor)
-		button.add_theme_font_size_override("font_size", roundi(font_size))
-		var minimum := button.get_combined_minimum_size()
-		minimum_width = maxf(minimum_width, minimum.x)
-		button_height = maxf(button_height, minimum.y)
-
-	var obstacles: Array[Rect2] = [_remaining_panel.get_rect(), _side_tools.get_rect(), _own_mic.get_global_rect()]
+	# Build a dock from the projected hand envelope, keeping tile selections
+	# from moving it. Reserve the closest clear row when discards reach that edge.
+	var step := ACTION_BUTTON_SIZE + Vector2.ONE * ACTION_BUTTON_GAP
+	var area := _usable_modal_area().grow(-ACTION_BUTTON_GAP)
+	area.position.y = maxf(area.position.y, _header.get_rect().end.y + ACTION_BUTTON_GAP)
+	area.end.y = _own_hand_top() - ACTION_HAND_GAP
+	if _frames_player_hand() and _coach_enabled:
+		area.end.y -= COACH_OVERLAY.LABEL_HEIGHT + COACH_OVERLAY.LABEL_GAP
+	if not area.has_area():
+		_actions_root.hide()
+		return
+	var preferred_x := _board_view.get_rect().get_center().x
+	if not _hand_models.is_empty():
+		var hand_x := (_hand_models[0].position.x + _hand_models[-1].position.x) * 0.5
+		var hand_anchor := _pieces_root.to_global(_own_tile_position(hand_x, 0.0))
+		preferred_x = _board_view.position.x + _project_to_board(hand_anchor).x
+	var obstacles: Array[Rect2] = [_projected_dial(0.147), _side_tools.get_rect(), _own_mic.get_global_rect()]
 	for panel in _seat_panels:
 		obstacles.append(panel.get_rect())
 	for model in _pieces_root.get_children():
-		if model.is_queued_for_deletion() or _hand_models.has(model): continue
-		var tile := _projected_tile_rect(model, &"TileBody")
+		if model.is_queued_for_deletion() or _hand_models.has(model):
+			continue
+		var tile := _projected_tile_rect(model)
 		tile.position += _board_view.position
-		if tile.has_area() and tile.intersects(area): obstacles.append(tile.grow(2.0 * factor))
+		if tile.intersects(area):
+			obstacles.append(tile.grow(1.0))
+	obstacles.sort_custom(func(a: Rect2, b: Rect2) -> bool: return a.position.x < b.position.x)
 
-	var columns := buttons.size()
+	var max_columns := clampi(floori((area.size.x + ACTION_BUTTON_GAP) / step.x), 1, buttons.size())
 	var lane := Rect2()
-	# Keep every row on the same center line above the hand. Prefer the lowest
-	# complete group; compact it or add centered rows instead of moving sideways.
-	for candidate_columns in range(buttons.size(), 0, -1):
-		var rows := ceili(float(buttons.size()) / candidate_columns)
-		var height := rows * (button_height + gap) - gap
-		var min_width := candidate_columns * (minimum_width + gap) - gap
-		var width := minf(area.size.x, candidate_columns * (maxf(minimum_width, 153.0 * factor) + gap) - gap)
-		var candidate := _find_action_lane(area, width, min_width, height, obstacles)
+	var columns := max_columns
+	for count in range(max_columns, 0, -1):
+		var rows := ceili(float(buttons.size()) / count)
+		var extent := Vector2(count, rows) * step - Vector2.ONE * ACTION_BUTTON_GAP
+		var candidate := _find_action_lane(area, extent, preferred_x, obstacles)
 		if candidate.has_area() and (not lane.has_area() or candidate.end.y > lane.end.y + 0.1):
+			columns = count
 			lane = candidate
-			columns = candidate_columns
+			if is_equal_approx(lane.end.y, area.end.y):
+				break
 	if not lane.has_area():
-		# Even at unusually small window sizes, preserve the centered group and
-		# account for every row's height so no lower row spills into the hand.
-		columns = clampi(floori((area.size.x + gap) / (minimum_width + gap)), 1, buttons.size())
+		# Even an unusually constrained window must keep every legal action available.
 		var rows := ceili(float(buttons.size()) / columns)
-		var width := columns * (minimum_width + gap) - gap
-		var height := rows * (button_height + gap) - gap
-		lane = Rect2(Vector2(area.get_center().x - width * 0.5, floor_y - height), Vector2(width, height))
+		var extent := Vector2(columns, rows) * step - Vector2.ONE * ACTION_BUTTON_GAP
+		var left := clampf(preferred_x - extent.x * 0.5, area.position.x, maxf(area.position.x, area.end.x - extent.x))
+		lane = Rect2(Vector2(left, area.end.y - extent.y), extent)
 
 	_actions_root.position = lane.position
 	_actions_root.size = lane.size
-	var chip_width := (lane.size.x - (columns - 1) * gap) / columns
 	for index in buttons.size():
 		var row := floori(float(index) / columns)
-		var items := mini(columns, buttons.size() - row * columns)
-		var row_width := items * (chip_width + gap) - gap
-		buttons[index].position = Vector2((lane.size.x - row_width) * 0.5 + (index % columns) * (chip_width + gap), row * (button_height + gap))
-		buttons[index].size = Vector2(chip_width, button_height)
+		var count := mini(columns, buttons.size() - row * columns)
+		var width := count * step.x - ACTION_BUTTON_GAP
+		buttons[index].position = Vector2((lane.size.x - width) * 0.5 + (index % columns) * step.x, row * step.y)
 
 
-func _find_action_lane(area: Rect2, ideal_width: float, min_width: float, height: float, obstacles: Array[Rect2]) -> Rect2:
-	if ideal_width < min_width or area.size.y < height: return Rect2()
-	var bottom_row := area.end.y - height
-	var rows: Array[float] = [bottom_row]
+func _find_action_lane(area: Rect2, extent: Vector2, preferred_x: float, obstacles: Array[Rect2]) -> Rect2:
+	if area.size.x < extent.x or area.size.y < extent.y:
+		return Rect2()
+	var edge_top := area.end.y - extent.y
+	var rows: Array[float] = [edge_top]
 	for obstacle in obstacles:
-		var top := obstacle.position.y - height
-		if top >= area.position.y and top < bottom_row and not rows.has(top):
+		var top := obstacle.position.y - extent.y
+		if area.position.y <= top and top < edge_top and not rows.has(top):
 			rows.append(top)
 	rows.sort()
 	rows.reverse()
-	var center_x := area.get_center().x
+
+	var desired_left := preferred_x - extent.x * 0.5
 	for top in rows:
-		var half_width := area.size.x * 0.5
+		var closest := INF
+		var left := area.position.x
 		for obstacle in obstacles:
-			if obstacle.position.y >= top + height or obstacle.end.y <= top: continue
-			if obstacle.position.x < center_x and obstacle.end.x > center_x:
-				half_width = 0.0
-				break
-			var clearance := center_x - obstacle.end.x if obstacle.end.x <= center_x else obstacle.position.x - center_x
-			half_width = minf(half_width, maxf(0.0, clearance))
-		var width := minf(ideal_width, half_width * 2.0)
-		if width >= min_width:
-			return Rect2(Vector2(center_x - width * 0.5, top), Vector2(width, height))
+			if obstacle.end.y <= top or obstacle.position.y >= top + extent.y:
+				continue
+			var right := minf(area.end.x, obstacle.position.x)
+			if right - left >= extent.x:
+				var position_x := clampf(desired_left, left, right - extent.x)
+				if absf(position_x - desired_left) < absf(closest - desired_left):
+					closest = position_x
+			left = maxf(left, obstacle.end.x)
+		if area.end.x - left >= extent.x:
+			var position_x := clampf(desired_left, left, area.end.x - extent.x)
+			if absf(position_x - desired_left) < absf(closest - desired_left):
+				closest = position_x
+		if is_finite(closest):
+			return Rect2(Vector2(closest, top), extent)
 	return Rect2()
 
 
 func _layout_own_mic() -> void:
 	if is_instance_valid(_own_mic):
-		var factor := minf(size.x/1440.0,size.y/810.0)
 		var extent := MODAL.icon_button_extent(self)
-		_own_mic.position = _side_tools.position + Vector2(_side_tools.size.x + maxf(8.0 * factor, extent / 8.0), 0.0)
 		MODAL.size_icon_button(_own_mic, self)
 		_own_mic.size = Vector2.ONE * extent
 
@@ -830,6 +858,7 @@ func _sync_viewport_size() -> void:
 			"window_px": [window_pixels.x, window_pixels.y],
 			"board_output_px": [output_pixels.x, output_pixels.y],
 			"board_texture_px": [texture_pixels.x, texture_pixels.y],
+			"vertical_fov_deg": _camera.fov,
 			"render_scale": _board_viewport.scaling_3d_scale,
 			"container_stretch": _board_surface.stretch,
 			"max_fps": Engine.max_fps,
@@ -840,50 +869,101 @@ func _sync_viewport_size() -> void:
 
 
 func _fit_camera() -> void:
-	if not is_instance_valid(_camera) or not _camera.is_inside_tree():
+	if not is_instance_valid(_camera) or not _camera.is_inside_tree() or not _play_area.has_area():
 		return
-	# Use the largest perspective projection that fits both the playable width
-	# and the vertical band from the opposite avatar to the safe bottom.
 	var aspect := Vector2(_board_viewport.size).aspect()
-	var usable_aspect := _board_view.size.x / maxf(1.0, size.y - _safe.y - _safe.w)
-	var wide_fit := smoothstep(1.78, 2.22, usable_aspect)
-	var pitch_degrees := lerpf(36.5, 30.5, smoothstep(1.26, 1.72, usable_aspect))
-	# Keep all discards and side melds clear when enlarging the near hand.
-	var pitch := deg_to_rad(lerpf(pitch_degrees, 29.0, wide_fit))
-	var camera_distance := lerpf(2.40, 2.025, wide_fit)
-	_camera.position = CAMERA_TARGET + Vector3(0.0, sin(pitch), cos(pitch)) * camera_distance
+	var pitch := deg_to_rad(CAMERA_PITCH_DEGREES)
+	_camera.position = CAMERA_TARGET + Vector3(0.0, sin(pitch), cos(pitch))
 	_camera.look_at(CAMERA_TARGET)
-	var inverse := _camera.global_transform.affine_inverse()
-	var tangent := 0.0
-	# The near edge sets the width limit. The raised local hand is inset
-	# from this edge and remains inside its projected span.
-	var near_rail_corner: Vector3 = inverse * (Vector3(0.683, 0.0015, 0.683) * TABLE_SCALE)
-	tangent = maxf(tangent, near_rail_corner.x / (-near_rail_corner.z * aspect * 0.99))
-	# The near felt edge and the top of the opposite concealed row bound the
-	# playing area. Align their projected midpoint even when width limits zoom.
-	var inner_rail: Vector3 = inverse * (Vector3(0.0,0.0015,0.683)*TABLE_SCALE)
-	var opposite_seat := _seat_rect(2)
-	var edge_margin := 8.0 * opposite_seat.size.y / SEAT_CARD_SIZE.y
-	var footer_clearance := edge_margin
-	if _board_viewport.size.x < 760 and not _is_spectating():
-		# On short phones the three fixed-size social buttons can extend
-		# into the hand's horizontal span. Leave their upper half clear.
-		footer_clearance = maxf(footer_clearance, MODAL.icon_button_extent(self) * 0.72)
-	var top_clear := maxf(edge_margin, opposite_seat.end.y + edge_margin - _board_view.position.y)
-	var top_limit := 1.0 - 2.0 * top_clear / _board_view.size.y
-	var bottom_limit := -1.0 + 2.0 * footer_clearance / _board_view.size.y
-	var far_hand: Vector3 = inverse * (Vector3(0.0, TILE_SIZE.z * OPPONENT_HAND_SCALE, -0.765 - TILE_SIZE.y * OPPONENT_HAND_SCALE * 0.5) * TILE_WORLD_SCALE)
-	var depth_span := -far_hand.z * top_limit + inner_rail.z * bottom_limit
-	if depth_span > 0.0:
-		tangent = maxf(tangent, (far_hand.y - inner_rail.y) / depth_span)
-	var far_weight := -1.0 / far_hand.z
-	var near_weight := -1.0 / inner_rail.z
-	_camera.fov = rad_to_deg(2.0 * atan(tangent))
-	_camera.v_offset = (far_hand.y * far_weight + inner_rail.y * near_weight - tangent * (top_limit + bottom_limit)) / (far_weight + near_weight)
+	if _frames_player_hand() and is_instance_valid(_pieces_root) and _pieces_root.is_inside_tree():
+		_fit_player_hand_camera(aspect)
+		return
+
+	var view := Transform3D(_camera.global_basis, CAMERA_TARGET).affine_inverse()
+	var tan_x := CAMERA_SENSOR_WIDTH_MM / (2.0 * CAMERA_FOCAL_LENGTH_MM)
+	var tan_y := tan_x / aspect
+	var far := view * Vector3(0.0, TILE_SIZE.z, -HAND_ROW_RADIUS)
+	var near_depth := HAND_PIVOT_DEPTH + TILE_SIZE.y if _is_spectating() else PLAY_AREA_NEAR_DEPTH
+	var near_edge := view * Vector3(0.0, 0.0, near_depth)
+	var far_seat := _seat_rect(2)
+	var gap := 8.0 * far_seat.size.y / SEAT_CARD_SIZE.y
+	var top := 1.0 - 2.0 * (maxf(_play_area.position.y, far_seat.end.y) + gap) / size.y
+	var bottom := 1.0 - 2.0 * (minf(_play_area.end.y, _side_tools.position.y) - gap) / size.y
+	var usable_width := _play_area.size.x / size.x
+	if aspect >= 1.0: usable_width -= 2.0 * far_seat.size.x / size.x
+	usable_width = maxf(0.3, usable_width)
+	var side_extent := HAND_PIVOT_DEPTH + TILE_SIZE.y
+	var distance := maxf(near_edge.z + side_extent / (tan_x * usable_width),
+		((far.y - near_edge.y) / tan_y + top * far.z - bottom * near_edge.z) / maxf(0.1, top - bottom))
+	if not _is_spectating():
+		var outer := (FULL_HAND_COUNT - 1) * TILE_SIZE.x * 0.5
+		var end_tile := view * _own_tile_pose(outer, 0.0)
+		for index in 8:
+			var point := end_tile * TILE_BODY_BOUNDS.get_endpoint(index)
+			distance = maxf(distance, point.z + absf(point.x) / (tan_x * _play_area.size.x / size.x * 0.98))
+	var top_offset := far.y - top * (distance - far.z) * tan_y
+	var bottom_offset := near_edge.y - bottom * (distance - near_edge.z) * tan_y
+	_camera.set_perspective(rad_to_deg(2.0 * atan(tan_y)), _camera.near, _camera.far)
+	_camera.position = CAMERA_TARGET + _camera.basis.z * distance
+	_camera.h_offset = (near_edge.z - distance) * tan_x * (2.0 * _play_area.get_center().x / size.x - 1.0)
+	_camera.v_offset = (top_offset + bottom_offset) * 0.5
+	if aspect < 1.0:
+		# Frame the board above the side portraits and keep the far edge of the felt offscreen.
+		var side_end := view * Vector3(0.0, 0.0, HAND_PIVOT_DEPTH)
+		var above_portraits := 1.0 - 2.0 * (_seat_rect(1).position.y - gap) / size.y
+		var half_felt := TABLE_THEME.FELT_SIZE_METRES.y * 0.4995
+		var far_felt := view * Vector3(0.0, 0.0, -half_felt)
+		var near_felt := view * Vector3(0.0, 0.0, half_felt)
+		var portrait_offset := side_end.y - above_portraits * (distance - side_end.z) * tan_y
+		_camera.v_offset = clampf(minf(_camera.v_offset, portrait_offset),
+			near_felt.y + (distance - near_felt.z) * tan_y, far_felt.y - (distance - far_felt.z) * tan_y)
+	_camera_world_per_pixel = 2.0 * (distance - near_edge.z) * tan_y / size.y
+
+
+func _fit_player_hand_camera(aspect: float) -> void:
+	# Measure the standing tile in camera axes. The 14-tile reference stays fixed as tiles are played.
+	var view := Transform3D(_camera.global_basis, CAMERA_TARGET).affine_inverse()
+	var row := view * _own_tile_pose(0.0, 0.0)
+	var corners := PackedVector3Array()
+	var nearest_z := -INF
+	for i in 8:
+		var point := row * TILE_BODY_BOUNDS.get_endpoint(i)
+		corners.append(point)
+		nearest_z = maxf(nearest_z, point.z)
+
+	var board_height := _board_view.size.y
+	var opposite := _seat_rect(2)
+	var top := maxf(_play_area.position.y, opposite.end.y) + 8.0 * opposite.size.y / SEAT_CARD_SIZE.y
+	var pixel_scale := (get_viewport_transform() * get_global_transform()).y.length()
+	var bottom := size.y - _safe.w - HAND_BOTTOM_PIXELS / maxf(pixel_scale, 0.01)
+	var top_ndc := 1.0 - 2.0 * top / board_height
+	var bottom_ndc := 1.0 - 2.0 * bottom / board_height
+	var far := view * _pieces_root.to_global(Vector3(0.0, TILE_SIZE.z, -HAND_ROW_RADIUS))
+
+	var tangent := CAMERA_SENSOR_WIDTH_MM / (2.0 * CAMERA_FOCAL_LENGTH_MM * aspect)
+	var half_height := (CAMERA_DISTANCE_METRES - nearest_z) * tangent
+	# Keep the longer focal length as the screen widens. A shifted projection can
+	# frame both rows without moving the eye closer and exaggerating perspective.
+	var far_height := half_height + (nearest_z - far.z) * tangent
+	var shift := 0.0
+	for point in corners:
+		var near_height := half_height + (nearest_z - point.z) * tangent
+		shift = minf(shift, (point.y - far.y - bottom_ndc * near_height + top_ndc * far_height) / (far_height - near_height))
+	var vertical_offset := INF
+	for point in corners:
+		vertical_offset = minf(vertical_offset, point.y - (bottom_ndc - shift) * (half_height + (nearest_z - point.z) * tangent))
+	_camera.position = CAMERA_TARGET + _camera.basis.z * CAMERA_DISTANCE_METRES
+	_camera.set_perspective(rad_to_deg(2.0 * atan(tangent)), _camera.near, _camera.far)
+	if shift < -0.001:
+		_camera.set_frustum(2.0 * _camera.near * tangent, Vector2(0.0, -shift * tangent * _camera.near), _camera.near, _camera.far)
+	_camera.h_offset = row.origin.x
+	_camera.v_offset = vertical_offset
+	_camera_world_per_pixel = 2.0 * (half_height + (nearest_z - row.origin.z) * tangent) / board_height
 
 
 func _on_native_projection_resized() -> void:
 	if not is_instance_valid(_camera) or _exiting: return
+	_stop_camera_impact()
 	_fit_camera()
 	_layout_compass()
 	_layout_hand_controls()
@@ -896,6 +976,7 @@ func _build_3d_table() -> void:
 	_board_view.mouse_filter = Control.MOUSE_FILTER_STOP
 	_board_view.gui_input.connect(_on_board_input)
 	add_child(_board_view)
+	_board_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_board_surface = _board_view.surface
 	_board_surface.name = "MahjongNativeRenderSurface"
 	_board_viewport = _board_view.viewport
@@ -907,18 +988,14 @@ func _build_3d_table() -> void:
 	_board_viewport.add_child(world)
 	_stage = STAGE_SCRIPT.new()
 	world.add_child(_stage)
-	_camera = _stage.configure(2.0, Vector3(0, 1.76, 3.01)*TILE_WORLD_SCALE, CAMERA_TARGET, true, 30.0)
+	var pitch := deg_to_rad(CAMERA_PITCH_DEGREES)
+	_camera = _stage.configure(2.0, CAMERA_TARGET + Vector3(0, sin(pitch), cos(pitch)) * CAMERA_DISTANCE_METRES, CAMERA_TARGET, true, 30.0)
 	TABLE_THEME.configure_stage(_stage, _quality)
-	var table := TABLE_SCENE.instantiate() as Node3D
-	table.name = "ImportedMahjongTable"
-	table.scale *= TABLE_SCALE
-	world.add_child(table)
-	TABLE_THEME.finish_table(table)
+	world.add_child(TABLE_THEME.create_felt_surface())
 	_wind_dial = WIND_DIAL.new()
 	world.add_child(_wind_dial)
 	_pieces_root = Node3D.new()
 	_pieces_root.name = "ThreeDimensionalTiles"
-	_pieces_root.scale = Vector3.ONE*TILE_WORLD_SCALE
 	world.add_child(_pieces_root)
 	_tile_focus = TILE_FOCUS.new()
 	world.add_child(_tile_focus)
@@ -1079,7 +1156,9 @@ func _refresh_connection_actions(refresh_tool: bool = true) -> void:
 	if is_instance_valid(_own_mic):
 		_own_mic.disabled = (not _actions_ready() or _is_practice_table() or str(_state.get("status", "waiting")) == "waiting") and not _recording
 	if not _actions_ready(): _stop_recording()
-	if refresh_tool and _tool_open in ["chat", "emote", "gang"] and is_instance_valid(_overlay_root):
+	if refresh_tool and _tool_open == "chat" and is_instance_valid(_tool_surface):
+		_refresh_social_choices()
+	elif refresh_tool and _tool_open == "gang" and is_instance_valid(_overlay_root):
 		_clear(_overlay_root)
 		_render_tool()
 
@@ -1093,6 +1172,8 @@ func _handle_packet(raw: String) -> void:
 		_handle_watch_packet(parsed)
 		return
 	match str(parsed.get("type", "")):
+		"mahjong_match_cancelled":
+			apply_match_cancellation(parsed)
 		"mahjong_joined":
 			if str(parsed.get("room_id", match_context.get("room_id", ""))) != str(match_context.get("room_id", "")): return
 			var match_id := str(parsed.get("match_id", ""))
@@ -1116,7 +1197,9 @@ func _handle_packet(raw: String) -> void:
 				_snapshot_ready = false
 				_clear_pending_command()
 				_refresh_connection_actions()
-				_status.text = "牌桌规则与房间不一致，请退出后重新入座"
+				if _status.text != "牌桌规则与房间不一致，请退出后重新入座":
+					_status.text = "牌桌规则与房间不一致，请退出后重新入座"
+					_show_table_notice("牌桌规则已变更", _status.text)
 				return
 			var committed := _collect_action_events(parsed)
 			var cue := _snapshot_audio_cue(parsed)
@@ -1164,7 +1247,7 @@ func _handle_packet(raw: String) -> void:
 			else:
 				_clear_pending_command()
 				_refresh_connection_actions()
-				_status.text = str(parsed.get("message","操作未生效"))
+				_show_table_notice("操作未生效", str(parsed.get("message", "牌桌未接受这次操作，请按当前牌局继续。")))
 		"mahjong_social":
 			_receive_social(parsed)
 		"mahjong_report_result":
@@ -1179,11 +1262,21 @@ func _handle_packet(raw: String) -> void:
 				_sync_settings()
 				return
 			if parsed.get("operation", "") == "join":
+				if parsed.get("code") == "match_unavailable":
+					if not _joined: _end_confirmed_match(parsed, "原对局已结束，请返回大厅重新开局。")
+					return
+				if parsed.has("room_id") and parsed.room_id != match_context.get("room_id"): return
+				if parsed.has("match_id") and parsed.match_id != _joined_match_id: return
+				if _joined: return
+				if _dealt:
+					if is_instance_valid(_transport) and _transport.is_open():
+						_transport._lose("入座尚未恢复")
+					return
 				_abort_entry(str(parsed.get("message", "未能入桌，请返回大厅")))
 				return
 			if _pending_command.is_empty(): _pending_action = false
 			_refresh_connection_actions()
-			_status.text = "操作未生效：" + str(parsed.get("message", "未知错误"))
+			_show_table_notice("操作未生效", str(parsed.get("message", "请按当前牌局继续。")))
 
 
 func _handle_watch_packet(packet: Dictionary) -> void:
@@ -1218,8 +1311,30 @@ func _handle_watch_packet(packet: Dictionary) -> void:
 			_abort_entry(str(packet.get("message", "观战已结束")))
 
 
+var released_match_id := ""
+
+
+func apply_match_cancellation(packet: Dictionary) -> void:
+	if packet.get("reason") == "disconnect_timeout":
+		_end_confirmed_match(packet, "有玩家断线超过5分钟，本局已解散")
+
+
+func _end_confirmed_match(packet: Dictionary, message: String) -> void:
+	if _exiting or training_mode or _is_spectating() or not released_match_id.is_empty(): return
+	if _joined_match_id.is_empty() or packet.get("match_id") != _joined_match_id: return
+	if packet.get("room_id") != match_context.get("room_id") or _state.get("phase") == "finished": return
+	released_match_id = _joined_match_id
+	_abort_entry(message)
+
+
 func _abort_entry(message: String) -> void:
 	if _exiting: return
+	_clear_pending_command()
+	_spectator_permission_pending = null
+	_deadline_tick = 0
+	if is_instance_valid(_bubble_deadline): _bubble_deadline.stop()
+	_social_events.clear()
+	_stop_camera_impact()
 	entry_cancelled.emit(message)
 	_return_now()
 
@@ -1283,9 +1398,32 @@ func _render() -> void:
 	_clear(_pieces_root)
 	_hand_models.clear()
 	_hand_ids.clear()
-	if not _settings_open():
+	var phase := str(_state.get("phase", ""))
+	var status := str(_state.get("status", "waiting"))
+	var finished := phase == "finished" and not bool(_state.get("saving", false))
+	var finished_key := "%s/%s/%d" % [_state.get("room_id", ""), _state.get("match_id", ""), int(_state.get("completed_rounds", 0))] if finished else ""
+	var first_finish := not finished_key.is_empty() and finished_key != _finished_round_key
+	_finished_round_key = finished_key
+	if first_finish:
+		_coach_overlay.close_detail()
+		_tool_open = ""
+		_tool_opener = null
+		_settings_view = null
+		_settlement_dismissed = false
+	var stable_tool := _settings_open() or (_tool_open in ["chat", "notice"] and is_instance_valid(_tool_surface) and _tool_surface.is_inside_tree())
+	var keep_settlement := false
+	var previous_view := {}
+	if finished and not training_mode and not _is_spectating():
+		var content := {}
+		for field in ["room_id", "match_id", "kind", "rule", "rule_set_id", "rule_version", "round_limit", "completed_rounds", "can_rematch", "your_seat", "winners", "win_kind", "win_from", "hu_details", "fan_breakdown", "settlement_hands", "hand", "melds", "robbed_tile", "ready_seats", "scores", "player_names", "players", "ji_counts", "egg_counts", "egg_deltas", "flipped_ji", "score_breakdown", "series_rounds", "series_total_rounds", "series_scores", "series_ranks"]:
+			if _state.has(field): content[field] = _state[field]
+		keep_settlement = not first_finish and _tool_open.is_empty() and ((is_instance_valid(_settlement_panel) and _settlement_panel.is_inside_tree() and content == _settlement_content) or (is_instance_valid(_settlement_reopen) and _settlement_reopen.is_inside_tree() and _settlement_dismissed))
+		_settlement_content = content
+		if not first_finish and not keep_settlement and _tool_open.is_empty() and is_instance_valid(_settlement_panel) and _settlement_panel.is_inside_tree():
+			previous_view = _settlement_panel.navigation_snapshot()
+	if not stable_tool and not keep_settlement:
 		_clear(_overlay_root)
-	_settlement_panel = null
+		_settlement_panel = null
 	if _tool_open.is_empty() and (_state.get("phase") != "finished" or training_mode or _is_spectating()):
 		_block_board_focus(false)
 	_selected_id = _selected_id if _state.get("phase") != "dingque" and _hand_contains(_selected_id) else 0
@@ -1299,21 +1437,27 @@ func _render() -> void:
 	_render_bubbles()
 	if _settings_open():
 		_sync_settings()
-	elif not _tool_open.is_empty():
+	elif stable_tool and _tool_open == "chat":
+		_refresh_social_choices()
+	elif not stable_tool and not _tool_open.is_empty():
 		_render_tool()
-	var phase := str(_state.get("phase", ""))
-	var status := str(_state.get("status", "waiting"))
 	if phase != "finished": _settlement_dismissed = false
-	if _is_spectating():
+	if finished:
+		_status.text = ""
+		if training_mode or _is_spectating():
+			if first_finish:
+				_show_table_notice("本局结束", "牌墙已摸完，本次练习结束。" if training_mode else "你观战的这一局已结束。")
+		elif _tool_open.is_empty() and not keep_settlement:
+			_render_settlement_overlay()
+			if not previous_view.is_empty() and is_instance_valid(_settlement_panel):
+				_settlement_panel.restore_navigation(previous_view)
+	elif _is_spectating():
 		_status.text = "观战 · %d 号位 · %s" % [int(_state.get("your_seat", match_context.get("watch_seat", 0))) + 1,
-			"等待牌局开始" if status == "waiting" else "本局结束" if phase == "finished" else "只查看公开牌局"]
+			"等待牌局开始" if status == "waiting" else "只查看公开牌局"]
 	elif _state.get("saving", false):
 		_status.text = "正在保存牌局"
 	elif status == "waiting":
 		_status.text = "正在连接训练桌" if _room_kind()=="training" else "等待四位牌友连接 · %d / 4" % int(_state.get("connected_players", 0))
-	elif phase == "finished":
-		_status.text = "牌墙已空 · 摸打完成" if training_mode else "本局结束"
-		if not training_mode and _tool_open.is_empty(): _render_settlement_overlay()
 	elif not _actions_ready():
 		_status.text = "连接恢复中 · 等待入座确认和新状态"
 	elif phase == "dingque":
@@ -1363,6 +1507,7 @@ func _render_seats() -> void:
 	var watching := _is_spectating()
 	var missing_suits := _public_missing_suits()
 	var factor := minf(size.x/1440.0,size.y/810.0)
+	var clear_background := StyleBoxEmpty.new()
 	_seat_voice_buttons.clear()
 	_seat_panels.resize(4)
 	for seat in range(4):
@@ -1386,7 +1531,7 @@ func _render_seats() -> void:
 		panel.position=_seat_rect(relative).position
 		panel.size=_seat_rect(relative).size
 		panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
-		panel.add_theme_stylebox_override("panel", BATTLE_ART.seat(dealer))
+		panel.add_theme_stylebox_override("panel", clear_background)
 		_seat_root.add_child(panel)
 		var avatar := Panel.new()
 		avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1425,7 +1570,9 @@ func _render_seats() -> void:
 			manage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		var name_label := _label(panel,"",74*factor,5*factor,0,27*factor,roundi(20*factor),Color("#fff1d4"))
 		name_label.name = "MahjongSeatNickname"
-		name_label.add_theme_stylebox_override("normal", BATTLE_ART.seat_name())
+		name_label.add_theme_stylebox_override("normal", clear_background)
+		name_label.add_theme_color_override("font_outline_color", Color("#17261e"))
+		name_label.add_theme_constant_override("outline_size", maxi(1, roundi(2 * factor)))
 		name_label.add_theme_font_override("font", RURAL.title_font())
 		name_label.autowrap_mode=TextServer.AUTOWRAP_OFF
 		name_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -1434,7 +1581,7 @@ func _render_seats() -> void:
 		var name_size := roundi(20 * factor)
 		while name_size > 10 and name_label.get_theme_font("font").get_height(name_size) > 25 * factor:
 			name_size -= 1
-		name_label.add_theme_font_size_override("font_size", maxi(10, name_size - 2))
+		name_label.add_theme_font_size_override("font_size", maxi(12, name_size))
 		var text_edge := panel.size.x - 7.0 * factor
 		name_label.size = Vector2(text_edge - name_label.position.x, 27.0 * factor)
 		name_label.tooltip_text = nickname + (" · 庄家" if dealer else "")
@@ -1443,17 +1590,19 @@ func _render_seats() -> void:
 			var missing_x := text_edge - 47.0 * factor
 			name_label.size.x = missing_x - name_label.position.x - 2.0 * factor
 			var missing := _label(panel, "缺 " + suit, missing_x, 5 * factor, 47 * factor, 27 * factor,
-				maxi(10, roundi(15 * factor)), Color("#652d1e"))
+				maxi(10, roundi(15 * factor)), TABLE_THEME.CREAM)
 			missing.name = "MahjongMissingSuit%d" % seat
 			missing.tooltip_text = "定缺" + suit
 		var quantity := _label(panel,"",74*factor,34*factor,0,36*factor,roundi(31*factor),Color("#a42316"))
 		quantity.name = "MahjongSeatEggs"
+		quantity.add_theme_color_override("font_outline_color", Color("#ffe6c1"))
+		quantity.add_theme_constant_override("outline_size", maxi(1, roundi(2 * factor)))
 		quantity.add_theme_font_override("font", RURAL.title_font())
 		quantity.autowrap_mode = TextServer.AUTOWRAP_OFF
 		# CJK fonts have a taller line box than their point size. Fit the real
 		# metrics so Godot never clips the entire balance line on compact cards.
 		var balance_font := quantity.get_theme_font("font")
-		var balance_size := roundi(31 * factor)
+		var balance_size := maxi(1,roundi(31 * factor))
 		var balance_width := text_edge - quantity.position.x
 		var egg_extent := Vector2(20, 25) * factor
 		var egg_gap := 4.0 * factor
@@ -1482,13 +1631,14 @@ func _render_seats() -> void:
 		elif _can_moderate(seat):
 			var mic := _button(panel,"",52*factor,50*factor,22*factor,22*factor,_toggle_seat_mute.bind(seat))
 			mic.name="MahjongSeatMic%d"%seat
-			MODAL.icon_button(mic, BATTLE_ART.icon("muted" if _seat_muted(seat) else "mic"), "切换此牌友静音")
+			BATTLE_ART.hud_button(mic, "muted" if _seat_muted(seat) else "mic", "切换此牌友静音")
 			MODAL.size_icon_button(mic, self, 22.0 * factor)
 			mic.size = mic.custom_minimum_size
 			mic.tooltip_text="取消静音（本桌）" if _seat_muted(seat) else "静音此牌友的聊天、表情与语音"
 			_seat_voice_buttons[seat]=mic
 		_seat_panels[relative]=panel
 	_refresh_avatar_presence()
+	_position_avatar_clock()
 	if focused_seat_button != &"":
 		var replacement := _seat_root.find_child(str(focused_seat_button), true, false) as Button
 		if is_instance_valid(replacement) and not replacement.disabled:
@@ -1503,7 +1653,9 @@ func _table_rule() -> Dictionary:
 
 func _rule_name() -> String:
 	if training_mode: return "摸打练习"
-	return str(_table_rule().get("name","基础 108" if str(match_context.get("rule_set_id",""))=="basic_108" else "贵阳捉鸡"))
+	var title := str(_table_rule().get("name", "")).strip_edges()
+	if not title.is_empty(): return title
+	return "基础 108" if str(_state.get("rule_set_id", match_context.get("rule_set_id", ""))) == "basic_108" else "贵阳捉鸡"
 
 
 func _room_kind() -> String:
@@ -1518,17 +1670,14 @@ func _update_context_labels() -> void:
 	var phase := str(_state.get("phase", ""))
 	var status := str(_state.get("status", "waiting"))
 	var own_turn := not _is_spectating() and int(_state.get("turn", -1)) == int(_state.get("your_seat", -2))
-	_turn_label.text = "轮到你出牌" if own_turn else "等待牌友"
+	_turn_label.text = "" if own_turn else "等待牌友"
 	_turn_label.add_theme_color_override("font_color", Color("#ffe19b") if own_turn else Color("#fff8df"))
-	_remaining_number.text = "—"
-	var room := _rule_name() if training_mode else "房间" + str(_state.get("room_id", match_context.get("room_id", "—")))
-	var context_parts := PackedStringArray([room])
 	var limit := int(_state.get("round_limit", match_context.get("round_limit", 0)))
 	var completed := int(_state.get("completed_rounds", match_context.get("completed_rounds", 0)))
-	if not training_mode and _is_practice_table(): context_parts.append("训练 · " + _rule_name())
-	elif limit > 0: context_parts.append("%d/%d局" % [clampi(completed + 1, 1, limit), limit])
-	context_parts.append("余牌 %d" % int(_state.remaining) if _state.has("remaining") else "余牌 —")
-	_header.text = " │ ".join(context_parts)
+	_round_number.text = "%d/%d局" % [clampi(completed + 1, 1, limit), limit] if limit > 0 else ("练习" if _is_practice_table() else "第%d局" % maxi(1, completed + 1))
+	_wall_number.text = "余牌 %d" % int(_state.remaining) if _state.has("remaining") else "余牌 —"
+	var room := str(_state.get("room_id", match_context.get("room_id", "—")))
+	_header.text = _rule_name() if training_mode else "%s · %s %s" % [_rule_name(), "训练房" if _room_kind() == "training" else "房间", room]
 	BATTLE_ART.fit_room_heading(_header)
 	if _state.get("saving", false):
 		_turn_label.text = "正在保存"
@@ -1537,8 +1686,9 @@ func _update_context_labels() -> void:
 	elif phase == "reaction":
 		_turn_label.text = "等待响应" if _options().is_empty() else "可以响应"
 	elif phase == "finished":
-		_turn_label.text = "本局结束"
+		_turn_label.text = ""
 	if _is_spectating(): _turn_label.text = "观战 · %d 号位" % (int(match_context.get("watch_seat", 0)) + 1)
+	_turn_label.visible = not _turn_label.text.is_empty()
 	_update_compass_winds()
 	_update_clock()
 
@@ -1558,11 +1708,10 @@ func _tile_path(tile: Dictionary) -> String:
 func _tile_model(tile: Dictionary, location: Vector3, relative: int = 0, concealed: bool = false, tabletop := false) -> Node3D:
 	var model := TILE_MODEL.build(_tile_materials, tile, concealed, tabletop)
 	model.position = location
-	model.scale = Vector3.ONE * 1.17
-	model.rotation.y = float(relative) * PI / 2.0
+	var pitch := HAND_STANDING_ANGLE
+	if tabletop: pitch = PI if concealed else 0.0
+	model.rotation = Vector3(pitch, float(relative) * PI * 0.5, 0.0)
 	_pieces_root.add_child(model)
-	if concealed:
-		model.rotation.x = PI
 	return model
 
 
@@ -1572,29 +1721,37 @@ func _render_opponent_hands() -> void:
 		var relative := _relative_seat(seat)
 		if relative == 0 and not _is_spectating(): continue
 		var count := mini(int(counts[seat]),14)
-		var hand_start := _concealed_row_start(relative, count, OPPONENT_HAND_SCALE)
+		var hand_start := _concealed_row_start(relative, count)
 		for index in range(count):
-			var along := hand_start + float(index) * TILE_SIZE.x * OPPONENT_HAND_SCALE
-			var position := _seat_table_position(relative, along, TILE_SIZE.z * OPPONENT_HAND_SCALE * 0.5, 0.765)
+			var along := hand_start + float(index) * TILE_SIZE.x
+			var position := _seat_table_position(relative, along, HAND_PIVOT_HEIGHT, HAND_PIVOT_DEPTH)
 			var model := _tile_model({},position,relative,true)
 			model.name="MahjongConcealedHand%d_%d"%[relative,index]
-			model.scale = Vector3.ONE * OPPONENT_HAND_SCALE
-			model.rotation.x=PI*.5
 
 
 func _seat_table_position(relative: int, along: float, height: float, depth: float) -> Vector3:
 	return Vector3(along, height, depth).rotated(Vector3.UP, float(relative) * PI * 0.5)
 
 
-func _meld_tile_count(relative: int) -> int:
-	var groups := _array("melds")
-	var total := 0
-	for seat in range(mini(4, groups.size())):
-		if _relative_seat(seat) != relative or not groups[seat] is Array: continue
-		for meld in groups[seat].slice(0, 4):
-			if meld is Dictionary and meld.get("tiles") is Array:
-				total += mini(4, meld.tiles.size())
-	return total
+func _meld_layout(relative: int) -> Dictionary:
+	var seats := _array("melds")
+	var seat := posmod(relative + int(_state.get("your_seat", 0)), 4)
+	var origins: Array[Vector2i] = []
+	var widest := 0
+	if seat < seats.size() and seats[seat] is Array:
+		var remaining_width := _seat_concealed_count(relative) * TILE_SIZE.x
+		var capacity := clampi(floori((0.69 - remaining_width - OPPONENT_MELD_SEPARATION) / TILE_SIZE.x), 4, 8)
+		var row := 0
+		var used := 0
+		for meld in seats[seat].slice(0, 4):
+			var count := mini(4, meld.tiles.size()) if meld is Dictionary and meld.get("tiles") is Array else 0
+			if used + count > capacity:
+				row += 1
+				used = 0
+			origins.append(Vector2i(used, row))
+			used += count
+			widest = maxi(widest, used)
+	return {"origins":origins, "columns":widest}
 
 
 func _seat_concealed_count(relative: int) -> int:
@@ -1605,16 +1762,14 @@ func _seat_concealed_count(relative: int) -> int:
 	return 0
 
 
-func _concealed_row_start(relative: int, count: int, tile_scale: float) -> float:
-	var meld_width := _meld_tile_count(relative) * TILE_SIZE.x * MELD_SCALE
-	var hand_tile_width := TILE_SIZE.x * tile_scale
-	var hand_width := count * hand_tile_width
-	var separator := _meld_hand_gap(relative, hand_tile_width) if meld_width > 0.0 and count > 0 else 0.0
-	return (meld_width + separator - hand_width) * 0.5 + hand_tile_width * 0.5 + (0.025 if relative == 0 else 0.0)
+func _concealed_row_start(relative: int, count: int) -> float:
+	var meld_width := int(_meld_layout(relative).columns) * TILE_SIZE.x
+	var separator := _meld_hand_gap(relative) if meld_width > 0.0 and count > 0 else 0.0
+	return (meld_width + separator - count * TILE_SIZE.x + TILE_SIZE.x) * 0.5
 
 
-func _meld_hand_gap(relative: int, hand_tile_width: float) -> float:
-	return hand_tile_width if relative == 0 and not _is_spectating() else OPPONENT_MELD_SEPARATION
+func _meld_hand_gap(relative: int) -> float:
+	return TILE_SIZE.x if relative == 0 and not _is_spectating() else OPPONENT_MELD_SEPARATION
 
 
 func _render_discards() -> void:
@@ -1627,32 +1782,24 @@ func _render_discards() -> void:
 			var seat := int(raw.get("seat", -1))
 			if seat >= 0 and seat < 4 and not bool(raw.get("claimed", false)):
 				per_seat[seat].append(raw.get("tile", {}))
+	var river_columns: Array[int] = []
+	for river: Array in per_seat:
+		river_columns.append(14 if training_mode else maxi(DISCARD_COLUMNS, ceili(river.size() / 3.0)))
 	for seat in range(4):
 		var relative := _relative_seat(seat)
-		for index in range(per_seat[seat].size()):
-			var col := index % DISCARD_COLUMNS
-			var row := int(index / DISCARD_COLUMNS)
-			var columns := DISCARD_COLUMNS
-			var tile_scale := DISCARD_SCALE
-			var origin_depth := DISCARD_ORIGIN_DEPTH
-			if training_mode:
-				# All 56 practice discards go into one river. Fit four rows on the felt.
-				row = int(index / PRACTICE_DISCARD_COLUMNS)
-				columns = mini(PRACTICE_DISCARD_COLUMNS, per_seat[seat].size() - row * PRACTICE_DISCARD_COLUMNS)
-				col = index % PRACTICE_DISCARD_COLUMNS
-				tile_scale = PRACTICE_DISCARD_SCALE
-				origin_depth = PRACTICE_DISCARD_ORIGIN_DEPTH
-			elif per_seat[seat].size() > 24:
-				# Late hands can exceed 24 unclaimed discards. Widen the outer
-				# rows to 8/12/16; a fourth row would hit the inward own hand.
-				row = 0 if index < 8 else 1 if index < 20 else 2
-				columns = 8 if row == 0 else 12 if row == 1 else maxi(16,per_seat[seat].size()-20)
-				col = index if row == 0 else index-8 if row == 1 else index-20
-			var along := (float(col) - float(columns-1)*0.5) * TILE_SIZE.x * tile_scale
-			var depth := origin_depth + float(row) * TILE_SIZE.z * tile_scale
-			var position := _seat_table_position(relative, along, 0.002, depth)
+		var count: int = per_seat[seat].size()
+		var columns := river_columns[seat]
+		# Leave enough room for the perpendicular rivers at each corner without changing a tile's size.
+		var adjacent_columns := maxi(river_columns[(seat + 1) % 4], river_columns[(seat + 3) % 4])
+		var first_depth := 0.17 if training_mode else (adjacent_columns * TILE_SIZE.x + TILE_SIZE.z) * 0.5 + RIVER_CORNER_GAP
+		for index in range(count):
+			var row := int(index / columns)
+			var col := index % columns
+			var visible_columns := mini(columns, count - row * columns) if training_mode else columns
+			var along := (col - (visible_columns - 1) * 0.5) * TILE_SIZE.x
+			var depth := first_depth + row * TILE_SIZE.z
+			var position := _seat_table_position(relative, along, 0.0015, depth)
 			var model := _tile_model(per_seat[seat][index], position, relative, false, true)
-			model.scale = Vector3.ONE * tile_scale
 			model.name = "MahjongDiscard%d_%d" % [seat, index]
 			var last_tile: Variant = last.get("tile", {})
 			if not bool(last.get("claimed", false)) and int(last.get("seat", -1)) == seat and last_tile is Dictionary and int(last_tile.get("id", 0)) > 0 and int(last_tile.get("id", 0)) == int(per_seat[seat][index].get("id", 0)):
@@ -1669,35 +1816,31 @@ func _render_melds() -> void:
 			continue
 		var relative := _relative_seat(seat)
 		var melds: Array = meld_groups[seat]
-		var column := 0
+		var layout := _meld_layout(relative)
 		var concealed_count := _seat_concealed_count(relative)
-		var hand_scale := OWN_HAND_SCALE if relative == 0 and not _is_spectating() else OPPONENT_HAND_SCALE
-		var meld_width := _meld_tile_count(relative) * TILE_SIZE.x * MELD_SCALE
-		var hand_tile_width := TILE_SIZE.x * hand_scale
-		var hand_width := concealed_count * hand_tile_width
-		var separator := _meld_hand_gap(relative, hand_tile_width) if concealed_count > 0 else 0.0
-		var start := -(meld_width + hand_width + separator) * 0.5 + TILE_SIZE.x * MELD_SCALE * 0.5 + (0.025 if relative == 0 else 0.0)
+		var meld_width := int(layout.columns) * TILE_SIZE.x
+		var hand_width := concealed_count * TILE_SIZE.x
+		var separator := _meld_hand_gap(relative) if concealed_count > 0 else 0.0
+		var bank_width := meld_width + hand_width + separator
+		var start := (TILE_SIZE.x - bank_width) * 0.5
 		for index in range(mini(4, melds.size())):
 			var meld: Variant = melds[index]
 			if not meld is Dictionary or not meld.get("tiles") is Array:
 				continue
 			var tiles: Array = meld.tiles
+			var origin: Vector2i = layout.origins[index]
+			var depth := HAND_ROW_RADIUS - origin.y * (TILE_SIZE.z + MELD_ROW_GAP)
 			var concealed: bool = (relative != 0 or _is_spectating()) and meld.get("kind") == "an_gang"
 			# Every seat reads its exposed sets from its own left, just ahead of
 			# its remaining concealed row. Rotate both rows with the same seat basis.
-			# Own melds follow the hand's inward move, clearing three discard
-			# rows. Other seats keep their established public row depth.
-			var depth := MELD_ROW_DEPTH - DISCARD_ROW_DEPTH if relative == 0 else MELD_ROW_DEPTH
-			var height := 0.002 + (TILE_SIZE.y * MELD_SCALE if concealed else 0.0)
+			var height := 0.0015 + (TILE_SIZE.y if concealed else 0.0)
 			for tile_index in range(mini(4, tiles.size())):
 				if not tiles[tile_index] is Dictionary:
 					continue
-				var along := start + float(column) * TILE_SIZE.x * MELD_SCALE
+				var along := start + (origin.x + tile_index) * TILE_SIZE.x
 				var position := _seat_table_position(relative, along, height, depth)
 				var model := _tile_model(tiles[tile_index], position, relative, concealed, true)
-				model.scale = Vector3.ONE * MELD_SCALE
 				model.name = "MahjongMeld%d_%d_%d" % [relative, index, tile_index]
-				column += 1
 
 
 func _render_hand() -> void:
@@ -1715,14 +1858,12 @@ func _render_hand() -> void:
 			break
 	_hand_models.clear()
 	_hand_ids.clear()
-	var hand_start := _concealed_row_start(0, hand.size(), OWN_HAND_SCALE)
+	var hand_start := _concealed_row_start(0, hand.size())
 	for index in range(hand.size()):
 		var tile: Dictionary = hand[index]
 		var id := int(tile.get("id", 0))
-		var along := hand_start + float(index) * TILE_SIZE.x * OWN_HAND_SCALE
-		var model := _tile_model(tile, Vector3(along, OWN_HAND_BASE_Y + (OWN_HAND_LIFT if id == _selected_id else 0.0), OWN_HAND_DEPTH))
-		model.scale = Vector3.ONE * OWN_HAND_SCALE
-		model.rotation_degrees.x = OWN_HAND_TILT_DEGREES
+		var along := hand_start + float(index) * TILE_SIZE.x
+		var model := _tile_model(tile, _own_tile_position(along, OWN_HAND_LIFT if id == _selected_id else 0.0))
 		_hand_models.append(model)
 		_hand_ids.append(id)
 	_sync_selected_tile_emission()
@@ -1758,7 +1899,8 @@ func _discard_prompt() -> String:
 
 func _render_hand_only() -> void:
 	for index in range(_hand_models.size()):
-		_hand_models[index].position.y = OWN_HAND_BASE_Y + (OWN_HAND_LIFT if _hand_ids[index] == _selected_id else 0.0)
+		var model := _hand_models[index]
+		model.position = _own_tile_position(model.position.x, OWN_HAND_LIFT if _hand_ids[index] == _selected_id else 0.0)
 	_sync_selected_tile_emission()
 	_update_selection()
 
@@ -1792,17 +1934,26 @@ func _options() -> Array:
 	return _array("options")
 
 
+func _action_button(caption: String, action: Callable, style: String = "") -> Button:
+	var button := _button(_actions_root, caption, 0, 0, ACTION_BUTTON_SIZE.x, ACTION_BUTTON_SIZE.y, action, style.is_empty())
+	if not style.is_empty():
+		BATTLE_ART.lacquer(button, style)
+	button.add_theme_font_size_override("font_size", ACTION_FONT_SIZE)
+	button.custom_minimum_size = ACTION_BUTTON_SIZE
+	button.size = ACTION_BUTTON_SIZE
+	return button
+
+
 func _render_actions() -> void:
 	for index in range(RESPONSE_KINDS.size()):
 		var kind: String = RESPONSE_KINDS[index]
-		var button := _button(_actions_root, ["吃", "碰", "杠", "胡", "过"][index], 0, 0, 108, 76, _on_response.bind(kind))
+		var button := _action_button(["吃", "碰", "杠", "胡", "过"][index], _on_response.bind(kind), kind)
 		button.name = "MahjongAction_" + kind
-		BATTLE_ART.lacquer(button, kind)
 		if kind == "pass": button.tooltip_text = "放弃对他人这次出牌或补杠的响应"
 		_response_buttons[kind] = button
 	for suit in DINGQUE_SUITS:
-		var button := _button(_actions_root, "缺" + DINGQUE_SUITS[suit], 0, 0, 108, 76,
-			_send_action.bind("dingque", 0, [], suit), true)
+		var button := _action_button("缺" + DINGQUE_SUITS[suit],
+			_send_action.bind("dingque", 0, [], suit))
 		button.name = "MahjongDingque_" + suit
 		button.tooltip_text = "选择定缺" + DINGQUE_SUITS[suit]
 		_dingque_buttons[suit] = button
@@ -2226,12 +2377,14 @@ func _start_camera_impact(action: String, unit: float) -> void:
 
 
 func _apply_camera_impact(progress: float, strength: float) -> void:
-	if not is_instance_valid(_board_view): return
+	if not is_instance_valid(_camera): return
 	var delta := Vector2(sin(progress*TAU*2.5), sin(progress*TAU*3.0)*0.55)
 	delta *= strength * pow(1.0 - progress, 2.0)
 	var step := delta - _camera_displacement
 	_camera_displacement = delta
-	_board_view.position += step
+	# Keep the native surface fixed so the impact cannot expose a window edge.
+	_camera.h_offset -= step.x * _camera_world_per_pixel
+	_camera.v_offset += step.y * _camera_world_per_pixel
 	_coach_overlay.shift_badges(step)
 	_layout_compass()
 	_layout_selection()
@@ -2292,7 +2445,8 @@ func _update_clock() -> void:
 	if not is_instance_valid(_remaining_number): return
 	_stop_clock()
 	var watching_live := _is_spectating() and _joined and _snapshot_ready and not _exiting
-	if _deadline_tick>0 and (_actions_ready() or watching_live) and str(_state.get("phase",""))!="finished":
+	_position_avatar_clock()
+	if _remaining_number.visible and _deadline_tick > 0 and (_actions_ready() or watching_live):
 		var seconds := maxf(0.0,float(_deadline_tick-Time.get_ticks_msec())/1000.0)
 		_draw_clock(seconds)
 		if seconds>0.0:
@@ -2300,6 +2454,29 @@ func _update_clock() -> void:
 			_clock_animation.tween_method(_draw_clock,seconds,0.0,seconds)
 	else:
 		_remaining_number.text = "—"
+		_remaining_number.hide()
+
+
+func _position_avatar_clock() -> void:
+	if not is_instance_valid(_remaining_number): return
+	var phase := str(_state.get("phase", ""))
+	var seat := -1
+	if phase == "turn":
+		seat = int(_state.get("turn", -1))
+	elif phase in ["reaction", "dingque"] and not _is_spectating() and not _options().is_empty():
+		seat = int(_state.get("your_seat", -1))
+	var ready := (_is_spectating() and _joined and _snapshot_ready) or _actions_ready()
+	_remaining_number.visible = not _exiting and ready and _state.get("status") == "playing" and _deadline_tick > 0 and seat >= 0 and seat < _avatar_portraits.size()
+	if not _remaining_number.visible: return
+	var portrait := _avatar_portraits[seat]
+	var bounds := portrait.get_global_rect()
+	# The mute control is at the lower right. Keep the timer on the portrait's lower left.
+	var extent := Vector2(bounds.size.x * 0.60, bounds.size.y * 0.37)
+	var point_size := maxi(8, roundi(extent.y * 0.68))
+	_remaining_number.add_theme_font_size_override("font_size", point_size)
+	_remaining_number.size = extent
+	_remaining_number.global_position = Vector2(bounds.position.x, bounds.end.y - _remaining_number.size.y)
+	_remaining_number.tooltip_text = "出牌剩余秒数" if phase == "turn" else ("定缺剩余秒数" if phase == "dingque" else "响应剩余秒数")
 
 
 func _draw_clock(seconds: float) -> void:
@@ -2319,9 +2496,16 @@ func _open_tool(kind: String) -> void:
 		var focus := get_viewport().gui_get_focus_owner()
 		_tool_opener = weakref(focus) if is_instance_valid(focus) and not _overlay_root.is_ancestor_of(focus) else null
 	_coach_overlay.close_detail()
-	_tool_open = "leave" if kind == "exit" else kind
+	_tool_open = "leave" if kind == "exit" else ("chat" if kind == "emote" else kind)
 	_clear(_overlay_root)
 	_render_tool()
+
+
+func _show_table_notice(title: String, message: String) -> void:
+	if _tool_open == "notice" and _notice_title == title and _notice_message == message: return
+	_notice_title = title
+	_notice_message = message
+	_open_tool("notice")
 
 
 func _close_tool() -> void:
@@ -2369,6 +2553,7 @@ func _tool_panel(title: String, height: float) -> VBoxContainer:
 	title_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title_slot)
 	_tool_title = MODAL.village_title(title_slot, title, _tool_surface)
+	_tool_title.get_parent().name = "MahjongToolTitlePlate"
 	_tool_title.clip_text = true
 	_tool_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_tool_title.add_theme_font_size_override("font_size", 27)
@@ -2403,14 +2588,16 @@ func _fit_tool_panel() -> void:
 	var height := minf(float(_tool_surface.get_meta("preferred_height")), bounds.size.y - 16.0)
 	_tool_title.get_parent().custom_minimum_size.x = clampf(width - 190.0, 96.0, 345.0)
 	_tool_surface.scale = Vector2.ONE * pixel
-	var tool_header := _tool_title.get_parent().get_parent()
-	var close := tool_header.get_child(-1) as Button
+	var close := _tool_surface.find_child("MahjongToolClose", true, false) as Button
+	var tool_header := close.get_parent()
 	(tool_header.get_child(0) as Control).custom_minimum_size.x = MODAL.size_icon_button(close, close)
 	_tool_surface.size = Vector2(width, height)
-	_tool_surface.position = area.get_center() - (_tool_surface.size - Vector2(0, 12)) * pixel * 0.5
+	var plate := _tool_title.get_parent() as Control
+	var headroom := maxf(0.0, plate.get_combined_minimum_size().y * 0.5 - float(_tool_surface.get_meta("title_border_offset", 0)))
+	_tool_surface.position = area.get_center() - (_tool_surface.size - Vector2(0, headroom)) * pixel * 0.5
 
 
-func _tool_action(body: VBoxContainer, title: String, action: Callable, primary := false) -> Button:
+func _tool_action(body: Container, title: String, action: Callable, primary := false) -> Button:
 	var button := _button(body, title, 0, 0, 230, 48, action, primary)
 	MODAL.village_button(button, primary)
 	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -2429,6 +2616,13 @@ func _tool_copy(body: VBoxContainer, text: String, font_size := 19) -> Label:
 func _render_tool() -> void:
 	_block_board_focus(true)
 	match _tool_open:
+		"notice":
+			var body := _tool_panel(_notice_title, 320)
+			var copy := _tool_copy(body, _notice_message, 21)
+			copy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			var acknowledge := _tool_action(body, "知道了", _close_tool, true)
+			acknowledge.name = "MahjongNoticeConfirm"
+			acknowledge.grab_focus()
 		"rules":
 			var body := _tool_panel("本桌规则", 466)
 			_tool_copy(body, _rule_name(), 24)
@@ -2436,7 +2630,7 @@ func _render_tool() -> void:
 			var version := str(_state.get("rule_version",match_context.get("rule_version","")))
 			_tool_copy(body, "本地练习" if training_mode else ("规则版本 " + version if not version.is_empty() else "以本桌结算为准"), 17)
 		"settings": _settings_panel()
-		"chat", "emote": _social_panel()
+		"chat": _social_panel()
 		"moderation": _moderation_panel()
 		"gang": _gang_panel()
 		"leave": _leave_panel()
@@ -2559,14 +2753,27 @@ func _gang_panel() -> void:
 
 
 func _social_panel() -> void:
-	var chatting := _tool_open == "chat"
-	var body := _tool_panel(("训练 · 本地快捷聊天" if chatting else "训练 · 本地表情") if training_mode else ("快捷聊天" if chatting else "牌桌表情"), 484)
-	var ids := CHAT_IDS if chatting else EMOTE_IDS
-	var texts := CHAT_TEXTS if chatting else EMOTE_TEXTS
-	for index in range(ids.size()):
-		var button := _tool_action(body, texts[index], _send_social_choice.bind("chat" if chatting else "emote", "quick_chat" if chatting else "emote", ids[index]))
-		button.disabled = not _actions_ready() or (not training_mode and str(_state.get("status", "waiting")) == "waiting")
+	var body := _tool_panel("牌桌聊天", 655)
+	_tool_copy(body, "表情", 18)
+	var emotes := HFlowContainer.new()
+	emotes.alignment = FlowContainer.ALIGNMENT_CENTER
+	body.add_child(emotes)
+	for index in EMOTE_IDS.size():
+		var button := _tool_action(emotes, EMOTE_TEXTS[index], _send_social_choice.bind("emote", "emote", EMOTE_IDS[index]))
+		button.name = "MahjongSocialChoice_" + EMOTE_IDS[index]
+		button.custom_minimum_size = Vector2(84, 48)
+	_tool_copy(body, "快捷语", 18)
+	for index in CHAT_IDS.size():
+		var button := _tool_action(body, CHAT_TEXTS[index], _send_social_choice.bind("chat", "quick_chat", CHAT_IDS[index]))
+		button.name = "MahjongSocialChoice_" + CHAT_IDS[index]
 	_tool_copy(body, "训练互动仅在本机显示" if training_mode else "所有牌友均可见 · 每秒一次", 16)
+	_refresh_social_choices()
+
+
+func _refresh_social_choices() -> void:
+	var disabled := not _actions_ready() or (not training_mode and str(_state.get("status", "waiting")) == "waiting")
+	for button: Button in _tool_surface.find_children("MahjongSocialChoice_*", "Button", true, false):
+		button.disabled = disabled
 
 
 func _seat_account(seat: int) -> String:
@@ -2860,8 +3067,15 @@ func _render_bubbles() -> void:
 		var box := Panel.new()
 		box.name = "MahjongSocialSeat%d" % int(seat)
 		var bubble_x := rect.position.x if relative != 1 else rect.end.x - 280
-		box.position = Vector2(clampf(bubble_x, 8, size.x - 288), rect.position.y - 64 if relative == 0 else rect.end.y + 32)
 		box.size = Vector2(280, 52)
+		var bubble_y := rect.end.y + 32.0
+		if relative == 0:
+			if rect.end.x + 8.0 + box.size.x <= _seat_rect(2).position.x:
+				bubble_x = rect.end.x + 8.0
+				bubble_y = rect.position.y
+			else:
+				bubble_y = _status.get_rect().end.y + 4.0
+		box.position = Vector2(clampf(bubble_x, 8, size.x - 288), bubble_y)
 		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_theme_stylebox_override("panel", _style(Color("#fff5deef"), Color("#b39c61"), 16))
 		_social_root.add_child(box)
@@ -2965,8 +3179,8 @@ func _fit_leave_panel(panel: Control) -> void:
 		action.custom_minimum_size = Vector2(128 if compact else 230, maxf(RURAL.touch_extent(self) / pixel, 48 if compact else 62))
 		action.add_theme_font_size_override("font_size", 21 if compact else 30)
 	panel.scale = Vector2.ONE * pixel
-	var header := plate.get_parent()
-	var close := header.get_child(-1) as Button
+	var close := panel.find_child("MahjongLeaveCloseButton", true, false) as Button
+	var header := close.get_parent()
 	(header.get_child(0) as Control).custom_minimum_size.x = MODAL.size_icon_button(close, close)
 	panel.size = Vector2(width, height)
 	var headroom := maxf(0.0, plate.custom_minimum_size.y * 0.5 - float(panel.get_meta("title_border_offset", 0)))
@@ -2980,8 +3194,17 @@ func finished_friend_match_id() -> String:
 
 
 func _return_now(keep_room: bool = false) -> void:
-	if _exiting: return
 	if keep_room and finished_friend_match_id().is_empty(): return
+	_exit_board(request_next_round if keep_room else request_return_to_lobby)
+
+
+func _return_to_finished_room() -> void:
+	if not finished_friend_match_id().is_empty():
+		_exit_board(request_return_to_room)
+
+
+func _exit_board(destination: Signal) -> void:
+	if _exiting: return
 	_exiting = true
 	_reset_report_request()
 	_joined = false
@@ -2991,8 +3214,7 @@ func _return_now(keep_room: bool = false) -> void:
 	_stop_clock()
 	if is_instance_valid(_transport): _transport.stop()
 	_refresh_connection_actions()
-	if keep_room: request_next_round.emit()
-	else: request_return_to_lobby.emit()
+	destination.emit()
 
 
 func _fit_settlement() -> void:
@@ -3004,11 +3226,16 @@ func _fit_settlement() -> void:
 		_settlement_reopen.add_theme_font_size_override("font_size", roundi(19.0 * pixel))
 		_settlement_reopen.position = Vector2(area.get_center().x - _settlement_reopen.size.x * 0.5, area.end.y - 66.0 * pixel)
 	if not is_instance_valid(_settlement_panel) or not _settlement_panel.is_inside_tree(): return
-	var width := minf(1480.0, minf(area.size.x * 0.89, area.size.y * 1.88) / pixel)
-	var height := minf(820.0, area.size.y * 0.88 / pixel)
+	var physical := area.size / pixel
+	var compact := physical.x < 960 or physical.y < 540
+	var width := minf(1590.0, physical.x * (0.97 if compact else 0.95))
+	if not compact and physical.x > physical.y:
+		width = minf(width,maxf(physical.y * 1.48,physical.x * 0.81))
+	var height := minf(970.0, physical.y * (0.96 if compact else 0.89))
 	_settlement_panel.scale = Vector2.ONE * pixel
 	_settlement_panel.size = Vector2(width, height)
-	_settlement_panel.position = area.get_center() - _settlement_panel.size * pixel * 0.5
+	var spare := area.size - _settlement_panel.size * pixel
+	_settlement_panel.position = area.position + spare * Vector2(0.5,0.5 if compact else 0.75)
 
 
 func _render_settlement_overlay() -> void:
@@ -3037,11 +3264,35 @@ func _reopen_settlement() -> void:
 	_render_settlement_overlay()
 
 
+func _settlement_tiles(seat: int, own_seat: int) -> Array:
+	var hands := _array("settlement_hands")
+	var concealed: Variant = hands[seat] if seat < hands.size() else _state.get("hand") if seat == own_seat else null
+	if not concealed is Array: return []
+	var tiles := []
+	var melds := _array("melds")
+	var group := 0
+	if seat < melds.size() and melds[seat] is Array:
+		for meld in melds[seat]:
+			if not meld is Dictionary or not meld.get("tiles") is Array: continue
+			for tile in meld.tiles:
+				if tile is Dictionary and DINGQUE_SUITS.has(tile.get("suit")) and _option_integer(tile.get("rank")) in range(1,10):
+					tiles.append({"suit":tile.suit,"rank":int(tile.rank),"group":group})
+				elif meld.get("kind") == "an_gang":
+					tiles.append({"concealed":true,"group":group})
+			group += 1
+	for tile in concealed:
+		if tile is Dictionary and DINGQUE_SUITS.has(tile.get("suit")) and _option_integer(tile.get("rank")) in range(1,10):
+			tiles.append({"suit":tile.suit,"rank":int(tile.rank),"group":group})
+	return tiles
+
+
 func _render_settlement() -> void:
 	_block_board_focus(true)
 	var dim := ColorRect.new()
 	dim.name = "MahjongSettlementDim"
-	dim.color = Color("#2117109c")
+	var blur := ShaderMaterial.new()
+	blur.shader = preload("res://modules/games/mahjong/guiyang/settlement_backdrop.gdshader")
+	dim.material = blur
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_overlay_root.add_child(dim)
@@ -3066,12 +3317,15 @@ func _render_settlement() -> void:
 	if winners.is_empty() and _is_dingque_table(): summary = "查叫结算"
 	if winners.is_empty() and _state.has("ready_seats"): summary = "黄庄查叫"
 	var version := str(_state.get("rule_version", match_context.get("rule_version", "")))
-	var room := "%s · 房间 %s" % [_rule_name(), str(_state.get("room_id", match_context.get("room_id", "")))]
+	var room_id := str(_state.get("room_id", match_context.get("room_id", "")))
+	var room := "%s · 房间 %s" % [_rule_name(), room_id]
+	var round_caption := "房间%s  ·  本局结算" % room_id
 	if not version.is_empty(): room += " · 规则 " + version
 	var round_limit := int(_state.get("round_limit", match_context.get("round_limit", 0)))
 	if _room_kind() == "friend" and round_limit > 0:
 		var completed := int(_state.get("completed_rounds", match_context.get("completed_rounds", 0)))
 		room += " · %d/%d 局" % [clampi(completed + 1, 1, round_limit), round_limit]
+		round_caption = "房间%s  ·  第 %d 局结算" % [room_id,clampi(completed+1,1,round_limit)]
 	var series_rounds := int(_state.get("series_rounds", 0))
 	var series_scores := _array("series_scores")
 	var series_ranks := _array("series_ranks")
@@ -3079,6 +3333,7 @@ func _render_settlement() -> void:
 		var total_rounds := int(_state.get("series_total_rounds", series_rounds))
 		room += " · 累计 %d/%d 局" % [series_rounds, total_rounds]
 	var data := {"room":room, "summary":summary, "outcome":outcome, "outcome_title":outcome_title, "rows":[], "rematch":not finished_friend_match_id().is_empty()}
+	data["round_caption"] = round_caption
 	data["return_caption"] = "返回" + str(match_context.get("return_destination", "大厅"))
 	var indicator: Variant = _state.get("flipped_ji", {})
 	if indicator is Dictionary and str(indicator.get("suit", "")) in ["wan", "tong", "tiao"] and int(indicator.get("rank",0)) in range(1, 10):
@@ -3088,6 +3343,11 @@ func _render_settlement() -> void:
 	var players := _array("players")
 	var chicken := _array("ji_counts")
 	var egg_deltas := _array("egg_deltas")
+	var egg_counts := _array("egg_counts")
+	var fan_by_seat := {}
+	for fan in _array("fan_breakdown"):
+		if fan is Dictionary and fan.get("items") is Array and _option_integer(fan.get("total")) >= 0:
+			fan_by_seat[_option_integer(fan.get("seat"))] = fan
 	var player_names := _array("player_names")
 	var breakdown: Variant = _state.get("score_breakdown")
 	var win_from := int(_state.get("win_from", -1))
@@ -3100,16 +3360,39 @@ func _render_settlement() -> void:
 		if seat < player_names.size() and player_names[seat] is String and not str(player_names[seat]).is_empty(): name_value = str(player_names[seat])
 		if seat == own_seat: name_value = "%s（我）" % str(match_context.get("display_name", name_value))
 		elif _room_kind()=="training": name_value += " · 电脑牌友"
-		elif seat >= player_names.size() and seat<players.size(): name_value += " · 牌友 " + str(players[seat]).right(4)
+		elif seat >= player_names.size() and seat < players.size(): name_value += " · 牌友"
 		var seat_result := "流局" if winners.is_empty() else "未胡"
 		if winners.has(seat): seat_result = str(method_names.get(win_kind, "胡牌"))
 		elif not winners.is_empty() and seat == win_from: seat_result = "被抢杠" if win_kind == "qiang_gang" else "点炮"
+		var win_method := seat_result
 		if hu_details.has(seat):
 			var detail: Dictionary = hu_details[seat]
 			var method := str(method_names.get(detail.get("kind"), seat_result))
+			win_method = method
 			seat_result = "%s · %s %d 番" % [method, str(detail.get("pattern", "")), int(detail.get("fan", 0))]
 		if seat < chicken.size() and int(chicken[seat]) > 0: seat_result += " · 鸡值 %d" % int(chicken[seat])
 		var row := {"seat":seat, "name":name_value, "score":int(scores[seat]), "result":seat_result, "own":seat == own_seat}
+		row["relative"] = _relative_seat(seat)
+		row["winner"] = winners.has(seat)
+		row["method"] = win_method
+		row["status"] = "胡牌" if row.winner else "闲家" if win_method == "未胡" else win_method
+		row["tiles"] = _settlement_tiles(seat, own_seat)
+		if seat < egg_counts.size() and _option_integer(egg_counts[seat]) >= 0:
+			row["balance"] = int(egg_counts[seat])
+		if fan_by_seat.has(seat):
+			var fan: Dictionary = fan_by_seat[seat]
+			var items := []
+			for item in fan.items:
+				if item is Dictionary and item.get("name") is String and _option_integer(item.get("fan")) >= 0:
+					items.append({"name":item.name,"fan":int(item.fan)})
+			if not items.is_empty():
+				row["fan_items"] = items
+				row["fan_total"] = int(fan.total)
+		if not row.has("fan_total") and hu_details.has(seat):
+			var hu: Dictionary = hu_details[seat]
+			if _option_integer(hu.get("fan")) >= 0:
+				row["fan_total"] = int(hu.fan)
+				row["fan_items"] = [{"name":"%s · %s" % [str(hu.get("pattern","胡牌")), win_method],"fan":int(hu.fan)}]
 		if series_rounds > 0 and series_scores.size() == 4 and series_ranks.size() == 4:
 			row["series"] = "累计 %+d 分 · 第 %d 名" % [int(series_scores[seat]), int(series_ranks[seat])]
 		row["counts_eggs"] = not training_mode and _room_kind() != "training"
@@ -3121,11 +3404,13 @@ func _render_settlement() -> void:
 			var ji: Variant = breakdown.get("ji")
 			if hu is Array and hu.size() == 4 and gang is Array and gang.size() == 4 and ji is Array and ji.size() == 4:
 				row["details"] = "胡 %+d   杠 %+d   鸡 %+d" % [int(hu[seat]), int(gang[seat]), int(ji[seat])]
+				row["score_items"] = [{"name":"胡牌","points":int(hu[seat])},{"name":"杠分","points":int(gang[seat])},{"name":"鸡分","points":int(ji[seat])}]
 				var checked: Variant = breakdown.get("cha_jiao")
 				if checked is Array and checked.size() == 4 and (_is_dingque_table() or _state.has("ready_seats")):
 					row["details"] += "   查叫 %+d" % int(checked[seat])
+					row.score_items.append({"name":"查叫","points":int(checked[seat])})
 		data.rows.append(row)
-	panel.setup(data, _return_now, _return_now.bind(true), _open_tool.bind("rules"), _dismiss_settlement)
+	panel.setup(data, _return_now, _return_now.bind(true), _open_tool.bind("rules"), _dismiss_settlement, _return_to_finished_room, _tile_materials)
 	_overlay_root.add_child(panel)
 	_settlement_panel = panel
 	_fit_settlement()

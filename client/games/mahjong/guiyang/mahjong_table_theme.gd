@@ -1,51 +1,38 @@
 extends RefCounted
-## Felt and varnished wood on the imported Mahjong table.
+## The borderless felt surface and lighting for the Mahjong table.
 
-const WOOD_SHADER := preload("res://modules/games/mahjong/guiyang/rural_wood.gdshader")
 const FELT_SHADER := preload("res://modules/games/mahjong/guiyang/club_felt.gdshader")
-const WOOD_ALBEDO := preload("res://modules/games/mahjong/guiyang/assets/models/textures/T_Mahjong_WalnutRail_BaseColor.png")
+const FELT_PILE := preload("res://modules/games/mahjong/guiyang/assets/models/textures/T_Mahjong_Felt_Pile.png")
 const CREAM := Color("#fff0d7")
 const MUTED := Color("#e0c3a0")
 const BRASS := Color("#ab7f50")
-const FELT_SCALE := 0.689 / 0.6675
-const FELT_COLOR := Color("#192f1e")
-const KEY_POSITION := Vector3(-0.60, 1.20, 0.42)
-# Approximate white points in sRGB for the project's unitless light mode.
-const KEY_4800K := Color("#ffe5cb")
-const FILL_6000K := Color("#fff7ef")
-const RIM_COOL_DAYLIGHT := Color("#e6efff")
-const KEY_ENERGY := 1.46
-const FILL_ENERGY := 0.45
-const RIM_ENERGY := 0.36
-const CORNER_STEPS := 12
-# Half-width, height and corner radius of the closed wooden rail, in GLB metres.
-const RAIL_PROFILE := [
-	Vector3(0.744, -0.059525, 0.048), Vector3(0.749, -0.056, 0.051),
-	Vector3(0.750, -0.052, 0.052), Vector3(0.750, 0.001, 0.052),
-	Vector3(0.7493, 0.0045, 0.0515), Vector3(0.7466, 0.008, 0.0495),
-	Vector3(0.742, 0.010, 0.046), Vector3(0.691, 0.010, 0.033),
-	Vector3(0.6872, 0.0088, 0.030), Vector3(0.6845, 0.0058, 0.0285),
-	Vector3(0.683, 0.0015, 0.027), Vector3(0.683, -0.059525, 0.027),
-]
-static var _rail_mesh: ArrayMesh
+const FELT_SIZE_METRES := Vector2.ONE * (1.35 + 2.0 * 2.0)
+const FELT_COLOR := Color("#223b2b")
+const KEY_POSITION := Vector3(-0.65, 1.29, 0.54)
+const KEY_WARM_WHITE := Color("#ffefdc")
+const FILL_WHITE := Color("#f3f8ff")
+const RIM_COOL_DAYLIGHT := Color("#d5eaff")
+const KEY_ENERGY := 1.43
+const FILL_ENERGY := 0.50
+const RIM_ENERGY := 0.40
 static var _reflection_panorama: ImageTexture
 static var _reflection_skies: Dictionary = {}
 
 
 static func configure_stage(stage: Node3D, quality: int) -> void:
 	var compatibility := RenderingServer.get_current_rendering_method() == "gl_compatibility"
-	# Linear tone mapping has less highlight headroom on the energy-saving tier.
-	var local_energy := 0.66 if compatibility else (0.86 if quality == 0 else 1.0)
+	# The compatibility backend has less headroom before ivory highlights clip.
+	var local_energy := 0.33 if compatibility else 1.0
 	var environment := (stage.get_node("WorldEnvironment") as WorldEnvironment).environment
 	environment.background_mode = Environment.BG_CLEAR_COLOR
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color("#ebeff4")
-	environment.ambient_light_energy = 0.14 if compatibility else 0.17
+	environment.ambient_light_color = Color("#e4edf5")
+	environment.ambient_light_energy = 0.14 if compatibility else 0.25
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.sky = _studio_reflection(quality)
-	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC if quality > 0 and not compatibility else Environment.TONE_MAPPER_LINEAR
-	environment.tonemap_exposure = 1.08 if quality > 0 and not compatibility else 1.0
-	environment.tonemap_white = 1.75
+	environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR if compatibility else Environment.TONE_MAPPER_ACES
+	environment.tonemap_exposure = 1.0 if compatibility else 1.02
+	environment.tonemap_white = 2.22
 	(stage.get_node("Floor") as MeshInstance3D).hide()
 
 	# The angled spot is now the only shadow caster. Retire the former
@@ -59,10 +46,9 @@ static func configure_stage(stage: Node3D, quality: int) -> void:
 		old_northwest.light_energy = 0.0
 		old_northwest.shadow_enabled = false
 		old_northwest.hide()
-	# The upright hand faces away from the broad key. Lift the front fill
-	# there so the engraved pips remain legible on smaller displays.
-	_configure_fill(stage, "FillLight", Vector3(0.0, 0.30, 0.82), FILL_6000K, FILL_ENERGY * local_energy, 1.48)
-	_configure_fill(stage, "NortheastSeatLight", Vector3(0.64, 0.44, -0.64), RIM_COOL_DAYLIGHT, (RIM_ENERGY if quality > 0 else 0.0) * local_energy, 1.72)
+	# The front fill opens the upright hand. The cooler rear light catches its bevels.
+	_configure_fill(stage, "FillLight", Vector3(0.06, 0.53, 0.98), FILL_WHITE, FILL_ENERGY * local_energy, 1.80, 0.12)
+	_configure_fill(stage, "NortheastSeatLight", Vector3(0.65, 0.63, -0.64), RIM_COOL_DAYLIGHT, (RIM_ENERGY if quality > 0 else 0.0) * local_energy, 1.86, 0.30)
 	_configure_overhead(stage, quality, local_energy)
 	# This filter is global in Godot. Restore the renderer's platform default
 	# when the Mahjong stage exits, rather than leaking it into another game.
@@ -98,22 +84,22 @@ static func _configure_overhead(stage: Node3D, quality: int, energy_scale: float
 		stage.add_child(spot)
 	spot.position = KEY_POSITION
 	spot.look_at(Vector3(0.0, 0.0, 0.0))
-	spot.light_color = KEY_4800K
+	spot.light_color = KEY_WARM_WHITE
 	spot.light_energy = KEY_ENERGY * energy_scale
-	spot.light_specular = 0.39
+	spot.light_specular = 0.18
 	spot.spot_range = 2.7
-	spot.spot_angle = 55.0
-	spot.spot_attenuation = 0.45
-	spot.spot_angle_attenuation = 0.55
+	spot.spot_angle = 60.0
+	spot.spot_attenuation = 0.52
+	spot.spot_angle_attenuation = 0.50
 	spot.light_size = 0.0 # Explicit PCF, no per-fragment PCSS search on mobile.
 	spot.shadow_enabled = true
-	spot.shadow_blur = 1.30 if quality > 0 else 1.12
-	spot.shadow_opacity = 0.64
+	spot.shadow_blur = 1.58 if quality > 0 else 1.20
+	spot.shadow_opacity = 0.70
 	spot.shadow_bias = 0.012
 	spot.shadow_normal_bias = 0.16
 
 
-static func _configure_fill(stage: Node3D, light_name: String, location: Vector3, tint: Color, energy: float, radius: float) -> void:
+static func _configure_fill(stage: Node3D, light_name: String, location: Vector3, tint: Color, energy: float, radius: float, specular: float) -> void:
 	var light := stage.get_node_or_null(light_name) as OmniLight3D
 	if light == null:
 		light = OmniLight3D.new()
@@ -121,10 +107,10 @@ static func _configure_fill(stage: Node3D, light_name: String, location: Vector3
 		stage.add_child(light)
 	light.position = location
 	light.omni_range = radius
-	light.omni_attenuation = 1.30
+	light.omni_attenuation = 1.20
 	light.light_color = tint
 	light.light_energy = energy
-	light.light_specular = 0.32
+	light.light_specular = specular
 	light.shadow_enabled = false
 	light.visible = energy > 0.0
 
@@ -154,59 +140,16 @@ static func _studio_reflection(quality: int) -> Sky:
 	return sky
 
 
-static func finish_table(table: Node3D) -> void:
-	var frame := table.find_child("SM_Mahjong_Table_Frame_RoundedAlloy", true, false) as MeshInstance3D
-	var felt := table.find_child("Mahjong_Felt_Surface", true, false) as MeshInstance3D
-	if frame != null:
-		var wood := ShaderMaterial.new()
-		wood.shader = WOOD_SHADER
-		wood.set_shader_parameter("wood_albedo", WOOD_ALBEDO)
-		# Preserve the RGB of the user's walnut reference. Lighting/clearcoat
-		# supplies the volume; no orange tint is mixed back into the wood.
-		wood.set_shader_parameter("wood_color", Color.WHITE)
-		frame.mesh = _wooden_rail_mesh()
-		frame.material_override = wood
-
-	if felt != null:
-		var textile := ShaderMaterial.new()
-		textile.shader = FELT_SHADER
-		textile.set_shader_parameter("felt_color", FELT_COLOR)
-		felt.scale = Vector3(FELT_SCALE, 1.0, FELT_SCALE)
-		felt.material_override = textile
-
-	var inlay := table.find_child("Frame_GoldInlay_RoundedContinuous", true, false) as MeshInstance3D
-	if inlay != null:
-		inlay.hide()
-
-	# The UI projects live wind labels and timer over the center of the table.
-	for controller in table.find_children("Controller_*", "MeshInstance3D", true, false):
-		controller.hide()
-
-
-static func _wooden_rail_mesh() -> ArrayMesh:
-	if _rail_mesh != null:
-		return _rail_mesh
-	var rings: Array[PackedVector3Array] = []
-	for cross_section: Vector3 in RAIL_PROFILE:
-		var ring := PackedVector3Array()
-		var center := cross_section.x - cross_section.z
-		for corner: Vector2 in [Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1), Vector2(-1, -1)]:
-			var start := corner.angle() - PI * 0.25
-			for step in range(CORNER_STEPS + 1):
-				var angle := start + float(step) * PI * 0.5 / float(CORNER_STEPS)
-				var edge := corner * center + Vector2.from_angle(angle) * cross_section.z
-				ring.append(Vector3(edge.x, cross_section.y, edge.y))
-		rings.append(ring)
-	var surface := SurfaceTool.new()
-	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for index in range(rings.size()):
-		var current := rings[index]
-		var following := rings[(index + 1) % rings.size()]
-		for point in range(current.size()):
-			var next := (point + 1) % current.size()
-			for vertex in [current[point], current[next], following[point], current[next], following[next], following[point]]:
-				surface.add_vertex(vertex)
-	surface.generate_normals()
-	surface.index()
-	_rail_mesh = surface.commit()
-	return _rail_mesh
+static func create_felt_surface() -> MeshInstance3D:
+	var plane := PlaneMesh.new()
+	plane.size = FELT_SIZE_METRES
+	var textile := ShaderMaterial.new()
+	textile.shader = FELT_SHADER
+	textile.set_shader_parameter("felt_color", FELT_COLOR)
+	textile.set_shader_parameter("pile_map", FELT_PILE)
+	var felt := MeshInstance3D.new()
+	felt.name = "Mahjong_Felt_Surface"
+	felt.mesh = plane
+	felt.material_override = textile
+	felt.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return felt

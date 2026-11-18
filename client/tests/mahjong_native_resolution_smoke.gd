@@ -34,6 +34,178 @@ func _native(area: Control, viewport: SubViewport, label: String) -> void:
 		_check(Vector2i(viewport.get_texture().get_size()) == target, "%s GPU texture must match the physical display area" % label)
 	_records.append({"case":label,"window":root.size,"display_px":target,"render_px":viewport.size,"scale":viewport.scaling_3d_scale})
 
+
+func _verify_felt_coverage(board: Board, label: String) -> void:
+	var felt := board._board_viewport.find_child("Mahjong_Felt_Surface", true, false) as MeshInstance3D
+	_check(is_instance_valid(felt), "%s must render a real 3D felt surface" % label)
+	if not is_instance_valid(felt): return
+	var bounds: AABB = felt.global_transform * felt.get_aabb()
+	_check(Vector2(bounds.size.x, bounds.size.z).is_equal_approx(Vector2(5.35, 5.35))
+		and Vector2(bounds.get_center().x, bounds.get_center().z).is_zero_approx(),
+		"%s must extend the 1.35 m table by exactly 2 m on each side" % label)
+	var frame := board._board_viewport.find_child("SM_Mahjong_Table_Frame_RoundedAlloy", true, false) as MeshInstance3D
+	_check(frame == null or not frame.is_visible_in_tree(), "%s must not render the table frame" % label)
+	_check(board._board_view.get_rect().is_equal_approx(Rect2(Vector2.ZERO, board.size)),
+		"%s must render the felt behind the entire window, including the header" % label)
+	var pitch := rad_to_deg(asin(board._camera.global_basis.z.normalized().y))
+	_check(absf(pitch - 50.0) <= 0.1, "%s camera pitch must be 50 degrees (got %.2f)" % [label, pitch])
+	var horizontal_tangent := tan(deg_to_rad(board._camera.fov * 0.5)) * Vector2(board._board_viewport.size).aspect()
+	_check(is_equal_approx(horizontal_tangent, 36.0 / (2.0 * 40.0)), "%s must preserve a 40 mm lens on a 36 mm horizontal gate" % label)
+
+	var plane := Plane(Vector3.UP, bounds.end.y)
+	var width := board._board_viewport.size.x
+	var height := board._board_viewport.size.y
+	var corners := [Vector2(0.5, 0.5), Vector2(width - 0.5, 0.5),
+		Vector2(0.5, height - 0.5), Vector2(width - 0.5, height - 0.5)]
+	for corner: Vector2 in corners:
+		var hit: Variant = plane.intersects_ray(board._camera.project_ray_origin(corner), board._camera.project_ray_normal(corner))
+		_check(hit is Vector3 and hit.x >= bounds.position.x and hit.x <= bounds.end.x
+			and hit.z >= bounds.position.z and hit.z <= bounds.end.z,
+			"%s uncovered viewport corner %s" % [label, corner])
+	if DisplayServer.get_name() != "headless":
+		var rendered := board._board_viewport.get_texture().get_image()
+		for corner: Vector2 in corners:
+			var pixel := rendered.get_pixel(int(corner.x), int(corner.y))
+			_check(pixel.a >= 0.98 and pixel.g > pixel.r, "%s corner %s must render green felt" % [label, corner])
+
+
+func _verify_physical_tile(model: Node3D) -> void:
+	var body := model.find_child("TileBody", true, false) as MeshInstance3D
+	var axes := Transform3D(model.global_basis.orthonormalized(), model.global_position)
+	var bounds: AABB = (axes.affine_inverse() * body.global_transform) * body.get_aabb()
+	_check(bounds.size.is_equal_approx(Vector3(0.039, 0.028, 0.056)), "%s body measures %s metres" % [model.name, bounds.size])
+
+
+func _verify_full_hand_framing(board: Board) -> void:
+	for model: Node3D in board._pieces_root.get_children():
+		if not model.is_queued_for_deletion(): _verify_physical_tile(model)
+	var span: float = board._hand_models.back().global_position.x - board._hand_models.front().global_position.x + 0.039
+	_check(is_equal_approx(span, 0.546), "The 14-tile hand must span 546 mm at every aspect ratio")
+	var safe_area := Rect2(board._safe.x, board._safe.y, board.size.x - board._safe.x - board._safe.z, board.size.y - board._safe.y - board._safe.w)
+	if safe_area.size.aspect() < 1.67: return
+	_check(absf(board._camera.position.distance_to(board.CAMERA_TARGET) - 2.802157 * 2.0 / 3.0) <= 0.002, "The camera must be one third closer to the table at the fixed 40 mm focal length")
+	var bounds := board._projected_tile_rect(board._hand_models[0], &"TileBody")
+	for model: Node3D in board._hand_models: bounds = bounds.merge(board._projected_tile_rect(model, &"TileBody"))
+	var tile_width := bounds.size.x / 14.0
+	var left := bounds.position.x / tile_width
+	var right := (board.size.x - bounds.end.x) / tile_width
+	var pixels := (board.get_viewport_transform() * board.get_global_transform()).y.length()
+	var bottom_px := (safe_area.end.y - bounds.end.y) * pixels
+	var bottom_tiles := (safe_area.end.y - bounds.end.y) / tile_width
+	_check(absf(left - right) < 0.07 and safe_area.encloses(bounds), "The original-size hand must be centered and fully visible")
+	_check(absf(bottom_px - 6.0) <= 2.0, "Own hand must sit at the bottom safe edge: %.1f px" % bottom_px)
+	var selected := board._selected_id
+	for index in [0, 13]:
+		var resting: Transform3D = board._hand_models[index].global_transform
+		board._select_tile(board._hand_ids[index])
+		var lifted: Transform3D = board._hand_models[index].global_transform
+		_check(lifted.basis.is_equal_approx(resting.basis) and (lifted.origin - resting.origin).is_equal_approx(Vector3.UP * board.OWN_HAND_LIFT),
+			"Selecting either end tile must only lift it vertically")
+		_verify_physical_tile(board._hand_models[index])
+	board._selected_id = selected
+	board._render_hand_only()
+	_records.append({"case":"full_hand_framing","window":root.size,"hand_width_metres":span,"width_fraction":bounds.size.x/board.size.x,"left_tiles":left,"right_tiles":right,"bottom_tiles":bottom_tiles,"bottom_px":bottom_px,"vertical_fov_deg":board._camera.fov})
+
+
+func _verify_tile_lighting(board: Board, quality: int) -> void:
+	var frame := root.get_texture().get_image()
+	var canvas := board._board_view.get_viewport_transform() * board._board_view.get_global_transform()
+	# The upright hand, nearest river and farthest river face the lights at different angles.
+	var models: Array[Node3D] = [board._hand_models[7], board._pieces_root.get_node("MahjongDiscard0_4"),
+		board._pieces_root.get_node("MahjongDiscard2_5")]
+	for model in models:
+		var interior := Rect2i(canvas * board._projected_tile_rect(model)).grow(-3)
+		if not interior.has_area() or not Rect2i(Vector2i.ZERO, frame.get_size()).encloses(interior):
+			_check(false, "Lit tile face must be on screen")
+			continue
+		var luminance := PackedFloat32Array()
+		var clipped := 0
+		for y in range(interior.position.y, interior.end.y):
+			for x in range(interior.position.x, interior.end.x):
+				var pixel := frame.get_pixel(x, y)
+				luminance.append(pixel.srgb_to_linear().get_luminance())
+				if minf(pixel.r, minf(pixel.g, pixel.b)) >= 254.0 / 255.0: clipped += 1
+		luminance.sort()
+		var contrast := (luminance[luminance.size() * 9 / 10] + 0.05) / (luminance[luminance.size() / 10] + 0.05)
+		var clipped_fraction := float(clipped) / luminance.size()
+		var label := "%s quality %d" % [model.name, quality]
+		_check(contrast > 2.5, "%s tile ink lost contrast (%.2f)" % [label, contrast])
+		_check(clipped_fraction < 0.02, "%s ivory highlights clipped (%.1f%%)" % [label, 100.0 * clipped_fraction])
+		_records.append({"case":label, "p90_p10_contrast":contrast, "clipped_fraction":clipped_fraction})
+
+
+func _verify_hud_layout(board: Board) -> void:
+	var heading := board._header.get_global_rect()
+	var opposite := board._seat_panels[2].get_global_rect()
+	var expected_left := board._safe.x + board._horizontal_screen_pixels(10.0)
+	var top_inset := opposite.position.y - board._safe.y
+	_check(board.find_child("MahjongTableBrandMark", true, false) == null, "The battle HUD must omit the logo")
+	_check(is_equal_approx(heading.position.x, expected_left)
+		and board._header.horizontal_alignment == HORIZONTAL_ALIGNMENT_LEFT
+		and is_equal_approx(heading.position.y, opposite.position.y),
+		"Room heading must start at the top-left safe inset")
+	for relative in 4:
+		_check(board._wind_dial._winds[relative].text == ["南", "东", "北", "西"][relative], "Projected table directions must follow the screen")
+		var nickname := board._seat_panels[relative].get_node("MahjongSeatNickname") as Label
+		var factor := minf(board.size.x / 1440.0, board.size.y / 810.0)
+		var previous_size := roundi(20 * factor)
+		while previous_size > 10 and nickname.get_theme_font("font").get_height(previous_size) > 25 * factor: previous_size -= 1
+		_check(nickname.get_theme_font_size("font_size") == maxi(10, previous_size - 2) + 2, "All four nicknames must gain exactly two points")
+	_check(is_equal_approx(opposite.get_center().x, board._play_area.get_center().x)
+		and top_inset >= 0.0 and top_inset <= 12.1,
+		"Opposite player's card must sit at the top center")
+	_check(not heading.intersects(opposite) and not opposite.intersects(board._toolbar.get_global_rect()),
+		"Room heading, opposite player's card and toolbar must have separate space")
+	var left := board._seat_panels[3].get_global_rect()
+	var right := board._seat_panels[1].get_global_rect()
+	var expected_right := board.size.x - board._safe.z - board._horizontal_screen_pixels(10.0)
+	var center_y := (board._safe.y + board.size.y - board._safe.w) * 0.5
+	_check(is_equal_approx(left.position.x, expected_left) and is_equal_approx(right.end.x, expected_right)
+		and is_equal_approx(left.get_center().y, center_y) and is_equal_approx(right.get_center().y, center_y),
+		"Side players' cards must be centered vertically along the safe edges")
+	for relative in [1, 3]:
+		var seat := board._seat_panels[relative].get_global_rect()
+		for tile in board._pieces_root.find_children("MahjongConcealedHand%d_*" % relative, "Node3D", false, false):
+			if tile.is_queued_for_deletion(): continue
+			var body := board._projected_tile_rect(tile, &"TileBody")
+			_check(not seat.grow(-1.0).intersects(body), "Side card must clear %s at %s: %s and %s" % [tile.name, root.size, seat, body])
+	var own_seat := board._seat_panels[0].get_global_rect()
+	var row_gap := 4.0 * minf(board.size.x / 1440.0, board.size.y / 810.0)
+	_check(is_equal_approx(own_seat.position.x, heading.position.x) and is_equal_approx(own_seat.position.y, heading.end.y + row_gap)
+		and not own_seat.intersects(opposite) and not own_seat.intersects(left), "South portrait must sit directly under the room heading at the safe left edge")
+	_check(not board._turn_label.visible and board._turn_label.text.is_empty(), "Local discard turn must have no reminder text")
+	var saved_turn: int = board._state.turn
+	board._state.turn = 1
+	board._update_context_labels()
+	var turn := board._turn_label.get_global_rect()
+	_check(board._turn_label.visible and board._turn_label.text == "等待牌友" and turn.position.y >= own_seat.end.y and turn.end.y <= board.size.y - board._safe.w
+		and is_equal_approx(turn.get_center().x, own_seat.get_center().x),
+		"Waiting status must return below the local portrait when the turn changes")
+	board._state.turn = saved_turn
+	board._update_context_labels()
+	var tools := board._side_tools.get_global_rect()
+	var mic := board._own_mic.get_global_rect()
+	var beside := is_equal_approx(tools.end.y, mic.end.y) and tools.end.x < mic.position.x
+	var above := is_equal_approx(tools.end.x, mic.end.x) and tools.end.y < mic.position.y
+	_check(is_equal_approx(mic.end.x, expected_right) and (beside or above)
+		and mic.end.y <= board.size.y - board._safe.w,
+		"Chat, emoji and microphone must share the bottom-right safe area")
+	# Refit a long room ID against the same bounds used by an ordinary snapshot.
+	var room_id: Variant = board._state.room_id
+	board._state.room_id = "1234567890123456"
+	board._state.round_limit = 24
+	board._state.completed_rounds = 23
+	board._update_context_labels()
+	var font := board._header.get_theme_font("font")
+	var pixels := font.get_string_size(board._header.text, HORIZONTAL_ALIGNMENT_LEFT, -1, board._header.get_theme_font_size("font_size"))
+	_check(board._header.get_global_rect().is_equal_approx(heading) and pixels.x <= heading.size.x and pixels.y <= heading.size.y,
+		"A long room ID, round and wall count must fit without moving the heading")
+	board._state.room_id = room_id
+	board._state.erase("round_limit")
+	board._state.erase("completed_rounds")
+	board._update_context_labels()
+
+
 func _run() -> void:
 	Engine.max_fps = 0
 	if DisplayServer.get_name() != "headless": DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
@@ -56,15 +228,29 @@ func _run() -> void:
 		"players":["me","east","north","west"],"player_names":["村口阿牛","田埂阿梅","稻香大叔","河湾老张"],"egg_counts":[500,500,500,500],
 		"hand":hand,"hand_counts":[14,13,13,13],"melds":[[],[],[],[]],"discards":discards,"remaining":46,"options":[{"type":"play"}],"drawn_tile_id":14}
 	board._render()
-	for dimensions in [Vector2i(1280,720),Vector2i(1920,864),Vector2i(1920,1200),Vector2i(1600,1200),Vector2i(2560,1440)]:
+	var well := board._wind_dial.get_node("TimerWell") as MeshInstance3D
+	var well_material := well.material_override as StandardMaterial3D
+	var rim := board._wind_dial.get_node("WoodenBody") as MeshInstance3D
+	var rim_box := rim.global_transform * rim.get_aabb()
+	_check(absf(rim_box.size.x - 0.294 * 0.72) < 0.0001 and is_equal_approx(rim_box.size.x, rim_box.size.z),
+		"Wind dial must keep a round 72 percent footprint in world space")
+	_check(well_material.albedo_color.is_equal_approx(Color("#101010"))
+		and board._wind_dial.get_timer_position().y < 0.025,
+		"Wind dial must have a black center and lower projection height")
+	for dimensions in [Vector2i(720,1280),Vector2i(1280,720),Vector2i(1920,864),Vector2i(1920,1200),Vector2i(1600,1200),Vector2i(2560,1440)]:
 		root.size = dimensions
 		await _settle()
 		for quality in 3:
 			board._set_quality(quality)
 			await _settle()
 			_native(board._board_view, board._board_viewport, "board_%dx%d_q%d" % [dimensions.x,dimensions.y,quality])
+			if dimensions == Vector2i(1280,720) and DisplayServer.get_name() != "headless":
+				_verify_tile_lighting(board, quality)
 			var display := board._board_surface.get_viewport_transform() * board._board_surface.get_global_transform()
 			_check(display.get_scale().is_equal_approx(Vector2.ONE) and not board._board_surface.stretch, "Board must present each rendered pixel at 1:1")
+		_verify_full_hand_framing(board)
+		_verify_felt_coverage(board, "%dx%d" % [dimensions.x, dimensions.y])
+		_verify_hud_layout(board)
 		board._select_tile(0)
 		var tap := InputEventScreenTouch.new()
 		tap.pressed = true
@@ -77,6 +263,21 @@ func _run() -> void:
 		if not _output.is_empty() and DisplayServer.get_name() != "headless":
 			await RenderingServer.frame_post_draw
 			_check(root.get_texture().get_image().save_png(_output.path_join("board_%dx%d.png" % [dimensions.x,dimensions.y])) == OK, "Native capture saves")
+	board._apply_camera_impact(0.11, 5.0)
+	await _settle()
+	_verify_felt_coverage(board, "play effect")
+	board._stop_camera_impact()
+	board.match_context.merge({"spectating":true,"watch_seat":0}, true)
+	board._state.hand = []
+	board._render()
+	for dimensions in [Vector2i(800,450), Vector2i(1600,720)]:
+		root.size = dimensions
+		await _settle()
+		var near_row := board._pieces_root.find_children("MahjongConcealedHand0_*", "Node3D", false, false)
+		_check(near_row.size() == 14, "Spectating must render all fourteen near tile backs")
+		for tile: Node3D in near_row:
+			_check(board._board_view.get_rect().encloses(board._projected_tile_rect(tile, &"TileBody")),
+				"Spectator camera must include the full near tile back at %s" % [dimensions])
 	board.queue_free()
 	await _settle()
 	root.content_scale_size = Vector2i(1440,810)
@@ -86,6 +287,7 @@ func _run() -> void:
 	root.add_child(guided)
 	await _settle()
 	_native(guided._preview, guided._viewport, "guided_scaled_canvas")
+	for model: Node3D in guided._pieces.get_children(): _verify_physical_tile(model)
 	guided.scale = Vector2.ONE * 1.25
 	await _settle()
 	_native(guided._preview, guided._viewport, "guided_parent_scale")
@@ -97,6 +299,7 @@ func _run() -> void:
 	detail.show_result("进张明细", entries, "", Rect2(Vector2.ZERO,root.get_visible_rect().size))
 	await _settle()
 	_native(detail._tray, detail._viewport, "detail_scaled_canvas")
+	for model: Node3D in detail._models: _verify_physical_tile(model)
 	detail.hide()
 	root.size = Vector2i(1920,1080)
 	await _settle()

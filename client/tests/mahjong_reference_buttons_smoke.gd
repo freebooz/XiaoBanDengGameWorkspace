@@ -45,6 +45,35 @@ func _fixture() -> Dictionary:
 		"hand_counts":[14,13,13,13], "scores":[0,0,0,0], "melds":[[],[],[],[]], "discards":[], "remaining":55,
 		"options":[{"type":"play"}], "winners":[]}
 
+func _check_hud_icons(screen: OfflineTable) -> void:
+	var controls := screen._toolbar.get_children() + screen._side_tools.get_children() + screen._seat_voice_buttons.values()
+	var normal := screen._own_mic.get_theme_stylebox("normal")
+	var rim := normal.get("texture") as Texture2D
+	_check(controls.size() == 8 and rim != null, "主工具、社交和三个座位麦克风必须使用同一套圆形外观")
+	_check(screen._side_tools.get_child_count() == 1 and screen._side_tools.get_node_or_null("MahjongChat") != null, "快捷语与表情共用一个按钮")
+	for button: Button in controls:
+		_check(button.icon != null and button.text.is_empty() and not button.accessibility_name.is_empty(), "图标按钮缺少图形或辅助名称：" + str(button.name))
+		for state in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled", &"focus"]:
+			var frame := button.get_theme_stylebox(state)
+			_check(frame.get("texture") == rim and frame.get("preserve_aspect") == true, "%s/%s 的外圈形状或素材不一致" % [button.name, state])
+	if rim == null or DisplayServer.get_name() == "headless": return
+	var image := rim.get_image()
+	var middle := image.get_size() / 2
+	_check(image.get_pixelv(middle).a < 0.25 and image.get_pixel(0, 0).a < 0.01, "外圈中央应能透出桌布，四角应完全透明")
+
+func _click_hud(button: Button) -> void:
+	var point := button.get_viewport_transform() * button.get_global_transform() * (button.size * 0.5)
+	var motion := InputEventMouseMotion.new()
+	motion.position = point
+	root.push_input(motion)
+	for down in [true, false]:
+		var click := InputEventMouseButton.new()
+		click.position = point
+		click.button_index = MOUSE_BUTTON_LEFT
+		click.pressed = down
+		root.push_input(click)
+		await process_frame
+
 func _run() -> void:
 	var preferences := "user://mahjong_reference_buttons_fixture_%d.cfg" % OS.get_process_id()
 	var screen := OfflineTable.new()
@@ -68,6 +97,7 @@ func _run() -> void:
 	screen._handle_packet(JSON.stringify(first))
 	screen._select_tile(11)
 	_check(not screen._play_button.disabled, "合法回合选牌后打出仍被禁用")
+	_check_hud_icons(screen)
 	var response_visible: bool = screen._response_buttons.values().any(func(button: Button): return button.is_visible_in_tree())
 	_check(screen._play_button.is_visible_in_tree() and not response_visible, "只有出牌选项时不得显示任一响应按钮")
 	await process_frame
@@ -99,6 +129,8 @@ func _run() -> void:
 	screen._on_play()
 	_check(screen.delivered.size() == 1 and screen._play_button.disabled, "确认前重新选牌绕过了重复提交限制")
 	screen._handle_packet(JSON.stringify({"type":"mahjong_error", "message":"测试拒绝"}))
+	_check(screen._tool_open == "notice" and screen._notice_message == "测试拒绝", "服务端拒绝须弹出实际原因")
+	(screen.find_child("MahjongNoticeConfirm", true, false) as Button).pressed.emit()
 	_check(not screen._play_button.disabled, "服务器拒绝后未恢复可重试操作")
 	screen._on_play()
 	_check(screen.delivered.size() == 2, "服务器拒绝后不能重新提交真实动作")
@@ -167,8 +199,16 @@ func _run() -> void:
 	screen._handle_packet(JSON.stringify(reactions))
 	screen._open_tool("chat")
 	screen._last_social_send = -1000
-	screen._send_social_choice("chat", "quick_chat", "hello")
+	var chat_panel := screen._tool_surface
+	_check(chat_panel.find_children("MahjongSocialChoice_*", "Button", true, false).size() == 10, "聊天面板应同时提供五个表情和五条快捷语")
+	screen._handle_packet(JSON.stringify(reactions))
+	_check(chat_panel == screen._tool_surface, "正常状态更新应保留打开的聊天面板和焦点")
+	(chat_panel.find_child("MahjongSocialChoice_hello", true, false) as Button).pressed.emit()
 	_check(screen.delivered.back().get("type") == "mahjong_social" and screen.delivered.back().get("quick_chat") == "hello" and not screen.delivered.back().has("seat"), "聊天没有使用规范 ID 或冒用了发送座位")
+	screen._open_tool("chat")
+	screen._last_social_send = -1000
+	(screen._tool_surface.find_child("MahjongSocialChoice_smile", true, false) as Button).pressed.emit()
+	_check(screen.delivered.back().get("action") == "emote" and screen.delivered.back().get("emote") == "smile", "同一面板的表情应发送独立的服务端表情 ID")
 	screen._handle_packet(JSON.stringify({"type":"mahjong_social", "room_id":"3131", "seat":1, "action":"chat", "text":"大家好，很高兴一起玩！"}))
 	_check(screen._social_events.has(1), "服务器聊天未显示牌桌气泡")
 	var mute := screen._seat_voice_buttons[1] as Button
@@ -219,8 +259,14 @@ func _run() -> void:
 	# Keep the desktop fixture reproducible while exercising asymmetric mobile insets.
 	screen._safe = Vector4i(24, 14, 6, 4)
 	var usable := Rect2(Vector2(24, 14), screen.size - Vector2(30, 18))
-	for tool in ["chat", "emote", "gang", "rules", "settings", "leave"]:
-		screen._open_tool(tool)
+	var tool_buttons := {"rules":"MahjongTool_rules", "settings":"MahjongTool_settings",
+		"leave":"MahjongTool_leave", "chat":"MahjongChat"}
+	for tool in ["chat", "gang", "rules", "settings", "leave"]:
+		if tool_buttons.has(tool):
+			await _click_hud(screen.find_child(tool_buttons[tool], true, false) as Button)
+			_check(screen._tool_open == tool, "实际点击未打开牌桌工具：" + tool)
+		else:
+			screen._open_tool(tool)
 		screen._handle_packet(JSON.stringify(reactions))
 		# Containers fit the overlapping title after the modal's minimum size
 		# notification; inspect the settled composition, not an intermediate frame.
@@ -231,7 +277,8 @@ func _run() -> void:
 		if panels.size() == 1:
 			var panel: Control = panels[0]
 			var visual_bounds := panel.get_global_rect()
-			var title := panel.find_child("MahjongLeaveTitlePlate", true, false) as Control
+			var title_name := "MahjongLeaveTitlePlate" if tool == "leave" else "MahjongToolTitlePlate"
+			var title := panel.find_child(title_name, true, false) as Control
 			if title != null:
 				visual_bounds = visual_bounds.merge(title.get_global_rect())
 			_check(visual_bounds.get_center().distance_to(usable.get_center()) <= 1.0, "弹窗与标题整体没有在安全区双轴居中：%s visual=%s safe=%s panel=%s title=%s minimum=%s" % [tool, visual_bounds, usable, panel.get_global_rect(), title.get_global_rect() if title != null else Rect2(), title.get_combined_minimum_size() if title != null else Vector2.ZERO])

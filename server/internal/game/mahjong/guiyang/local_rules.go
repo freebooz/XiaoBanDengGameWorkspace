@@ -168,6 +168,21 @@ func (g *Game) localWinKind(kind string) string {
 	return kind
 }
 
+func localWinMethodFan(kind string) fanItem {
+	switch kind {
+	case "zi_mo":
+		return fanItem{Name: "自摸", Fan: 1}
+	case "qiang_gang":
+		return fanItem{Name: "抢杠胡", Fan: 1}
+	case "gang_shang_hua":
+		return fanItem{Name: "杠上花", Fan: 2}
+	case "re_pao":
+		return fanItem{Name: "热炮", Fan: 2}
+	default:
+		return fanItem{}
+	}
+}
+
 func (g *Game) settleLocalHu(winners []int, from int, winningTile Tile) {
 	kind := g.WinKind
 	burnExtras := kind == "re_pao" || kind == "qiang_gang"
@@ -186,12 +201,7 @@ func (g *Game) settleLocalHu(winners []int, from int, winningTile Tile) {
 				pattern, fan = "天胡", 33
 			}
 		}
-		switch kind {
-		case "zi_mo", "qiang_gang":
-			fan++
-		case "gang_shang_hua", "re_pao":
-			fan += 2
-		}
+		fan += localWinMethodFan(kind).Fan
 		points := fan
 		if from < 0 {
 			for seat := range g.Players {

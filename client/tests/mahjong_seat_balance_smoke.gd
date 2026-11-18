@@ -40,6 +40,8 @@ func _run() -> void:
 		var panel: Control = screen._seat_panels[seat]
 		var quantity := panel.get_node("MahjongSeatEggs") as Label
 		var nickname := panel.get_node("MahjongSeatNickname") as Label
+		_check(panel.get_theme_stylebox("panel") is StyleBoxEmpty and nickname.get_theme_stylebox("normal") is StyleBoxEmpty,
+			"Seat %d must show the felt behind the portrait, nickname and balance" % seat)
 		var egg_icon := panel.get_node("MahjongSeatEggIcon") as TextureRect
 		var font := quantity.get_theme_font("font")
 		var font_size := quantity.get_theme_font_size("font_size")
@@ -52,7 +54,7 @@ func _run() -> void:
 		_check(egg_icon.texture != null and egg_icon.is_visible_in_tree(), "Seat %d must display the egg currency icon" % seat)
 		_check(egg_icon.get_global_rect().position.x >= rectangle.end.x and panel.get_global_rect().encloses(egg_icon.get_global_rect()), "Seat %d egg icon must trail the number and stay within the card" % seat)
 		_check(egg_icon.stretch_mode == TextureRect.STRETCH_KEEP_ASPECT_CENTERED and egg_icon.mouse_filter == Control.MOUSE_FILTER_IGNORE, "Currency artwork stays proportional and does not block input")
-		_check(nickname.get_visible_line_count() >= 1 and nickname.get_theme_font("font").get_height(nickname.get_theme_font_size("font_size")) <= nickname.size.y,"Seat %d nickname must remain readable inside its wood strip"%seat)
+		_check(nickname.get_visible_line_count() >= 1 and nickname.get_theme_font("font").get_height(nickname.get_theme_font_size("font_size")) <= nickname.size.y,"Seat %d nickname must remain readable above the balance"%seat)
 		_check(not nickname.get_global_rect().intersects(rectangle),"Seat %d nickname must not overlap the balance area"%seat)
 		var painted := -1
 		if frame_image != null:

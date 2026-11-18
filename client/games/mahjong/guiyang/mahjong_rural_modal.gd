@@ -10,7 +10,7 @@ const PAPER_CARD := preload(BASE + "warm_kraft_card.png")
 const SECTION := preload(BASE + "section.svg")
 const CLOSE := preload("res://modules/games/mahjong/guiyang/assets/ui/harvest/round_button.png")
 const HUD_ICON_EXTENT := 56.0
-const ICON_VISUAL_RATIO := 0.90
+const ICON_VISUAL_RATIO := 0.675 # Three quarters of the former 0.90 diameter; touch minima are independent.
 const NAV := preload(BASE + "nav.svg")
 const NAV_SELECTED := preload(BASE + "nav_selected.svg")
 const TOGGLE_ON := preload(BASE + "toggle_on.png")
@@ -269,20 +269,23 @@ static func heading(parent: Control, title: String) -> Control:
 
 
 static func close_button(control: Button) -> void:
-	_skin(control, CLOSE, Vector4.ZERO, Vector4.ZERO)
+	_round_button(control, icon("close"), CLOSE)
+
+
+static func _round_button(control: Button, glyph: Texture2D, surface: Texture2D) -> void:
+	_skin(control, surface, Vector4.ZERO, Vector4.ZERO)
 	control.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	control.icon = icon("close")
+	control.icon = glyph
 	control.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	control.expand_icon = true
 	size_icon_button(control, control)
 	_ink_states(control, Color.TRANSPARENT, Color.TRANSPARENT)
 
 
-static func icon_button(control: Button, glyph: Texture2D, description: String) -> void:
+static func icon_button(control: Button, glyph: Texture2D, description: String, surface: Texture2D = CLOSE) -> void:
 	control.text = ""
-	close_button(control)
+	_round_button(control, glyph, surface)
 	control.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	control.icon = glyph
 	control.tooltip_text = description
 	control.accessibility_name = description
 
@@ -309,7 +312,9 @@ static func size_icon_button(control: Button, owner: Control, compact_extent := 
 		metrics = Vector2(compact_extent * ICON_VISUAL_RATIO, compact_extent)
 	control.custom_minimum_size = Vector2.ONE * metrics.y
 	for state in [&"normal", &"hover", &"pressed", &"hover_pressed", &"disabled"]:
-		control.get_theme_stylebox(state).set("aspect_max_extent", metrics.x)
+		var surface := control.get_theme_stylebox(state) as NINE_PATCH
+		surface.preserve_aspect = true
+		surface.aspect_max_extent = metrics.x
 	control.add_theme_constant_override("icon_max_width", maxi(1, roundi(metrics.x * 0.52)))
 	control.queue_redraw()
 	return metrics.y

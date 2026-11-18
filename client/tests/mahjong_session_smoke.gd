@@ -59,6 +59,10 @@ func _respond(app: AppFixture, code: int, payload: Dictionary = {}) -> void:
 	app._http.request_completed.emit(HTTPRequest.RESULT_SUCCESS, code, PackedStringArray(), JSON.stringify(payload).to_utf8_buffer())
 
 
+func _publish_assignment(app: AppFixture, state: Dictionary) -> void:
+	app._lobby_socket.packet_received.emit(JSON.stringify({"type": "mahjong_lobby_state", "state": state, "presets": []}))
+
+
 func _run() -> void:
 	# Synthetic only. The harness writes no real credentials or process environment.
 	var token_a := "AbC_1-".repeat(7) + "A"
@@ -94,6 +98,14 @@ func _run() -> void:
 	first._enter_guest_lobby()
 	_check(first.connections == 1, "explicit lobby click opens just one connection")
 	_check(first.admitted and first._account.get("account_id") == "original-seat" and not first._account.has("session_token"), "separate authenticated identity and credential")
+	var active_room := {
+		"status":"playing", "start":true, "kind":"friend", "room_id":"0421", "seat_index":1,
+		"player_account_ids":["a","original-seat","b","c"], "capacity":4,
+		"rule_set_id":"guiyang", "rule_version":"2.0.0",
+	}
+	_publish_assignment(first, {"status":"idle"})
+	_publish_assignment(first, active_room)
+	_check(first._state == "lobby", "an idle admission must not auto-enter an assignment that appears later without a local join")
 	_check(first._sessions.save(SERVER_B, token_b) == OK, "save independent server session")
 	first.queue_free()
 	await process_frame
@@ -119,6 +131,18 @@ func _run() -> void:
 	_respond(restarted, 200, {"account_id": "original-seat", "display_name": "牌友"})
 	restarted._lobby_entry.pressed.emit()
 	_check(restarted.admitted and restarted._account.get("account_id") == "original-seat", "restored identity remains authored by the server")
+	_publish_assignment(restarted, active_room)
+	var resumed_board: Control = restarted._game
+	_check(restarted._state == "game" and is_instance_valid(resumed_board), "restored guest must automatically return to the active table")
+	if is_instance_valid(resumed_board):
+		_check(resumed_board.match_context.get("room_id") == "0421" and int(resumed_board.match_context.get("seat_index", -1)) == 1,
+			"automatic return must use the room and seat from the authenticated assignment")
+		_check(not resumed_board._actions_ready(), "a reopened table must wait for a new private snapshot before accepting moves")
+		_publish_assignment(restarted, active_room)
+		_check(restarted._game == resumed_board, "another lobby update must keep the restored board")
+		resumed_board.request_return_to_lobby.emit()
+		_publish_assignment(restarted, active_room)
+		_check(restarted._state == "lobby" and restarted._game == null, "explicit temporary leave must keep the player in the lobby")
 	_check(restarted._sessions.save(SERVER_A, token_a) == OK, "existing session can be atomically refreshed")
 	restarted._lobby_socket.session_expired.emit()
 	_check(restarted._state == "login" and restarted._account.is_empty() and restarted._sessions.read(SERVER_A).is_empty(), "live-session expiry returns to login and releases the active client identity")
@@ -161,6 +185,12 @@ func _run() -> void:
 	named._submit_account.pressed.emit()
 	_respond(named, 200, {"account_id": "named-account", "display_name": "Bambu_31", "session_token": token_b})
 	_check(named.admitted and named._account.get("account_id") == "named-account", "named login admits server-issued identity")
+	var named_room := active_room.duplicate(true)
+	named_room.player_account_ids[1] = "named-account"
+	_publish_assignment(named, named_room)
+	_check(named._state == "game" and is_instance_valid(named._game), "password login must also return to the active table")
+	if is_instance_valid(named._game):
+		named._game.request_return_to_lobby.emit()
 	var privacy := preload("res://modules/games/mahjong/guiyang/mahjong_account_view.gd").new()
 	root.add_child(privacy)
 	privacy.apply({"account_kind": named._account.kind, "display_name": named._account.display_name})
