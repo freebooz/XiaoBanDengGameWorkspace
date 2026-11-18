@@ -167,9 +167,9 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 		if not is_meld and not is_discard:
 			hands.append(tile)
 			var relative := 0 if screen._hand_models.has(tile) else int(str(tile.name).trim_prefix("MahjongConcealedHand").split("_")[0])
-			var inclination := deg_to_rad(30.0) if relative == 0 else 0.0
+			var inclination := deg_to_rad(15.0) if relative == 0 else 0.0
 			var face_normal := Vector3(0.0, sin(inclination), cos(inclination)).rotated(Vector3.UP, relative * PI * 0.5)
-			_check(tile.global_basis.y.is_equal_approx(face_normal), "Only the south hand should tilt 30 degrees toward the camera")
+			_check(tile.global_basis.y.is_equal_approx(face_normal), "Only the south hand should tilt 15 degrees toward the camera")
 			if relative != 0 or not screen._hand_models.has(tile) or screen._hand_ids[screen._hand_models.find(tile)] != screen._selected_id:
 				var dial_center: Vector3 = screen._wind_dial.global_position
 				var measured: float = (_body_bounds(tile).get_center() - dial_center).dot(Vector3.BACK.rotated(Vector3.UP, relative * PI * 0.5))

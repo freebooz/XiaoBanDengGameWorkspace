@@ -45,7 +45,7 @@ const ACTION_FONT_SIZE := 24
 const DINGQUE_SUITS := {"wan":"万", "tong":"筒", "tiao":"条"}
 const CAMERA_PITCH_DEGREES := 35.0
 const CAMERA_SENSOR_WIDTH_MM := 36.0
-const CAMERA_FOCAL_LENGTH_MM := 40.0
+const CAMERA_FOCAL_LENGTH_MM := 50.0
 const CAMERA_TARGET := Vector3(0.0, 0.0, 0.0144)
 const TILE_SIZE := TILE_MODEL.SIZE
 const TILE_BODY_BOUNDS := AABB(Vector3(-TILE_SIZE.x * 0.5, 0.0, -TILE_SIZE.z * 0.5), TILE_SIZE)
@@ -53,7 +53,7 @@ const MELD_ROW_RADIUS := 0.356
 const ROW_INSET := 0.028 # One 56-size tile thickness in metres.
 const HAND_ROW_RADIUS := MELD_ROW_RADIUS - 2.0 * ROW_INSET
 const HAND_STANDING_ANGLE := PI * 0.5
-const SOUTH_HAND_ANGLE := PI / 3.0 # The face normal points 30 degrees above the table toward the camera.
+const SOUTH_HAND_ANGLE := HAND_STANDING_ANGLE - PI / 12.0 # Tilt the south hand 15 degrees toward the camera.
 # The flat model pivots on its back. After standing it up, its thickness extends toward its owner.
 const HAND_PIVOT_DEPTH := HAND_ROW_RADIUS - TILE_SIZE.y * 0.5
 const HAND_PIVOT_HEIGHT := TILE_SIZE.z * 0.5

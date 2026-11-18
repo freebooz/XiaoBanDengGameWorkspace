@@ -2,7 +2,7 @@
 
 ## 现行尺寸
 
-56 号牌高 **56 mm**、宽 **39 mm**、厚 **28 mm**。编辑源 `SourceAssets/Mahjong/mahjong_tile.blend` 与游戏资源 `mahjong_tile.glb` 直接使用该尺寸。Godot 平放牌体的 X、Y、Z 轴分别对应宽、厚、高。四座手牌、牌河、副露及预览实例均使用单位缩放。南家从直立向摄像机倾斜 30°，用原网格的圆角最低点贴桌。
+56 号牌高 **56 mm**、宽 **39 mm**、厚 **28 mm**。编辑源 `SourceAssets/Mahjong/mahjong_tile.blend` 与游戏资源 `mahjong_tile.glb` 直接使用该尺寸。Godot 平放牌体的 X、Y、Z 轴分别对应宽、厚、高。四座手牌、牌河、副露及预览实例均使用单位缩放。南家从直立向摄像机倾斜 15°，用原网格的圆角最低点贴桌。
 
 在 Blender 后台运行 `tools/import_real_mahjong_tile.py -- --from-blend` 可从仓库内的编辑源重新导出。随后运行 `tools/validate_real_mahjong_tile.py` 检查源文件与导出文件的实际顶点、封闭性、牌面 UV、材质与哈希。
 

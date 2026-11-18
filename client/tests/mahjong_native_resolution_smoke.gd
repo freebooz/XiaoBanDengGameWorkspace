@@ -57,7 +57,7 @@ func _verify_felt_coverage(board: Board, label: String) -> void:
 	_check(pick_ray.is_equal_approx(rendered_ray), "%s picking and rendering must agree at the screen centre" % label)
 	var projection := board._camera.get_camera_projection()
 	var focal_mm := 18.0 * minf(projection.x.x, projection.y.y)
-	_check(is_equal_approx(focal_mm, 40.0), "%s must preserve a 40 mm lens on the 36 mm long edge of the film gate" % label)
+	_check(is_equal_approx(focal_mm, 50.0), "%s must preserve a 50 mm lens on the 36 mm long edge of the film gate" % label)
 
 	var plane := Plane(Vector3.UP, bounds.end.y)
 	var width := board._board_viewport.size.x
