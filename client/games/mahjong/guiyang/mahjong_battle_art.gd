@@ -113,40 +113,26 @@ static func room() -> StyleBox:
 	return box
 
 
-static func fit_room_heading(control: Label, preferred_size := 0, size_reduction := 0, size_increase := 0) -> void:
+static func fit_room_heading(control: Label, preferred_size := 0, size_reduction := 0) -> void:
 	if preferred_size > 0:
 		control.set_meta("room_heading_preferred_size", preferred_size)
 		control.set_meta("room_heading_size_reduction", size_reduction)
-		control.set_meta("room_heading_size_increase", size_increase)
-		control.set_meta("room_heading_base_size", control.size)
-		control.set_meta("room_heading_center_x", control.position.x + control.size.x * 0.5)
 	if control.size.x <= 0 or control.size.y <= 0:
 		return
 	var surface := control.get_theme_stylebox("normal")
-	var increase := int(control.get_meta("room_heading_size_increase", 0))
-	var base_size: Vector2 = control.get_meta("room_heading_base_size", control.size) if increase > 0 else control.size
-	var ratio := minf(base_size.y / TOOL.get_height(), base_size.x / 125.0)
-	var horizontal := 62.0 * ratio + clampf(base_size.y * 0.12, 3.0, 8.0)
-	var vertical := clampf(base_size.y * 0.10, 3.0, 7.0)
-	for side in [SIDE_LEFT, SIDE_RIGHT]: surface.set_content_margin(side, horizontal)
-	for side in [SIDE_TOP, SIDE_BOTTOM]: surface.set_content_margin(side, vertical)
+	if not surface is StyleBoxEmpty:
+		var ratio := minf(control.size.y / TOOL.get_height(), control.size.x / 125.0)
+		var horizontal := 62.0 * ratio + clampf(control.size.y * 0.12, 3.0, 8.0)
+		var vertical := clampf(control.size.y * 0.10, 3.0, 7.0)
+		for side in [SIDE_LEFT, SIDE_RIGHT]: surface.set_content_margin(side, horizontal)
+		for side in [SIDE_TOP, SIDE_BOTTOM]: surface.set_content_margin(side, vertical)
 	var outline := float(control.get_theme_constant("outline_size")) * 2.0
-	var available := base_size - surface.get_minimum_size() - Vector2.ONE * (outline + 2.0)
+	var available := control.size - surface.get_minimum_size() - Vector2.ONE * (outline + 2.0)
 	var font := control.get_theme_font("font")
 	var desired := int(control.get_meta("room_heading_preferred_size", control.get_theme_font_size("font_size")))
 	while desired > 12 and (font.get_string_size(control.text, HORIZONTAL_ALIGNMENT_LEFT, -1, desired).x > available.x or font.get_height(desired) > available.y):
 		desired -= 1
 	desired = maxi(10, desired - int(control.get_meta("room_heading_size_reduction", 0)))
-	# Apply the requested point increase after fitting, so viewport constraints
-	# cannot silently cancel it. A plain heading needs no artwork-cap padding.
-	desired += increase
-	if surface is StyleBoxEmpty:
-		for side in [SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, SIDE_BOTTOM]: surface.set_content_margin(side, 0)
-		if increase > 0:
-			var text_width := font.get_string_size(control.text, HORIZONTAL_ALIGNMENT_LEFT, -1, desired).x + outline + 2.0
-			var maximum_width := maxf(base_size.x, float(control.get_meta("room_heading_max_width", base_size.x)))
-			control.size.x = clampf(text_width, base_size.x, maximum_width)
-			control.position.x = float(control.get_meta("room_heading_center_x")) - control.size.x * 0.5
 	if desired != control.get_theme_font_size("font_size"):
 		control.add_theme_font_size_override("font_size", desired)
 	control.autowrap_mode = TextServer.AUTOWRAP_OFF

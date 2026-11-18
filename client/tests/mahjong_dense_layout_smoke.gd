@@ -246,10 +246,18 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 	if scenario=="four-seat-melds": _check(concealed_kongs==4,"Concealed kong count mismatch")
 	print("DENSE_LAYOUT scenario=%s viewer=%d viewport=%s exposed=%d hidden_kongs=%d smallest_discard=%s smallest_meld=%s"%[scenario,viewer,screen.size,exposed.size(),concealed_kongs,smallest_discard,smallest_meld])
 	var buttons: Dictionary = {}
+	var occupied: Array[Rect2] = []
+	var safe_area: Rect2 = screen._usable_modal_area()
+	var hand_top: float = screen._own_hand_top()
 	for kind in screen._response_buttons:
 		var button: Button = screen._response_buttons[kind]
 		if button.is_visible_in_tree():
 			var bounds := button.get_global_rect()
+			_check(bounds.size.is_equal_approx(Vector2(125.0, 56.0)), "%s action must retain the 125 × 56 discard size, got %s" % [kind, bounds.size])
+			_check(safe_area.encloses(bounds) and bounds.end.y <= hand_top, "%s action must be reachable above the hand" % kind)
+			for previous in occupied:
+				_check(not previous.intersects(bounds), "Fixed reaction buttons must not overlap")
+			occupied.append(bounds)
 			buttons[kind] = [bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y]
 	var pixel_scale: Vector2 = screen.get_viewport_transform().get_scale()
 	_evidence.append({"scenario":scenario,"camera_distance":screen._camera.position.distance_to(screen.CAMERA_TARGET),"camera_vertical_fov":screen._camera.fov,"far_hand_top_logical":far_edge.y,"near_play_edge_logical":near_play_edge.y,"band_center_logical":str(band_center),"native_render_size":str(screen._board_viewport.size),"hand_radii_metres":hand_radii,"tiles_measured":physical_bounds.size()})
@@ -338,8 +346,10 @@ func _verify_touch(screen) -> void:
 		screen.sent_actions.clear()
 		var id: int = screen._hand_ids[i]
 		var origin_y: float = screen._hand_models[i].position.y
+		var action_dock: Rect2 = screen._actions_root.get_rect()
 		await _tap(screen._board_view.get_viewport_transform()*screen._board_view.get_global_transform()*screen._projected_tile_rect(screen._hand_models[i]).get_center())
 		_check(screen._selected_id == id,"Projected touch missed hand %d"%id)
+		_check(screen._actions_root.get_rect().is_equal_approx(action_dock), "Raising a hand tile must keep the action dock fixed")
 		_verify_own_seat_slot(screen)
 		_check(screen.sent_actions.is_empty(),"First touch must only select the tile")
 		for action in screen._response_buttons.values()+[screen._play_button]:
@@ -390,6 +400,44 @@ func _verify_settlement(screen) -> void:
 		root.get_texture().get_image().save_png(_output.path_join("settlement.png"))
 	_evidence.append({"scenario":"settlement","logical_viewport":[screen.size.x,screen.size.y],"physical_window":[root.size.x,root.size.y],"scores":[-70,30,20,20],"egg_deltas":[-30,13,9,8],"labels":labels})
 
+func _verify_discard_dock(screen) -> void:
+	screen._clear_pending_command()
+	screen._coach_enabled = false
+	screen._state = _state("fourteen-hand", 0)
+	screen._state.phase = "turn"
+	screen._state.turn = 0
+	screen._state.discards.clear()
+	screen._state.options = [{"type": "play"}]
+	screen._render()
+	await process_frame
+	var heading: Label = screen._header
+	_check(heading.get_theme_stylebox("normal") is StyleBoxEmpty, "The live room heading must have no background artwork")
+	var reference := heading.duplicate(0) as Label
+	reference.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	screen.BATTLE_ART.fit_room_heading(reference, int(heading.get_meta("room_heading_preferred_size")))
+	_check(heading.get_theme_font_size("font_size") == maxi(10, reference.get_theme_font_size("font_size") - 2),
+		"The live room heading must be two font sizes below the fitted base")
+	reference.free()
+	var discard: Button = screen._play_button
+	_check(discard.is_visible_in_tree(), "A discard turn must show the discard button")
+	_check(discard.size.is_equal_approx(Vector2(125.0, 56.0)), "Discard button must retain the 125 × 56 reference size")
+	var gap: float = screen._own_hand_top() - discard.get_global_rect().end.y
+	_check(is_equal_approx(gap, 8.0), "Discard must dock 8 design units above the raised hand envelope, got %.2f" % gap)
+	var first: Rect2 = screen._projected_tile_rect(screen._hand_models.front())
+	var last: Rect2 = screen._projected_tile_rect(screen._hand_models.back())
+	var hand_center: float = (first.position.x + last.end.x) * 0.5 + screen._board_view.position.x
+	_check(absf(discard.get_global_rect().get_center().x - hand_center) < 2.0, "Discard must line up with the center of the 3D hand")
+	screen.sent_actions.clear()
+	screen._select_tile(screen._hand_ids.front())
+	await process_frame
+	var point := discard.get_viewport_transform() * discard.get_global_transform() * (discard.size * 0.5)
+	await _tap(point)
+	_check(screen.sent_actions == ["play"], "Tapping the fixed discard button must submit the selected tile once")
+	if not _output.is_empty() and DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png(_output.path_join("discard-dock.png"))
+
+
 func _run() -> void:
 	Engine.max_fps = 0
 	if DisplayServer.get_name() != "headless": DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
@@ -415,6 +463,7 @@ func _run() -> void:
 				await RenderingServer.frame_post_draw
 				root.get_texture().get_image().save_png(_output.path_join(scenario+".png"))
 			await _verify_touch(screen)
+	await _verify_discard_dock(screen)
 	await _verify_settlement(screen)
 	var lights: Dictionary = await _verify_lighting(screen)
 	var felt := screen._board_viewport.find_child("Mahjong_Felt_Surface",true,false) as MeshInstance3D

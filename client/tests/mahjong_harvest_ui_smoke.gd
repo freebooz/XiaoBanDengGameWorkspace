@@ -146,6 +146,19 @@ func _check_layouts(page: String, back_id: String, action_id: String) -> void:
 			var rooms: Control = _app._lobby_view._room_pages
 			var title: Label = rooms._join_title if page == "04_join" else rooms._plaque
 			_title_overlap(title.get_parent(), rooms._frame, str([page, dimensions]))
+		if page == "06_quick":
+			var lobby: Control = _app._lobby_view
+			for slot in lobby._seat_names.size():
+				var caption: Label = lobby._seat_names[slot]
+				var frame: PanelContainer = lobby._seat_frames[slot]
+				var border: StyleBox = frame.get_theme_stylebox("panel")
+				var inset := 88.0 * float(border.call("border_scale_for_size", frame.size)) + 3.0
+				var name_bounds := caption.get_global_rect()
+				var card := frame.get_global_rect()
+				_expect(name_bounds.position.x >= card.position.x + inset and name_bounds.end.x <= card.end.x - inset,
+					"Quick-match player names must fit inside the artwork at %s" % dimensions)
+				_expect(caption.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS and caption.tooltip_text == caption.text,
+					"Long matchmaking names are trimmed visually and retain the full value")
 		_check_room_control_heights(page, dimensions)
 		if page == "01_guest":
 			_check_guest_proportions(dimensions)
@@ -387,6 +400,7 @@ func _run() -> void:
 	_app.session_store_path = "user://harvest-ui-smoke-%d" % OS.get_process_id()
 	_app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(_app)
+	_app._audio.preference_file = "user://harvest-ui-smoke-%d.cfg" % OS.get_process_id()
 	await _frames()
 	await _press("MahjongGuestLoginButton")
 	_app._http.request_completed.emit(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(),

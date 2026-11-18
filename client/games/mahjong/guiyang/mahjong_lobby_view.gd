@@ -942,6 +942,7 @@ func _build_room() -> void:
 		frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		frame.custom_minimum_size.y = 97
 		_seat_grid.add_child(frame)
+		frame.resized.connect(_fit_quick_card_inset.bind(frame), CONNECT_DEFERRED)
 		var seat := _column(frame, 3)
 		var avatar := PanelContainer.new()
 		avatar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -957,6 +958,7 @@ func _build_room() -> void:
 		var player := _label(details, "", 22, INK)
 		player.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		player.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		player.mouse_filter = Control.MOUSE_FILTER_PASS
 		var badge := PanelContainer.new()
 		badge.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		details.add_child(badge)
@@ -1328,11 +1330,13 @@ func _render_seat(slot: int, id: String, own_id: String, is_ready: bool, reconne
 	var border := Color("#c9aa79") if empty else Color("#7e9b6d") if is_self or ready_badge else Color("#a1b590")
 	if _quick_room:
 		_seat_frames[slot].add_theme_stylebox_override("panel", MODAL.paper_frame(Vector4(9, 8, 9, 9)))
+		_fit_quick_card_inset(_seat_frames[slot])
 	else:
 		_seat_frames[slot].add_theme_stylebox_override("panel", _surface(fill, border, 16, 10))
 	var account_name := _account_name()
 	var player_name := "你" if account_name.is_empty() else "%s（你）" % account_name
 	_seat_names[slot].text = "空座" if empty else player_name if is_self else "牌友 · %s" % id.right(5)
+	_seat_names[slot].tooltip_text = _seat_names[slot].text
 	_seat_names[slot].add_theme_color_override("font_color", MUTED if empty else INK)
 	_seat_statuses[slot].text = "等待加入" if empty else "重连中" if reconnecting else "已准备" if is_ready else "未准备"
 	if _quick_room: _seat_statuses[slot].text = "●  " + _seat_statuses[slot].text
@@ -1345,6 +1349,19 @@ func _render_seat(slot: int, id: String, own_id: String, is_ready: bool, reconne
 		avatar = MODAL.VILLAGE_GUEST if is_self and _account.get("kind") == "guest" else VILLAGE_SEATS[slot]
 	_seat_icons[slot].texture = avatar
 	_seat_ready_bars[slot].set_value_no_signal(1.0 if is_ready else 0.0)
+
+
+func _fit_quick_card_inset(frame: PanelContainer) -> void:
+	if not is_instance_valid(frame) or not _quick_room:
+		return
+	var skin := frame.get_theme_stylebox("panel")
+	if not skin.has_method("border_scale_for_size"):
+		return
+	# The bamboo and its shadow extend 88 source pixels into each side.
+	var inset := ceilf(88.0 * float(skin.call("border_scale_for_size", frame.size)) + 3.0)
+	for side in [SIDE_LEFT, SIDE_RIGHT]:
+		if not is_equal_approx(skin.get_content_margin(side), inset):
+			skin.set_content_margin(side, inset)
 
 
 func _rule_index(selection: Dictionary) -> int:

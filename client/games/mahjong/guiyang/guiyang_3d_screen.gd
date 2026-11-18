@@ -526,7 +526,7 @@ func _layout_ui() -> void:
 	_header.position = Vector2(_safe.x + horizontal_inset, opposite_seat.position.y)
 	var bar_width := maxf(1.0, opposite_seat.position.x - _header.position.x - 12.0 * factor)
 	_header.size = Vector2(bar_width, minf(tool_height, maxf(44.0 * factor, icon_extent * 0.67)))
-	BATTLE_ART.fit_room_heading(_header, roundi(29 * factor))
+	BATTLE_ART.fit_room_heading(_header, roundi(28*factor), 2)
 	_toolbar.position = Vector2(width-_safe.z-toolbar_width-15*factor,top + 12*factor)
 	if _toolbar.position.x < opposite_seat.end.x + 8.0 * factor:
 		_toolbar.position.y = opposite_seat.end.y + 8.0 * factor
@@ -1070,12 +1070,14 @@ func _connect_socket() -> void:
 
 
 func _session_expired() -> void:
+	if _exiting: return
 	session_token = ""
 	_board_lost("游客会话已失效")
 	session_expired.emit()
 
 
 func _join_board() -> void:
+	if _exiting: return
 	var request := {"type":"mahjong_join", "room_id":str(match_context.get("room_id","")), "client_id":str(match_context.get("account_id",""))}
 	if _is_spectating():
 		request["type"] = "mahjong_watch_join"
@@ -1088,6 +1090,7 @@ func _join_board() -> void:
 
 
 func _board_lost(reason: String) -> void:
+	if _exiting: return
 	_joined = false
 	_snapshot_ready = false
 	_spectator_permission_pending = null
@@ -1322,7 +1325,8 @@ func apply_match_cancellation(packet: Dictionary) -> void:
 func _end_confirmed_match(packet: Dictionary, message: String) -> void:
 	if _exiting or training_mode or _is_spectating() or not released_match_id.is_empty(): return
 	if _joined_match_id.is_empty() or packet.get("match_id") != _joined_match_id: return
-	if packet.get("room_id") != match_context.get("room_id") or _state.get("phase") == "finished": return
+	var room := str(match_context.get("room_id", ""))
+	if room.is_empty() or packet.get("room_id") != room or _state.get("phase") == "finished": return
 	released_match_id = _joined_match_id
 	_abort_entry(message)
 
@@ -1602,7 +1606,7 @@ func _render_seats() -> void:
 		# CJK fonts have a taller line box than their point size. Fit the real
 		# metrics so Godot never clips the entire balance line on compact cards.
 		var balance_font := quantity.get_theme_font("font")
-		var balance_size := maxi(1,roundi(31 * factor))
+		var balance_size := maxi(10, roundi(31 * factor))
 		var balance_width := text_edge - quantity.position.x
 		var egg_extent := Vector2(20, 25) * factor
 		var egg_gap := 4.0 * factor
