@@ -2139,7 +2139,7 @@ func _on_history_page_response(result: int, code: int, _headers: PackedStringArr
 
 
 func _return_from_released_match(game: Control, message: String) -> void:
-	var stale := _match.get("status") == "playing" and _match.get("room_id") == game.match_context.get("room_id") \
+	var stale: bool = _match.get("status") == "playing" and _match.get("room_id") == game.match_context.get("room_id") \
 		and _match.get("previous_match_id") != game.released_match_id
 	if stale:
 		_match = {}
