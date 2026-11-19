@@ -83,21 +83,31 @@ func _verify_physical_tile(model: Node3D) -> void:
 	_check(bounds.size.is_equal_approx(Vector3(0.039, 0.028, 0.056)), "%s body measures %s metres" % [model.name, bounds.size])
 
 
+func _rendered_tile_bottom(board: Board, model: Node3D) -> float:
+	var body := model.find_child("TileBody", true, false) as MeshInstance3D
+	var bottom := -INF
+	for vertex in body.mesh.get_faces():
+		bottom = maxf(bottom, board._project_to_board(body.global_transform * vertex).y)
+	return board._board_view.position.y + bottom
+
+
 func _verify_full_hand_framing(board: Board) -> void:
 	for model: Node3D in board._pieces_root.get_children():
 		if not model.is_queued_for_deletion(): _verify_physical_tile(model)
 	var span: float = board._hand_models.back().global_position.x - board._hand_models.front().global_position.x + 0.039
 	_check(is_equal_approx(span, 0.546), "The 14-tile hand must span 546 mm at every aspect ratio")
 	var safe_area := Rect2(board._safe.x, board._safe.y, board.size.x - board._safe.x - board._safe.z, board.size.y - board._safe.y - board._safe.w)
-	if safe_area.size.aspect() < 1.67: return
+	if not board._frames_player_hand(): return
 	var bounds := board._projected_tile_rect(board._hand_models[0], &"TileBody")
 	for model: Node3D in board._hand_models: bounds = bounds.merge(board._projected_tile_rect(model, &"TileBody"))
 	var tile_width := bounds.size.x / 14.0
 	var left := bounds.position.x / tile_width
 	var right := (board.size.x - bounds.end.x) / tile_width
 	var pixels := (board.get_viewport_transform() * board.get_global_transform()).y.length()
-	var bottom_px := (safe_area.end.y - bounds.end.y) * pixels
-	var bottom_tiles := (safe_area.end.y - bounds.end.y) / tile_width
+	var resting_index := 1 if board._selected_id == board._hand_ids[0] else 0
+	var body_bottom := _rendered_tile_bottom(board, board._hand_models[resting_index])
+	var bottom_px := (safe_area.end.y - body_bottom) * pixels
+	var bottom_tiles := (safe_area.end.y - body_bottom) / tile_width
 	var minimum_margin := maxf(board.size.x * 2.97 / (14.0 + 2.0 * 2.97), maxf(board._safe.x, board._safe.z))
 	var north_top := INF
 	for tile: Node3D in board._pieces_root.find_children("MahjongConcealedHand2_*", "Node3D", false, false):
@@ -111,9 +121,9 @@ func _verify_full_hand_framing(board: Board) -> void:
 	_check(margin_px >= -2.0 and absf(bounds.position.x - (board.size.x - bounds.end.x)) * pixels < 2.0
 		and (margin_px < 2.0 or absf(north_top - safe_area.position.y - north_inset) * pixels <= 2.0)
 		and safe_area.encloses(bounds), "Both rows must fit with centred south margins: %.3f / %.3f" % [left, right])
-	var bottom_inset := board.HAND_BOTTOM_INSET * pixels
-	_check(bottom_px >= bottom_inset - 0.01 and bottom_px <= bottom_inset + 3.0,
-		"Resting hand must keep the camera's bottom inset: %.2f native pixels" % bottom_px)
+	var bottom_inset := board.HAND_BOTTOM_INSET_PIXELS
+	_check(absf(bottom_px - bottom_inset) <= 0.2,
+		"Resting hand must be five native pixels above the safe bottom edge: %.2f at %s" % [bottom_px, root.size])
 	var selected := board._selected_id
 	for index in [0, 13]:
 		var resting: Transform3D = board._hand_models[index].global_transform
@@ -211,12 +221,13 @@ func _verify_hud_layout(board: Board) -> void:
 			_check(not seat.grow(-1.0).intersects(body), "Portrait must clear %s at %s: %s and %s" % [tile.name, root.size, seat, body])
 	var own_seat := board._seat_panels[0].get_global_rect()
 	var south_portrait := board._avatar_portraits[0].get_global_rect()
+	var south_name := board._seat_panels[0].get_node("MahjongSeatNickname") as Label
 	var south_balance := board._seat_panels[0].get_node("MahjongSeatEggs") as Label
 	_check(is_equal_approx(own_seat.position.x, expected_left) and is_equal_approx(own_seat.end.y, board.size.y - board._safe.w - corner_inset)
 		and south_portrait.end.y >= own_seat.end.y - 5.1 * factor and not own_seat.intersects(left),
 		"South portrait must hug the safe bottom-left corner")
-	_check(south_balance.get_global_rect().end.y <= south_portrait.position.y,
-		"South captions must stack above its portrait to leave room for left-side public melds")
+	_check(south_name.get_global_rect().position.x >= south_portrait.end.x and south_balance.get_global_rect().position.x >= south_portrait.end.x,
+		"South name and balance must both sit to the right of the portrait")
 	for model in board._hand_models:
 		_check(not own_seat.grow(-1.0).intersects(board._projected_tile_rect(model, &"TileBody")), "South portrait must clear all local hand tiles")
 	_check(not board._turn_label.visible and board._turn_label.text.is_empty(), "Local discard turn must have no reminder text")
@@ -326,7 +337,22 @@ func _run() -> void:
 	_verify_north_portrait(board)
 	board._state.hand_counts[2] = 13
 	board._state.melds[2] = []
+	board._state.hand_counts[0] = 11
+	board._state.hand = hand.slice(0, 11)
+	board._state.melds[0] = [{"kind":"peng","tiles":[{"id":91,"suit":"wan","rank":8},{"id":92,"suit":"wan","rank":8},{"id":93,"suit":"wan","rank":8}]}]
 	board._render()
+	await _settle()
+	var meld := board._pieces_root.get_node("MahjongMeld0_0_0") as Node3D
+	var pixels := (board.get_viewport_transform() * board.get_global_transform()).y.length()
+	var meld_gap := (board.size.y - board._safe.w - _rendered_tile_bottom(board, meld)) * pixels
+	_check(absf(meld_gap - board.HAND_BOTTOM_INSET_PIXELS) <= 0.2,
+		"Exposed tiles must stay visible at five native pixels from the bottom after a meld")
+	_verify_north_portrait(board)
+	board._state.hand = hand
+	board._state.hand_counts[0] = 14
+	board._state.melds[0] = []
+	board._render()
+	_verify_full_hand_framing(board)
 	board._apply_camera_impact(0.11, 5.0)
 	await _settle()
 	_verify_felt_coverage(board, "play effect")

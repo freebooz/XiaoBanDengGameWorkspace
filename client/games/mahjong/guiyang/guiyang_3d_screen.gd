@@ -61,16 +61,16 @@ const DISCARD_COLUMNS := 8
 const RIVER_CORNER_GAP := 0.006
 const RIVER_SIDE_OFFSET := 0.074
 const MELD_ROW_GAP := 0.009
+const MELD_SURFACE_HEIGHT := 0.0015
 const OPPONENT_MELD_SEPARATION := 0.054
 const SEAT_CARD_SIZE := Vector2(178, 76)
-const SOUTH_CARD_SIZE := Vector2(98, 140)
 const NORTH_CARD_SIZE := Vector2(300, 76)
 const SEAT_EDGE_INSET := 12.0
 const NORTH_HAND_CARD_GAP := 4.0
 const OWN_HAND_LIFT := 0.020
 const FULL_HAND_COUNT := 14
 const HAND_SIDE_MARGIN_TILES := 2.97
-const HAND_BOTTOM_INSET := 76.0 / 3.0
+const HAND_BOTTOM_INSET_PIXELS := 5.0
 const PLAY_AREA_NEAR_DEPTH := HAND_ROW_RADIUS + TILE_SIZE.z * 0.5
 
 var product: Dictionary = {}
@@ -94,6 +94,8 @@ var _state: Dictionary = {}
 var _textures: Dictionary = {}
 var _tile_materials := TILE_MATERIALS.new()
 var _south_hand_rest_height := 0.0
+var _tile_side_hull := PackedVector2Array()
+var _framed_own_melds := false
 var _selected_id := 0
 var _auto_played := false
 var _status: Label
@@ -548,7 +550,7 @@ func _layout_ui() -> void:
 	_status.add_theme_font_size_override("font_size",roundi(14*factor))
 	var social_extent := icon_extent
 	var social_right := width - _safe.z - horizontal_inset
-	var stack_social := _frames_player_hand()
+	var stack_social := not _is_spectating() and usable_width >= 1.67 * (bottom - top)
 	var tool_step := (Vector2.DOWN if stack_social else Vector2.RIGHT) * (social_extent + tool_gap)
 	_side_tools.size = Vector2.ONE * social_extent
 	_own_mic.position = Vector2(social_right - social_extent, bottom - social_extent - 11.0 * factor)
@@ -585,7 +587,7 @@ func _horizontal_screen_pixels(pixels: float) -> float:
 
 func _seat_rect(relative: int) -> Rect2:
 	var factor := minf(size.x/1440.0,size.y/810.0)
-	var box: Vector2 = [SOUTH_CARD_SIZE, SEAT_CARD_SIZE, NORTH_CARD_SIZE, SEAT_CARD_SIZE][relative] * factor
+	var box := (NORTH_CARD_SIZE if relative == 2 else SEAT_CARD_SIZE) * factor
 	var horizontal_inset := _horizontal_screen_pixels(10.0)
 	var left := _safe.x + horizontal_inset
 	var right := size.x - _safe.z - horizontal_inset - box.x
@@ -613,7 +615,7 @@ func _uses_tablet_layout() -> bool:
 
 
 func _frames_player_hand() -> bool:
-	return not _is_spectating() and (size.x - _safe.x - _safe.z) >= 1.67 * maxf(1.0, size.y - _safe.y - _safe.w)
+	return not _is_spectating() and size.x >= size.y
 
 
 func _own_hand_top() -> float:
@@ -948,17 +950,16 @@ func _fit_player_hand_camera(aspect: float) -> void:
 	var row := view * _own_tile_pose(0.0, 0.0)
 	var north_row := view * _north_hand_pose(0.0)
 
-	var board_height := _board_view.size.y
-	# Keep the resting hand inside the bottom safe inset at fractional native scales.
+	var board_height := _board_viewport.size.y * _board_surface.scale.y
+	# The native 3D texture can be rounded up by a pixel. Use its displayed height for projection.
 	var pixel_scale := maxf((get_viewport_transform() * get_global_transform()).y.length(), 0.01)
-	var bottom := floorf((size.y - _safe.w - HAND_BOTTOM_INSET) * pixel_scale - 1.0) / pixel_scale
+	var bottom := size.y - _safe.w - HAND_BOTTOM_INSET_PIXELS / pixel_scale
 	var factor := minf(size.x / 1440.0, size.y / 810.0)
 	var top := _safe.y + (SEAT_EDGE_INSET + NORTH_CARD_SIZE.y + NORTH_HAND_CARD_GAP) * factor + 1.0 / pixel_scale
 	var top_ndc := 1.0 - 2.0 * top / board_height
 	var bottom_ndc := 1.0 - 2.0 * bottom / board_height
 	var tangent := CAMERA_SENSOR_WIDTH_MM / (2.0 * CAMERA_FOCAL_LENGTH_MM * aspect)
 	var nearest_z := -INF
-	var south_limit := INF
 	var north_limit := -INF
 	# Project both standing rows against the top and bottom edges of the viewing frustum.
 	for i in 8:
@@ -966,8 +967,13 @@ func _fit_player_hand_camera(aspect: float) -> void:
 		var south := row * corner
 		var north := north_row * corner
 		nearest_z = maxf(nearest_z, south.z)
-		south_limit = minf(south_limit, south.y + bottom_ndc * south.z * tangent)
 		north_limit = maxf(north_limit, north.y + top_ndc * north.z * tangent)
+	var bottom_slope := bottom_ndc * tangent
+	var south_limit := _bottom_framing_limit(row, bottom_slope)
+	if _framed_own_melds:
+		# An exposed set extends in front of the standing hand.
+		var meld := view * _pieces_root.global_transform * Transform3D(Basis.IDENTITY, Vector3(0.0, MELD_SURFACE_HEIGHT, MELD_ROW_RADIUS))
+		south_limit = minf(south_limit, _bottom_framing_limit(meld, bottom_slope))
 	# Use the existing row spacing to frame a reference hand, independent of melds and the live tile count.
 	var half_span := _concealed_row_start(0, 1) - _concealed_row_start(0, FULL_HAND_COUNT)
 	var hand_width := 2.0 * half_span + TILE_SIZE.x
@@ -982,6 +988,15 @@ func _fit_player_hand_camera(aspect: float) -> void:
 	_camera.h_offset = row.origin.x
 	_camera.v_offset = south_limit - bottom_ndc * distance * tangent
 	_camera_world_per_pixel = 2.0 * (distance - row.origin.z) * tangent / board_height
+
+
+func _bottom_framing_limit(pose: Transform3D, slope: float) -> float:
+	# The real rounded front edge ends above its bounding-box corner.
+	var limit := INF
+	for vertex in _tile_side_hull:
+		var point := pose * Vector3(0.0, vertex.x, vertex.y)
+		limit = minf(limit, point.y + slope * point.z)
+	return limit
 
 
 func _on_native_projection_resized() -> void:
@@ -1027,9 +1042,14 @@ func _build_3d_table() -> void:
 	var sample := TILE_MODEL.build(_tile_materials, {}, true)
 	_pieces_root.add_child(sample)
 	var body := sample.find_child("TileBody", true, false) as MeshInstance3D
-	var tilted := Transform3D(Basis(Vector3.RIGHT, SOUTH_HAND_ANGLE), Vector3.ZERO) * sample.global_transform.affine_inverse() * body.global_transform
+	var tile_space := sample.global_transform.affine_inverse() * body.global_transform
+	var tilted := Basis(Vector3.RIGHT, SOUTH_HAND_ANGLE)
+	var side_points := PackedVector2Array()
 	for vertex in body.mesh.get_faces():
-		_south_hand_rest_height = maxf(_south_hand_rest_height, -(tilted * vertex).y)
+		var point := tile_space * vertex
+		_south_hand_rest_height = maxf(_south_hand_rest_height, -(tilted * point).y)
+		side_points.append(Vector2(point.y, point.z))
+	_tile_side_hull = Geometry2D.convex_hull(side_points)
 	sample.free()
 	_tile_focus = TILE_FOCUS.new()
 	world.add_child(_tile_focus)
@@ -1464,6 +1484,12 @@ func _render() -> void:
 		_settlement_panel = null
 	if _tool_open.is_empty() and (_state.get("phase") != "finished" or training_mode or _is_spectating()):
 		_block_board_focus(false)
+	var has_own_melds := int(_meld_layout(0).columns) > 0
+	if _framed_own_melds != has_own_melds:
+		_framed_own_melds = has_own_melds
+		if _frames_player_hand():
+			_stop_camera_impact()
+			_fit_camera()
 	_selected_id = _selected_id if _state.get("phase") != "dingque" and _hand_contains(_selected_id) else 0
 	_render_seats()
 	_render_opponent_hands()
@@ -1565,7 +1591,6 @@ func _render_seats() -> void:
 		var egg_text := str(int(balance)) if known else "—"
 		var dealer := seat == int(_state.get("dealer", -1))
 		var portrait_centered := relative == 2
-		var caption_above := relative == 0
 		var panel := Panel.new()
 		panel.name="MahjongSeat%d"%relative
 		var seat_rect := _seat_rect(relative)
@@ -1580,8 +1605,6 @@ func _render_seats() -> void:
 		avatar.position = Vector2.ONE * 4.0 * factor
 		if portrait_centered:
 			avatar.position.x = (panel.size.x - avatar.size.x) * 0.5
-		if caption_above:
-			avatar.position.y = panel.size.y - avatar.size.y - 4.0 * factor
 		avatar.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 		var surround := RURAL.frame(Color("#e0a24c"), TABLE_THEME.BRASS, roundi(34 * factor), 1)
 		surround.shadow_size = 0
@@ -1613,7 +1636,7 @@ func _render_seats() -> void:
 			manage.pressed.connect(_open_moderation.bind(seat))
 			avatar.add_child(manage)
 			manage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		var text_start := (7.0 if portrait_centered or caption_above else 74.0) * factor
+		var text_start := (7.0 if portrait_centered else 74.0) * factor
 		var text_edge := panel.size.x - 7.0 * factor
 		var nickname_edge := avatar.position.x - 5.0 * factor if portrait_centered else text_edge
 		var nickname_y := (24.5 if portrait_centered else 5.0) * factor
@@ -1641,9 +1664,8 @@ func _render_seats() -> void:
 				maxi(10, roundi(15 * factor)), TABLE_THEME.CREAM)
 			missing.name = "MahjongMissingSuit%d" % seat
 			missing.tooltip_text = "定缺" + suit
-		var balance_y := (32.0 if caption_above else 34.0) * factor
+		var balance_y := (20.0 if portrait_centered else 34.0) * factor
 		var balance_x := avatar.get_rect().end.x + 5.0 * factor if portrait_centered else text_start
-		if portrait_centered: balance_y = 20.0 * factor
 		var quantity := _label(panel,"",balance_x,balance_y,0,36*factor,roundi(31*factor),Color("#a42316"))
 		quantity.name = "MahjongSeatEggs"
 		quantity.add_theme_color_override("font_outline_color", Color("#ffe6c1"))
@@ -1887,7 +1909,7 @@ func _render_melds() -> void:
 			var concealed: bool = (relative != 0 or _is_spectating()) and meld.get("kind") == "an_gang"
 			# Every seat reads its exposed sets from its own left, just ahead of
 			# its remaining concealed row. Rotate both rows with the same seat basis.
-			var height := 0.0015 + (TILE_SIZE.y if concealed else 0.0)
+			var height := MELD_SURFACE_HEIGHT + (TILE_SIZE.y if concealed else 0.0)
 			for tile_index in range(mini(4, tiles.size())):
 				if not tiles[tile_index] is Dictionary:
 					continue

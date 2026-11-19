@@ -128,11 +128,17 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 	var social_center_y: float = (band_top + screen._side_tools.position.y) * 0.5
 	var hand_center_y: float = (far_edge.y + screen._own_tile_rect(0.0, 0.0).end.y) * 0.5
 	if screen._frames_player_hand():
-		var bottom: float = screen._own_tile_rect(0.0, 0.0).end.y
+		var pose: Transform3D = screen._own_tile_pose(0.0, 0.0)
+		if screen._framed_own_melds:
+			var meld := screen._pieces_root.get_node_or_null("MahjongMeld0_0_0") as Node3D
+			if is_instance_valid(meld): pose = meld.global_transform
+		var bottom := -INF
+		for point: Vector2 in screen._tile_side_hull:
+			bottom = maxf(bottom, screen._project_to_board(pose * Vector3(0.0, point.x, point.y)).y)
 		var gap: float = (screen.size.y - screen._safe.w - bottom) * screen.get_viewport_transform().get_scale().y
-		var inset_px: float = screen.HAND_BOTTOM_INSET * screen.get_viewport_transform().get_scale().y
-		_check(gap >= inset_px - 0.01 and gap <= inset_px + 3.0 and far_edge.y >= screen._safe.y,
-			"Camera must preserve the bottom inset and keep the far row inside the safe frame")
+		var inset_px: float = screen.HAND_BOTTOM_INSET_PIXELS
+		_check(absf(gap - inset_px) <= 0.2 and far_edge.y >= screen._safe.y,
+			"Camera must keep the full reference hand five pixels from the safe bottom edge")
 	else:
 		_check(band_center.distance_to(full_center) <= 1.0 or (absf(hand_center_y-social_center_y) <= 1.0 and absf(band_center.x-view.get_center().x) <= 1.0), "Playable table must stay centered in the available band")
 		_check(far_edge.y >= band_top and near_play_edge.y <= view.end.y, "Near playing edge and far hand must fit the safe layout band")
