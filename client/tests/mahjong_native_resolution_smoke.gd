@@ -106,8 +106,10 @@ func _verify_full_hand_framing(board: Board) -> void:
 		_check(safe_area.encloses(north), "The entire north hand must be within the safe frame")
 		north_top = minf(north_top, north.position.y)
 	var margin_px := (bounds.position.x - minimum_margin) * pixels
+	var factor := minf(board.size.x / 1440.0, board.size.y / 810.0)
+	var north_inset := (board.SEAT_EDGE_INSET + board.NORTH_CARD_SIZE.y + board.NORTH_HAND_CARD_GAP) * factor
 	_check(margin_px >= -2.0 and absf(bounds.position.x - (board.size.x - bounds.end.x)) * pixels < 2.0
-		and (margin_px < 2.0 or (north_top - safe_area.position.y) * pixels <= 2.0)
+		and (margin_px < 2.0 or absf(north_top - safe_area.position.y - north_inset) * pixels <= 2.0)
 		and safe_area.encloses(bounds), "Both rows must fit with centred south margins: %.3f / %.3f" % [left, right])
 	var bottom_inset := board.HAND_BOTTOM_INSET * pixels
 	_check(bottom_px >= bottom_inset - 0.01 and bottom_px <= bottom_inset + 3.0,
@@ -152,17 +154,33 @@ func _verify_tile_lighting(board: Board, quality: int) -> void:
 		_records.append({"case":label, "p90_p10_contrast":contrast, "clipped_fraction":clipped_fraction})
 
 
+func _verify_north_portrait(board: Board) -> void:
+	var opposite := board._seat_panels[2].get_global_rect()
+	var portrait := board._seat_panels[2].find_child("MahjongSquarePortrait", true, false) as Control
+	var row := Rect2()
+	for tile: Node3D in board._pieces_root.find_children("MahjongConcealedHand2_*", "Node3D", false, false):
+		if tile.is_queued_for_deletion(): continue
+		var body := board._projected_tile_rect(tile, &"TileBody")
+		body.position += board._board_view.position
+		row = row.merge(body) if row.has_area() else body
+	var factor := minf(board.size.x / 1440.0, board.size.y / 810.0)
+	_check(row.has_area() and absf(portrait.get_global_rect().get_center().x - row.get_center().x) < 0.1
+		and absf(row.position.y - opposite.end.y - board.NORTH_HAND_CARD_GAP * factor) < 0.1
+		and board._usable_modal_area().encloses(opposite),
+		"North avatar must track the projected upper middle of its hand and keep the row clear at %s: %s / %s" % [root.size, opposite, row])
+
+
 func _verify_hud_layout(board: Board) -> void:
 	var heading := board._header.get_global_rect()
 	var opposite := board._seat_panels[2].get_global_rect()
 	var expected_left := board._safe.x + board._horizontal_screen_pixels(10.0)
 	var expected_right := board.size.x - board._safe.z - board._horizontal_screen_pixels(10.0)
 	var factor := minf(board.size.x / 1440.0, board.size.y / 810.0)
-	var corner_inset := 12.0 * factor
+	var corner_inset := board.SEAT_EDGE_INSET * factor
 	_check(board.find_child("MahjongTableBrandMark", true, false) == null, "The battle HUD must omit the logo")
 	_check(is_equal_approx(heading.position.x, expected_left)
 		and board._header.horizontal_alignment == HORIZONTAL_ALIGNMENT_LEFT
-		and is_equal_approx(heading.position.y, opposite.position.y),
+		and is_equal_approx(heading.position.y, board._safe.y + corner_inset),
 		"Room heading must start at the top-left safe inset")
 	for relative in 4:
 		_check(board._wind_dial._winds[relative].text == ["南", "东", "北", "西"][relative], "Projected table directions must follow the screen")
@@ -172,12 +190,13 @@ func _verify_hud_layout(board: Board) -> void:
 		_check(nickname.get_theme_font_size("font_size") == maxi(10, previous_size - 2) + 2, "All four nicknames must gain exactly two points")
 	var north_portrait := board._avatar_portraits[2].get_global_rect()
 	var north_name := board._seat_panels[2].get_node("MahjongSeatNickname") as Label
-	_check(is_equal_approx(opposite.end.x, expected_right) and is_equal_approx(opposite.position.y, board._safe.y + corner_inset)
-		and north_portrait.end.x >= opposite.end.x - 5.1 * factor and north_name.get_global_rect().end.x <= north_portrait.position.x,
-		"North portrait must hug the safe top-right corner with its name to the left")
+	var north_balance := board._seat_panels[2].get_node("MahjongSeatEggs") as Label
+	_verify_north_portrait(board)
+	_check(north_name.get_global_rect().end.x <= north_portrait.position.x and north_balance.get_global_rect().position.x >= north_portrait.end.x,
+		"North portrait must have its name and balance on opposite sides")
 	var toolbar := board._toolbar.get_global_rect()
-	_check(not heading.intersects(opposite) and toolbar.position.y > opposite.end.y and is_equal_approx(toolbar.end.x, expected_right),
-		"Room heading and north portrait must share the top edge with the tools below the portrait")
+	_check(not heading.intersects(opposite) and not toolbar.intersects(opposite) and is_equal_approx(toolbar.end.x, expected_right),
+		"Room heading and toolbar must keep the north avatar clear")
 	var left := board._seat_panels[3].get_global_rect()
 	var right := board._seat_panels[1].get_global_rect()
 	var center_y := (board._safe.y + board.size.y - board._safe.w) * 0.5
@@ -298,6 +317,16 @@ func _run() -> void:
 		if not _output.is_empty() and DisplayServer.get_name() != "headless":
 			await RenderingServer.frame_post_draw
 			_check(root.get_texture().get_image().save_png(_output.path_join("board_%dx%d.png" % [dimensions.x,dimensions.y])) == OK, "Native capture saves")
+	board._state.hand_counts[2] = 7
+	board._state.melds[2] = [
+		{"kind":"peng","tiles":[{"id":71,"suit":"wan","rank":3},{"id":72,"suit":"wan","rank":3},{"id":73,"suit":"wan","rank":3}]},
+		{"kind":"peng","tiles":[{"id":81,"suit":"tiao","rank":8},{"id":82,"suit":"tiao","rank":8},{"id":83,"suit":"tiao","rank":8}]}]
+	board._render()
+	await _settle()
+	_verify_north_portrait(board)
+	board._state.hand_counts[2] = 13
+	board._state.melds[2] = []
+	board._render()
 	board._apply_camera_impact(0.11, 5.0)
 	await _settle()
 	_verify_felt_coverage(board, "play effect")

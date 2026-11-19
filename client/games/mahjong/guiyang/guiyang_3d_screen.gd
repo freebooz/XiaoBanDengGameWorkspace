@@ -64,6 +64,9 @@ const MELD_ROW_GAP := 0.009
 const OPPONENT_MELD_SEPARATION := 0.054
 const SEAT_CARD_SIZE := Vector2(178, 76)
 const SOUTH_CARD_SIZE := Vector2(98, 140)
+const NORTH_CARD_SIZE := Vector2(300, 76)
+const SEAT_EDGE_INSET := 12.0
+const NORTH_HAND_CARD_GAP := 4.0
 const OWN_HAND_LIFT := 0.020
 const FULL_HAND_COUNT := 14
 const HAND_SIDE_MARGIN_TILES := 2.97
@@ -528,12 +531,11 @@ func _layout_ui() -> void:
 	var tool_height := icon_extent
 	var tool_gap := maxf(8.0 * factor, icon_extent / 8.0)
 	var toolbar_width := tool_width * _toolbar.get_child_count() + tool_gap * (_toolbar.get_child_count() - 1)
-	var opposite_seat := _seat_rect(2)
-	_header.position = Vector2(_safe.x + horizontal_inset, opposite_seat.position.y)
-	var bar_width := maxf(1.0, opposite_seat.position.x - _header.position.x - 12.0 * factor)
+	_header.position = Vector2(_safe.x + horizontal_inset, top + SEAT_EDGE_INSET * factor)
+	var bar_width := maxf(1.0, _play_area.get_center().x - (NORTH_CARD_SIZE.x * 0.5 + SEAT_EDGE_INSET) * factor - _header.position.x)
 	_header.size = Vector2(bar_width, minf(tool_height, maxf(44.0 * factor, icon_extent * 0.67)))
 	BATTLE_ART.fit_room_heading(_header, roundi(28*factor), 2)
-	_toolbar.position = Vector2(opposite_seat.end.x - toolbar_width, opposite_seat.end.y + 8.0 * factor)
+	_toolbar.position = Vector2(width - _safe.z - horizontal_inset - toolbar_width, _header.position.y)
 	_toolbar.size = Vector2(toolbar_width,tool_height)
 	for index in range(_toolbar.get_child_count()):
 		var tool := _toolbar.get_child(index) as Button
@@ -583,16 +585,25 @@ func _horizontal_screen_pixels(pixels: float) -> float:
 
 func _seat_rect(relative: int) -> Rect2:
 	var factor := minf(size.x/1440.0,size.y/810.0)
-	var box := (SOUTH_CARD_SIZE if relative == 0 else SEAT_CARD_SIZE) * factor
+	var box: Vector2 = [SOUTH_CARD_SIZE, SEAT_CARD_SIZE, NORTH_CARD_SIZE, SEAT_CARD_SIZE][relative] * factor
 	var horizontal_inset := _horizontal_screen_pixels(10.0)
 	var left := _safe.x + horizontal_inset
 	var right := size.x - _safe.z - horizontal_inset - box.x
 	var side_y := _safe.y + (size.y - _safe.y - _safe.w - box.y) * 0.5
-	var edge_inset := 12.0 * factor
+	var edge_inset := SEAT_EDGE_INSET * factor
 	match relative:
 		0: return Rect2(Vector2(left, size.y - _safe.w - box.y - edge_inset), box)
 		1: return Rect2(Vector2(right, side_y), box)
-		2: return Rect2(Vector2(right, _safe.y + edge_inset), box)
+		2:
+			var position := Vector2(_play_area.get_center().x - box.x * 0.5, _safe.y + edge_inset)
+			var count := _seat_concealed_count(2)
+			if count > 0 and is_instance_valid(_camera) and _camera.is_inside_tree() and is_instance_valid(_pieces_root):
+				var row_start := _concealed_row_start(2, count)
+				var row_end := row_start + (count - 1) * TILE_SIZE.x
+				var row := _project_tile_bounds(_north_hand_pose(row_start)).merge(_project_tile_bounds(_north_hand_pose(row_end)))
+				position.x = clampf(_board_view.position.x + row.get_center().x - box.x * 0.5, left, right)
+				position.y = maxf(position.y, _board_view.position.y + row.position.y - box.y - NORTH_HAND_CARD_GAP * factor)
+			return Rect2(position, box)
 	return Rect2(Vector2(left, side_y), box)
 
 
@@ -622,7 +633,16 @@ func _own_tile_position(along: float, lift: float) -> Vector3:
 
 
 func _own_tile_rect(along: float, lift: float) -> Rect2:
-	var pose := _own_tile_pose(along, lift)
+	return _project_tile_bounds(_own_tile_pose(along, lift))
+
+
+func _north_hand_pose(along: float) -> Transform3D:
+	var rotation := Basis.from_euler(Vector3(HAND_STANDING_ANGLE, PI, 0.0))
+	var position := _seat_table_position(2, along, HAND_PIVOT_HEIGHT, HAND_PIVOT_DEPTH)
+	return _pieces_root.global_transform * Transform3D(rotation, position)
+
+
+func _project_tile_bounds(pose: Transform3D) -> Rect2:
 	var rect := Rect2(_project_to_board(pose * TILE_BODY_BOUNDS.position), Vector2.ZERO)
 	for corner in range(1, 8):
 		rect = rect.expand(_project_to_board(pose * TILE_BODY_BOUNDS.get_endpoint(corner)))
@@ -888,12 +908,12 @@ func _fit_camera() -> void:
 	var far := view * Vector3(0.0, TILE_SIZE.z, -HAND_ROW_RADIUS)
 	var near_depth := HAND_PIVOT_DEPTH + TILE_SIZE.y if _is_spectating() else PLAY_AREA_NEAR_DEPTH
 	var near_edge := view * Vector3(0.0, 0.0, near_depth)
-	var far_seat := _seat_rect(2)
-	var gap := 8.0 * far_seat.size.y / SEAT_CARD_SIZE.y
-	var top := 1.0 - 2.0 * (maxf(_play_area.position.y, far_seat.end.y) + gap) / size.y
+	var factor := minf(size.x / 1440.0, size.y / 810.0)
+	var gap := 8.0 * factor
+	var top := 1.0 - 2.0 * (maxf(_play_area.position.y, _safe.y + (SEAT_EDGE_INSET + NORTH_CARD_SIZE.y) * factor) + gap) / size.y
 	var bottom := 1.0 - 2.0 * (minf(_play_area.end.y, _side_tools.position.y) - gap) / size.y
 	var usable_width := _play_area.size.x / size.x
-	if aspect >= 1.0: usable_width -= 2.0 * far_seat.size.x / size.x
+	if aspect >= 1.0: usable_width -= 2.0 * SEAT_CARD_SIZE.x * factor / size.x
 	usable_width = maxf(0.3, usable_width)
 	var side_extent := HAND_PIVOT_DEPTH + TILE_SIZE.y
 	var distance := maxf(near_edge.z + side_extent / (tan_x * usable_width),
@@ -926,15 +946,15 @@ func _fit_camera() -> void:
 func _fit_player_hand_camera(aspect: float) -> void:
 	var view := Transform3D(_camera.global_basis, CAMERA_TARGET).affine_inverse()
 	var row := view * _own_tile_pose(0.0, 0.0)
-	var north_pose := Transform3D(Basis.from_euler(Vector3(HAND_STANDING_ANGLE, PI, 0.0)),
-		_seat_table_position(2, 0.0, HAND_PIVOT_HEIGHT, HAND_PIVOT_DEPTH))
-	var north_row := view * _pieces_root.global_transform * north_pose
+	var north_row := view * _north_hand_pose(0.0)
 
 	var board_height := _board_view.size.y
 	# Keep the resting hand inside the bottom safe inset at fractional native scales.
 	var pixel_scale := maxf((get_viewport_transform() * get_global_transform()).y.length(), 0.01)
 	var bottom := floorf((size.y - _safe.w - HAND_BOTTOM_INSET) * pixel_scale - 1.0) / pixel_scale
-	var top_ndc := 1.0 - 2.0 * (_safe.y + 1.0 / pixel_scale) / board_height
+	var factor := minf(size.x / 1440.0, size.y / 810.0)
+	var top := _safe.y + (SEAT_EDGE_INSET + NORTH_CARD_SIZE.y + NORTH_HAND_CARD_GAP) * factor + 1.0 / pixel_scale
+	var top_ndc := 1.0 - 2.0 * top / board_height
 	var bottom_ndc := 1.0 - 2.0 * bottom / board_height
 	var tangent := CAMERA_SENSOR_WIDTH_MM / (2.0 * CAMERA_FOCAL_LENGTH_MM * aspect)
 	var nearest_z := -INF
@@ -968,6 +988,9 @@ func _on_native_projection_resized() -> void:
 	if not is_instance_valid(_camera) or _exiting: return
 	_stop_camera_impact()
 	_fit_camera()
+	if _seat_panels.size() == 4 and is_instance_valid(_seat_panels[2]):
+		_seat_panels[2].position = _seat_rect(2).position
+		_position_avatar_clock()
 	_layout_compass()
 	_layout_hand_controls()
 
@@ -1541,7 +1564,7 @@ func _render_seats() -> void:
 		var known: bool = (balance is int or balance is float) and balance >= 0 and is_finite(float(balance))
 		var egg_text := str(int(balance)) if known else "—"
 		var dealer := seat == int(_state.get("dealer", -1))
-		var portrait_on_right := relative == 2
+		var portrait_centered := relative == 2
 		var caption_above := relative == 0
 		var panel := Panel.new()
 		panel.name="MahjongSeat%d"%relative
@@ -1555,8 +1578,8 @@ func _render_seats() -> void:
 		avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		avatar.size = Vector2(68, 68) * factor
 		avatar.position = Vector2.ONE * 4.0 * factor
-		if portrait_on_right:
-			avatar.position.x = panel.size.x - avatar.size.x - 4.0 * factor
+		if portrait_centered:
+			avatar.position.x = (panel.size.x - avatar.size.x) * 0.5
 		if caption_above:
 			avatar.position.y = panel.size.y - avatar.size.y - 4.0 * factor
 		avatar.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
@@ -1590,9 +1613,11 @@ func _render_seats() -> void:
 			manage.pressed.connect(_open_moderation.bind(seat))
 			avatar.add_child(manage)
 			manage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		var text_start := (7.0 if portrait_on_right or caption_above else 74.0) * factor
-		var text_edge := panel.size.x - (74.0 if portrait_on_right else 7.0) * factor
-		var name_label := _label(panel,"",text_start,5*factor,0,27*factor,roundi(20*factor),Color("#fff1d4"))
+		var text_start := (7.0 if portrait_centered or caption_above else 74.0) * factor
+		var text_edge := panel.size.x - 7.0 * factor
+		var nickname_edge := avatar.position.x - 5.0 * factor if portrait_centered else text_edge
+		var nickname_y := (24.5 if portrait_centered else 5.0) * factor
+		var name_label := _label(panel,"",text_start,nickname_y,0,27*factor,roundi(20*factor),Color("#fff1d4"))
 		name_label.name = "MahjongSeatNickname"
 		name_label.add_theme_stylebox_override("normal", clear_background)
 		name_label.add_theme_color_override("font_outline_color", Color("#17261e"))
@@ -1606,18 +1631,20 @@ func _render_seats() -> void:
 		while name_size > 10 and name_label.get_theme_font("font").get_height(name_size) > 25 * factor:
 			name_size -= 1
 		name_label.add_theme_font_size_override("font_size", maxi(12, name_size))
-		name_label.size = Vector2(text_edge - name_label.position.x, 27.0 * factor)
+		name_label.size = Vector2(nickname_edge - name_label.position.x, 27.0 * factor)
 		name_label.tooltip_text = nickname + (" · 庄家" if dealer else "")
 		if not missing_suits.is_empty():
 			var suit: String = DINGQUE_SUITS[missing_suits[seat]]
-			var missing_x := text_edge - 47.0 * factor
+			var missing_x := nickname_edge - 47.0 * factor
 			name_label.size.x = missing_x - name_label.position.x - 2.0 * factor
-			var missing := _label(panel, "缺 " + suit, missing_x, 5 * factor, 47 * factor, 27 * factor,
+			var missing := _label(panel, "缺 " + suit, missing_x, nickname_y, 47 * factor, 27 * factor,
 				maxi(10, roundi(15 * factor)), TABLE_THEME.CREAM)
 			missing.name = "MahjongMissingSuit%d" % seat
 			missing.tooltip_text = "定缺" + suit
 		var balance_y := (32.0 if caption_above else 34.0) * factor
-		var quantity := _label(panel,"",text_start,balance_y,0,36*factor,roundi(31*factor),Color("#a42316"))
+		var balance_x := avatar.get_rect().end.x + 5.0 * factor if portrait_centered else text_start
+		if portrait_centered: balance_y = 20.0 * factor
+		var quantity := _label(panel,"",balance_x,balance_y,0,36*factor,roundi(31*factor),Color("#a42316"))
 		quantity.name = "MahjongSeatEggs"
 		quantity.add_theme_color_override("font_outline_color", Color("#ffe6c1"))
 		quantity.add_theme_constant_override("outline_size", maxi(1, roundi(2 * factor)))
@@ -3094,12 +3121,13 @@ func _render_bubbles() -> void:
 		var box := Panel.new()
 		box.name = "MahjongSocialSeat%d" % int(seat)
 		box.size = Vector2(280, 52)
-		var bubble_x := rect.end.x - box.size.x if relative in [1, 2] else rect.position.x
+		var bubble_x := rect.end.x - box.size.x if relative == 1 else rect.position.x
 		var bubble_y := rect.end.y + 32.0
 		if relative == 0:
 			bubble_y = _turn_label.position.y - box.size.y - 8.0
 		elif relative == 2:
-			bubble_y = _toolbar.get_rect().end.y + 8.0
+			bubble_x = rect.end.x + 8.0
+			bubble_y = maxf(rect.position.y, _toolbar.get_rect().end.y + 8.0)
 		var safe_area := _usable_modal_area()
 		box.position = Vector2(clampf(bubble_x, safe_area.position.x, safe_area.end.x - box.size.x),
 			clampf(bubble_y, safe_area.position.y, safe_area.end.y - box.size.y))
