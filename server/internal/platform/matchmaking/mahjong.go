@@ -363,6 +363,22 @@ func (m *Manager) ExpireMahjongEntry(expected MahjongAssignment) ([]string, bool
 	return players, true
 }
 
+// CancelActiveMahjongRound releases all seats without advancing the friend series.
+// The caller checks the live match ID before retiring its assignment.
+func (m *Manager) CancelActiveMahjongRound(expected MahjongAssignment) bool {
+	if !expected.Start || len(expected.PlayerAccountIDs) != 4 {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current, ok := m.mahjongAssignmentLocked(expected.PlayerAccountIDs[0])
+	if !ok || current.RoomID != expected.RoomID || !sameMahjongRoomImage(current, expected) {
+		return false
+	}
+	m.finishRoomLocked(expected.RoomID)
+	return true
+}
+
 // LeaveMahjong limits a lobby command to the caller's current Mahjong room.
 // Training seats have no separate human assignments, so ending the table is atomic.
 // On success it reports whether the room still has assigned players.

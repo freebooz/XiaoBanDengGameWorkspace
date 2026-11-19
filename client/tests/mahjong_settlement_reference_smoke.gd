@@ -53,9 +53,23 @@ func _click(control: Control) -> void:
 		event.pressed = down
 		root.push_input(event, true)
 
+func _check_caption_pixels(control: Control, frame: Image) -> void:
+	var transform := control.get_viewport_transform() * control.get_global_transform()
+	var bounds := Rect2i(transform * Rect2(Vector2.ZERO,control.size)).grow(-6).intersection(Rect2i(Vector2i.ZERO,frame.get_size()))
+	var light_pixels := 0
+	for x in range(bounds.position.x,bounds.end.x):
+		for y in range(bounds.position.y,bounds.end.y):
+			var ink := frame.get_pixel(x,y)
+			if ink.r > 0.88 and ink.g > 0.82 and ink.b > 0.67: light_pixels += 1
+	_check(light_pixels > 12,"The utility caption must retain legible glyphs after a portrait resize.")
+
 func _run() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--capture-dir="): capture_dir = arg.trim_prefix("--capture-dir=")
+	if DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		_check(Engine.max_fps == 0 and DisplayServer.window_get_vsync_mode() == DisplayServer.VSYNC_DISABLED, "Native settlement verification needs uncapped rendering.")
+		print("Settlement render: max_fps=%d vsync=%d" % [Engine.max_fps,DisplayServer.window_get_vsync_mode()])
 	root.size = Vector2i(1440,810)
 	var board := Board.new()
 	board.size = Vector2(1440,810)
@@ -86,6 +100,9 @@ func _run() -> void:
 		for id in ["MahjongNextRoundButton","MahjongSettlementRoomButton","MahjongSettlementShareButton"]:
 			var button := panel.find_child(id, true, false) as Button
 			_check(button.is_visible_in_tree() and panel.get_global_rect().grow(1).encloses(button.get_global_rect()), "Unreachable " + id + " at " + str(extent))
+		for tool: Button in panel._tools.get_children():
+			var caption := tool.get_node("Caption") as Label
+			_check(panel.get_global_rect().grow(1).encloses(tool.get_global_rect()) and caption.size.x >= caption.get_minimum_size().x, "Clipped utility button at " + str(extent))
 		for card: Panel in [panel._score_card,panel._fan_card]:
 			var rows := card.get_child(-1) as VBoxContainer
 			_check(card.get_global_rect().grow(1).encloses(rows.get_global_rect()),"A score line overflows its card at " + str(extent))
@@ -94,6 +111,8 @@ func _run() -> void:
 			_check(rendered.get_size() == root.size, "Expected an unscaled native screenshot.")
 			_check(rendered.save_png(capture_dir.path_join("settlement-%dx%d.png" % [extent.x,extent.y])) == OK, "Cannot save screenshot")
 		if extent.x < extent.y:
+			if DisplayServer.get_name() != "headless":
+				_check_caption_pixels(panel.find_child("MahjongSettlementDetailsButton",true,false),root.get_texture().get_image())
 			panel._scroll.scroll_vertical = roundi(panel._scroll.get_v_scroll_bar().max_value)
 			await _wait_layout()
 			_check(panel._scroll.get_global_rect().grow(1).encloses(panel._score_card.get_global_rect()),"All four final scores must be reachable by scrolling in portrait.")

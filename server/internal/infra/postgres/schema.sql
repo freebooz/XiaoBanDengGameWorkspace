@@ -206,6 +206,11 @@ CREATE TABLE IF NOT EXISTS mahjong_active_matches (
 -- Existing checkpoints retain their application-side deadline until the next write.
 ALTER TABLE mahjong_active_matches ADD COLUMN IF NOT EXISTS committed_at TIMESTAMPTZ;
 
+-- Seat-ordered Unix milliseconds. A zero has no known disconnect deadline.
+ALTER TABLE mahjong_active_matches ADD COLUMN IF NOT EXISTS disconnect_deadlines BIGINT[] NOT NULL
+    DEFAULT '{0,0,0,0}' CHECK (cardinality(disconnect_deadlines) = 4 AND array_dims(disconnect_deadlines) = '[1:4]'
+        AND array_position(disconnect_deadlines, NULL) IS NULL AND 0 <= ALL(disconnect_deadlines));
+
 CREATE TABLE IF NOT EXISTS mahjong_active_completions (
     match_id TEXT PRIMARY KEY,
     revision BIGINT NOT NULL CHECK (revision > 0)

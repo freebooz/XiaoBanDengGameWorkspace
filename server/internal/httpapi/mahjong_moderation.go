@@ -47,7 +47,7 @@ func (h *mahjongHub) reportForSeat(client *mahjongClient, message map[string]any
 	if !valid || target < 0 || target >= 4 || !mahjongmoderation.ValidReason(reason) || matchID == "" {
 		return mahjongmoderation.Report{}, errors.New("无效的举报座位、原因或对局编号")
 	}
-	room := client.room
+	room := h.boundBoard(client)
 	if room == nil {
 		return mahjongmoderation.Report{}, errors.New("请先加入麻将牌桌")
 	}

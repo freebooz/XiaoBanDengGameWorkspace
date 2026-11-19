@@ -170,8 +170,8 @@ func TestActiveMahjongPostgresRevisionAndCompletion(t *testing.T) {
 	if stamp, err := store.CommittedAt(ctx, legacySnapshot); err != nil || !stamp.IsZero() {
 		t.Fatalf("legacy snapshot should not gain a fabricated timestamp: %v %v", stamp, err)
 	}
-	if rows, err := store.List(ctx); err != nil || len(rows) != 1 || !rows[0].CommittedAt.IsZero() {
-		t.Fatalf("startup must accept SQL NULL timestamps: rows=%d err=%v", len(rows), err)
+	if rows, err := store.List(ctx); err != nil || len(rows) != 1 || !rows[0].CommittedAt.IsZero() || rows[0].DisconnectDeadlines != [4]int64{} {
+		t.Fatalf("legacy snapshots must restore without fabricated clocks or disconnect deadlines: rows=%d err=%v", len(rows), err)
 	}
 	if err := store.Delete(ctx, legacySnapshot.MatchID, 1); err != nil {
 		t.Fatal(err)

@@ -39,6 +39,8 @@ type mahjongHub struct {
 	lobbyClients        map[*mahjongClient]*mahjongLobbySubscription
 	spectators          mahjongSpectators
 	waitingGrace        time.Duration
+	disconnectGrace     time.Duration
+	recentDisconnects   []mahjongCancelledMatch
 	waitingDisconnects  map[string]*mahjongWaitingDisconnect
 	recordHistory       func(context.Context, mahjonghistory.Result) error
 	checkpoints         mahjongCheckpointStore
@@ -80,6 +82,11 @@ type mahjongRoom struct {
 	profilesLoaded  bool
 	eggDeltas       *[4]int64
 	joinedSeats     [4]bool
+
+	// A zero deadline denotes a connected human or a bot.
+	disconnectDeadlines [4]int64
+	disconnectTimer     *time.Timer
+	presenceDirty       bool
 }
 
 type mahjongClient struct {
@@ -100,6 +107,7 @@ func newMahjongHub(matches *matchmaking.Manager) *mahjongHub {
 		entries: map[string]*mahjongEntry{}, entryTimeout: mahjongEntryTimeout,
 		lobbyClients: map[*mahjongClient]*mahjongLobbySubscription{},
 		waitingGrace: mahjongWaitingGrace, waitingDisconnects: map[string]*mahjongWaitingDisconnect{},
+		disconnectGrace: 5 * time.Minute,
 	}
 }
 
@@ -208,7 +216,13 @@ func (h *mahjongHub) join(client *mahjongClient, message map[string]any) {
 	}
 	room, seat, err := h.lockRoomForJoin(client, roomID, accountID, expectedMatchID)
 	if err != nil {
-		_ = client.writeJSON(map[string]any{"type": "mahjong_error", "operation": "join", "message": err.Error()})
+		message := map[string]any{"type": "mahjong_error", "operation": "join", "message": err.Error()}
+		if expectedMatchID != "" && errors.Is(err, errMahjongMatchCancelled) {
+			message = mahjongCancellationMessage(roomID, expectedMatchID)
+		} else if expectedMatchID != "" && errors.Is(err, errMahjongMatchUnavailable) {
+			message["room_id"], message["match_id"], message["code"] = roomID, expectedMatchID, "match_unavailable"
+		}
+		_ = client.writeJSON(message)
 		return
 	}
 	started := false
@@ -218,6 +232,13 @@ func (h *mahjongHub) join(client *mahjongClient, message map[string]any) {
 			h.stopEntryTimeout(room)
 		}
 	}()
+	priorDeadline := room.disconnectDeadlines[seat]
+	if priorDeadline != 0 && !room.closed && client.principal == accountID {
+		if err := room.reconnectSeatLocked(h, seat); err != nil {
+			_ = client.writeJSON(map[string]any{"type": "mahjong_error", "operation": "join", "message": "服务器暂时无法恢复座位，请稍后重连"})
+			return
+		}
+	}
 	for old := range room.clients {
 		if old != client && old.seat == seat {
 			delete(room.clients, old)
@@ -231,6 +252,9 @@ func (h *mahjongHub) join(client *mahjongClient, message map[string]any) {
 	room.addRuleMetadata(joined)
 	if client.writeJSON(joined) != nil {
 		delete(room.clients, client)
+		if client.principal == accountID {
+			room.disconnectSeatLocked(h, seat, priorDeadline)
+		}
 		h.monitor.notify()
 		return
 	}
@@ -264,19 +288,28 @@ func (h *mahjongHub) lockRoomForJoin(client *mahjongClient, roomID, accountID, e
 	if h.stopping.Load() {
 		return nil, -1, errors.New("服务正在交接，请稍后重连")
 	}
+	if expectedMatchID != "" && client.principal == accountID && h.wasCancelledLocked(roomID, expectedMatchID, accountID) {
+		return nil, -1, errMahjongMatchCancelled
+	}
 	current, ok := h.matches.MahjongAssignment(accountID)
 	if !ok || current.RoomID != roomID || current.SeatIndex < 0 || current.SeatIndex >= 4 {
+		if expectedMatchID != "" {
+			return nil, -1, errMahjongMatchUnavailable
+		}
 		return nil, -1, errors.New("玩家不属于该麻将房间")
 	}
 	room := h.rooms[roomID]
 	restoring := !current.Start && current.Kind == matchmaking.MahjongFriend && expectedMatchID != "" && expectedMatchID == current.PreviousMatchID
 	if !restoring && (!current.Start || len(current.PlayerAccountIDs) != 4) {
+		if expectedMatchID != "" {
+			return nil, -1, errMahjongMatchUnavailable
+		}
 		return nil, -1, errors.New("四人尚未准备完成或座位失效")
 	}
 	predeal := h.friendHead(roomID)
 	reserved := !restoring && predeal != nil && predeal.image.EntryMatchID == expectedMatchID && (room == nil || !room.belongsToRound(current))
 	if expectedMatchID != "" && !reserved && (room == nil || room.matchID != expectedMatchID || !room.createdAt.Equal(current.Room.CreatedAt) || (!restoring && !room.belongsToRound(current))) {
-		return nil, -1, errors.New("此对局已失效，请返回大厅")
+		return nil, -1, errMahjongMatchUnavailable
 	}
 	rule := current.Rule
 	if rule.ID == "" {
@@ -308,6 +341,10 @@ func (h *mahjongHub) lockRoomForJoin(client *mahjongClient, roomID, accountID, e
 	if room.closed {
 		room.mu.Unlock()
 		return nil, -1, errors.New("此麻将房间已经结束")
+	}
+	if room.disconnectExpired(time.Now()) {
+		room.mu.Unlock()
+		return nil, -1, errors.New("牌局正在解散，请稍后重连")
 	}
 	return room, current.SeatIndex, nil
 }
@@ -357,7 +394,7 @@ func (h *mahjongHub) social(client *mahjongClient, message map[string]any) {
 		client.fail(err.Error())
 		return
 	}
-	room := client.room
+	room := h.boundBoard(client)
 	if room == nil {
 		client.fail("尚未加入麻将房间")
 		return
@@ -422,7 +459,7 @@ func (h *mahjongHub) action(client *mahjongClient, message map[string]any) {
 		}
 		_ = client.writeJSON(result)
 	}
-	room := client.room
+	room := h.boundBoard(client)
 	if room == nil {
 		reply(errors.New("尚未加入麻将房间"))
 		return
@@ -499,6 +536,10 @@ func (h *mahjongHub) action(client *mahjongClient, message map[string]any) {
 		return
 	}
 	when := time.Now().UTC()
+	if room.disconnectExpired(when) {
+		reply(errors.New("牌局正在解散"))
+		return
+	}
 	if !when.Before(room.actionDeadline()) {
 		reply(errors.New("当前操作窗口已超时"))
 		return
@@ -615,7 +656,7 @@ func (r *mahjongRoom) scheduleTimeoutLocked(h *mahjongHub) {
 	scheduled = time.AfterFunc(time.Until(runAt), func() {
 		r.mu.Lock()
 		defer r.mu.Unlock()
-		if r.closed || !r.started || r.persistPending || r.game.Epoch != expectedEpoch || r.timer != scheduled {
+		if r.closed || !r.started || r.persistPending || r.game.Epoch != expectedEpoch || r.timer != scheduled || r.disconnectExpired(time.Now()) {
 			return
 		}
 		next, err := r.copyForAction(h)
@@ -743,6 +784,10 @@ func (h *mahjongHub) removeUnobservedSettlement(r *mahjongRoom) {
 
 func (r *mahjongRoom) closeLocked() {
 	r.closed = true
+	if r.disconnectTimer != nil {
+		r.disconnectTimer.Stop()
+		r.disconnectTimer = nil
+	}
 	if r.spectators != nil {
 		r.spectators.notifyRoom(r.id)
 	}
@@ -763,16 +808,21 @@ func (h *mahjongHub) disconnect(client *mahjongClient) {
 		return
 	}
 	h.disconnectLobby(client)
+	h.mu.Lock()
 	if client.room == nil {
+		h.mu.Unlock()
 		return
 	}
-	h.mu.Lock()
 	room := client.room
 	room.mu.Lock()
 	defer room.mu.Unlock()
 	_, connected := room.clients[client]
+	seat := client.seat
 	h.detachLocked(client, room)
 	h.mu.Unlock()
+	if connected && client.principal != "" && client.principal == client.accountID {
+		room.disconnectSeatLocked(h, seat, 0)
+	}
 	if connected && (!room.closed || (room.kind != matchmaking.MahjongFriend && room.game.Phase == guiyang.PhaseFinished)) {
 		room.broadcastLocked()
 	} else if connected {

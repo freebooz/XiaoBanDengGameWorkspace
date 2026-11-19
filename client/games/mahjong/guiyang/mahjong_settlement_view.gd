@@ -5,7 +5,6 @@ const PLAYER_ROW := preload("res://modules/games/mahjong/guiyang/mahjong_settlem
 const MATERIALS := preload("res://modules/games/mahjong/guiyang/real_tile_materials.gd")
 const SHARE := preload("res://modules/games/mahjong/guiyang/mahjong_settlement_share.gd")
 const RURAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_theme.gd")
-const MODAL := preload("res://modules/games/mahjong/guiyang/mahjong_rural_modal.gd")
 
 var _data: Dictionary
 var _main := Control.new()
@@ -32,6 +31,7 @@ var _frame := ART.patch(ART.FRAME, Vector4(86, 3, 86, 142))
 var _banner_rect := Rect2()
 var _footer_height := 70.0
 var _action_rect := Rect2()
+var _canvas_scale := Vector2.ZERO
 
 func setup(data: Dictionary, leave: Callable, next_round: Callable, rules: Callable, dismiss := Callable(), return_room := Callable(), materials: RefCounted = null) -> void:
 	name = "MahjongSettlement"
@@ -91,9 +91,15 @@ func setup(data: Dictionary, leave: Callable, next_round: Callable, rules: Calla
 	_fan_title = _fan_card.get_node("Plaque/Caption")
 	_score_card = _card(_score_lines, "本局得失")
 	for row: Dictionary in rows:
-		var score := int(row.score)
-		_add_line(_score_lines, "自己" if row.get("own",false) else str(row.name), "%+d 分" % score,
-			ART.GAIN if score > 0 else ART.LOSS if score < 0 else ART.MUTED, "MahjongSettlementScore%d" % int(row.seat), row.get("own",false), true)
+		var counts_eggs := bool(row.get("counts_eggs", true))
+		var amount: Variant = row.get("egg_delta") if counts_eggs else row.score
+		var value := "—"
+		var ink := ART.MUTED
+		if amount != null:
+			value = ("%+d" if counts_eggs else "%+d 分") % int(amount)
+			if amount != 0: ink = ART.GAIN if amount > 0 else ART.LOSS
+		_add_line(_score_lines, "自己" if row.get("own",false) else str(row.name), value, ink,
+			"MahjongSettlementNet%d" % int(row.seat), row.get("own",false), counts_eggs)
 	var initial_seat := int(rows[0].seat) if not rows.is_empty() else -1
 	for row: Dictionary in rows:
 		if row.get("winner",false):
@@ -122,17 +128,16 @@ func setup(data: Dictionary, leave: Callable, next_round: Callable, rules: Calla
 func _tool(id: String, caption: String, action: Callable) -> Button:
 	var button := Button.new()
 	button.name = id
-	button.text = caption
 	button.tooltip_text = caption
 	button.accessibility_name = caption
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	button.add_theme_font_override("font", ART.FONT)
 	for state in [&"normal",&"hover",&"pressed",&"hover_pressed"]:
-		var fill := Color("#79502de8") if state == &"normal" else Color("#936235")
-		button.add_theme_stylebox_override(state, ART.surface(fill,Color("#dbad71"),15,1))
-	for state in [&"font_color",&"font_hover_color",&"font_pressed_color",&"font_focus_color"]:
-		button.add_theme_color_override(state,Color("#fff0d0"))
-	button.add_theme_stylebox_override("focus",ART.surface(Color.TRANSPARENT,Color("#ffe49f"),15,2))
+		var fill := Color("#754723") if state == &"normal" else Color("#955e2f")
+		button.add_theme_stylebox_override(state, ART.surface(fill,Color("#e6b77e"),12,1))
+	button.add_theme_stylebox_override("focus",ART.surface(Color.TRANSPARENT,Color("#ffe49f"),12,2))
+	var label := ART.label(button,caption,15,Color("#fff5d9"),HORIZONTAL_ALIGNMENT_CENTER)
+	label.name = "Caption"
+	label.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	button.pressed.connect(action)
 	_tools.add_child(button)
 	return button
@@ -187,7 +192,7 @@ func _fit_card(card: Panel, lines: VBoxContainer) -> void:
 	lines.position = Vector2(pad, top+(available-desired)*0.5)
 	lines.size = Vector2(maxf(1,card.size.x-pad*2),desired)
 
-func _add_line(parent: VBoxContainer, title: String, value: String, ink: Color, id := "", highlight := false, score := false, total := false) -> void:
+func _add_line(parent: VBoxContainer, title: String, value: String, ink: Color, id := "", highlight := false, show_egg := false, total := false) -> void:
 	var chip := PanelContainer.new()
 	chip.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -206,14 +211,13 @@ func _add_line(parent: VBoxContainer, title: String, value: String, ink: Color, 
 		line.add_theme_constant_override("separation",8)
 		key.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	else: key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if score:
+	if show_egg:
 		var icon := ART.picture(line, ART.EGG)
-		# Points and egg deltas can differ after wallet collection.
-		icon.tooltip_text = "本局牌分"
+		icon.tooltip_text = "本局鸡蛋得失"
 	var number := ART.label(line,value,17,Color("#ffe770") if total else ink,HORIZONTAL_ALIGNMENT_RIGHT)
 	if not id.is_empty(): number.name = id
 	number.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
-	number.tooltip_text = "本局牌分  "+value if score else value
+	number.tooltip_text = "本局鸡蛋得失  "+value if show_egg else value
 
 func _select_seat(seat: int) -> void:
 	_active_seat = seat
@@ -284,6 +288,7 @@ func _build_details() -> void:
 	for row: Dictionary in _data.get("rows",[]):
 		var name_line := ART.label(list,str(row.name),18)
 		name_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail(list,"MahjongSettlementScore%d" % int(row.seat),"本局牌分  %+d 分" % int(row.score))
 		_detail(list,"MahjongSettlementResult%d" % int(row.seat),str(row.get("result","")))
 		if row.has("details"): _detail(list,"MahjongSettlementBreakdown%d" % int(row.seat),str(row.details))
 		if row.has("series"): _detail(list,"MahjongSettlementSeries%d" % int(row.seat),str(row.series))
@@ -346,6 +351,16 @@ func _place_actions() -> void:
 		_actions.position = _action_rect.position
 		_actions.size = _action_rect.size
 
+func _refresh_text_scale() -> void:
+	if not is_inside_tree(): return
+	var canvas_scale := get_viewport_transform().get_scale()
+	if _canvas_scale.is_equal_approx(canvas_scale): return
+	_canvas_scale = canvas_scale
+	# Fixed-size controls retain their draw cache when the window's canvas scale
+	# changes. Reapply the sampling policy after the new transform is in place.
+	_main.oversampling_with_scale = CanvasItem.OVERSAMPLING_WITH_SCALE_DISABLED
+	_main.oversampling_with_scale = CanvasItem.OVERSAMPLING_WITH_SCALE_ENABLED
+
 func _fit() -> void:
 	if not is_instance_valid(_details) or size.x < 1 or size.y < 1: return
 	var narrow := size.x < 705
@@ -373,6 +388,7 @@ func _fit() -> void:
 	_columns.vertical = narrow
 	_player_margin.add_theme_constant_override("margin_top", 6 if narrow else clampi(roundi(size.y*0.022),9,22))
 	_aside_margin.add_theme_constant_override("margin_top",clampi(roundi(size.x*0.010),8,15))
+	_aside_margin.add_theme_constant_override("margin_bottom",4)
 	_columns.add_theme_constant_override("separation", 16 if narrow else maxi(8,roundi(size.x*0.011)))
 	_aside.add_theme_constant_override("separation",clampi(roundi(size.y*0.03),14,24))
 	var projected_left := _scroll.size.x if narrow else (_scroll.size.x-14)*0.706
@@ -408,8 +424,10 @@ func _fit() -> void:
 	var utility_h := maxf(real_touch,clampf(32*banner_scale,30,37))
 	_tools.add_theme_constant_override("separation",4)
 	for tool: Button in _tools.get_children():
-		tool.custom_minimum_size = Vector2(maxf(utility_h,35*banner_scale),utility_h)
-		tool.add_theme_font_size_override("font_size",maxi(12,roundi(utility_h*0.46)))
+		var caption := tool.get_node("Caption") as Label
+		var font_size := maxi(13,roundi(utility_h*0.47))
+		caption.add_theme_font_size_override("font_size",font_size)
+		tool.custom_minimum_size = Vector2(maxf(utility_h,caption.text.length()*font_size+12),utility_h)
 	_tools.size = _tools.get_combined_minimum_size()
 	if narrow:
 		_tools.position = Vector2(size.x-pad-_tools.size.x,_banner_rect.end.y)
@@ -422,6 +440,7 @@ func _fit() -> void:
 	var sheet := _details.get_node("Sheet") as Control
 	sheet.size = Vector2(minf(580,size.x-24),minf(570,size.y-24))
 	sheet.position = (size-sheet.size)*0.5
+	_refresh_text_scale.call_deferred()
 	queue_redraw()
 
 func _draw() -> void:

@@ -44,8 +44,10 @@ func _run() -> void:
 	_check((board._seat_panels[0].get_node("MahjongSeatEggs") as Label).text == "30", "Seat must display wallet amount, not a score delta")
 	var actual_delta := board.find_child("MahjongSettlementEggDelta0", true, false) as Label
 	var points := board.find_child("MahjongSettlementScore0", true, false) as Label
+	var net := board.find_child("MahjongSettlementNet0", true, false) as Label
 	_check(actual_delta != null and actual_delta.text == "-30 鸡蛋" and points != null and "-70 分" in points.text,
 		"Settlement must distinguish collected eggs from gameplay scores")
+	_check(net != null and net.is_visible_in_tree() and net.text == "-30", "The egg icon in the summary must show the collected amount")
 	# The commit/recovery refresh can reuse a gameplay epoch; zero is a real balance.
 	board._handle_packet(JSON.stringify(_packet(0)))
 	_check(app._egg_balance == 0, "Same-epoch committed wallet refresh must accept zero without adding/subtracting scores")
@@ -63,6 +65,8 @@ func _run() -> void:
 	board._handle_packet(JSON.stringify(older))
 	actual_delta = board.find_child("MahjongSettlementEggDelta0", true, false) as Label
 	_check(actual_delta != null and actual_delta.text == "— 鸡蛋", "Older snapshots without egg_deltas must not claim that score equals collected eggs")
+	net = board.find_child("MahjongSettlementNet0", true, false) as Label
+	_check(net != null and net.text == "—", "Unknown egg settlements must remain distinguishable from zero in the summary")
 	app._show_lobby()
 	var balance_button := app.find_child("MahjongEggBalanceButton", true, false) as Button
 	_check(balance_button != null and balance_button.text == "鸡蛋 42", "Returning to lobby must immediately project the latest committed balance")

@@ -32,8 +32,9 @@ type mahjongSpectator struct {
 	wake      chan struct{}
 	done      chan struct{}
 	// Written once before done is closed.
-	endMessage string
-	finalState *mahjongWatchState
+	endMessage     string
+	cancelledMatch string
+	finalState     *mahjongWatchState
 }
 
 func (s *mahjongSpectators) roomLocked(roomID string, createdAt time.Time) *mahjongRoomSpectators {
@@ -200,6 +201,22 @@ func (s *mahjongSpectators) finishRound(board *mahjongRoom) {
 	}
 }
 
+func (s *mahjongSpectators) cancelRound(board *mahjongRoom) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	room := s.roomLocked(board.id, board.createdAt)
+	if room == nil {
+		return
+	}
+	for seat, watcher := range room.seats {
+		if watcher != nil {
+			watcher.cancelledMatch = board.matchID
+			room.endLocked(seat, mahjongDisconnectMessage, nil)
+		}
+	}
+	delete(s.rooms, board.id)
+}
+
 func (s *mahjongSpectator) notify() {
 	select {
 	case s.wake <- struct{}{}:
@@ -289,7 +306,7 @@ func (h *mahjongHub) admitSpectator(accountID, roomID, password string, seat int
 
 func (h *mahjongHub) joinSpectator(client *mahjongClient, message map[string]any) {
 	accountID := client.resolveAccount(message)
-	if client.principal == "" || accountID == "" || client.lobbyAccount != "" || client.room != nil {
+	if client.principal == "" || accountID == "" || client.lobbyAccount != "" || h.boundBoard(client) != nil {
 		mahjongSpectatorError(client, "watch", errors.New("请使用独立的已登录观战连接"))
 		return
 	}
@@ -498,9 +515,13 @@ func (h *mahjongHub) writeSpectatorSnapshots(client *mahjongClient, watcher *mah
 				return
 			}
 			if watcher.endMessage != "" {
-				_ = client.writeJSON(map[string]any{
+				message := map[string]any{
 					"type": "mahjong_watch_ended", "room_id": watcher.roomID, "message": watcher.endMessage,
-				})
+				}
+				if watcher.cancelledMatch != "" {
+					message["match_id"], message["reason"] = watcher.cancelledMatch, "disconnect_timeout"
+				}
+				_ = client.writeJSON(message)
 				_ = client.wire.conn.Close()
 			}
 			return

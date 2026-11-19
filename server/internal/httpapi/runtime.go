@@ -41,6 +41,11 @@ func (r *Runtime) Drain() {
 	}
 	for _, room := range h.rooms {
 		room.mu.Lock()
+		if (room.playing() || room.openingDealPending()) && room.durable(h) {
+			if room.markAbsentSeats(h, [4]bool{}) || room.presenceDirty {
+				_ = room.savePresenceLocked(h)
+			}
+		}
 		room.closeLocked()
 		room.mu.Unlock()
 	}

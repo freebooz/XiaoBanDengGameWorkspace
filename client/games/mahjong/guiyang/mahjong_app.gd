@@ -117,6 +117,8 @@ var _public_rooms: Array = []
 var _spectator_supported := false
 var _pending_watch: Dictionary = {}
 var _board_return_notice := ""
+var _detached_match: Dictionary = {}
+var _released_lobby_assignment: Dictionary = {}
 var _presets: Array = []
 var _selected_rule: Dictionary = {}
 var _pending_lobby_id := ""
@@ -1208,6 +1210,9 @@ func _on_lobby_packet(raw: String) -> void:
 		"mahjong_match_cancelled":
 			if _state == "game" and is_instance_valid(_game):
 				_game.apply_match_cancellation(packet)
+			elif _state in ["lobby", "room"] and not _detached_match.is_empty() and packet.get("reason") == "disconnect_timeout":
+				if packet.get("room_id") == _detached_match.room_id and packet.get("match_id") == _detached_match.match_id:
+					_return_from_released_match(_detached_match.room_id, _detached_match.match_id, "有玩家断线超过5分钟，本局已解散")
 		"mahjong_lobby_state":
 			if packet.get("state") is Dictionary and packet.get("presets") is Array:
 				_spectator_supported = bool(packet.get("spectator_supported", false))
@@ -1256,6 +1261,12 @@ func _on_room_directory_deadline() -> void:
 func _on_lobby_state(state: Dictionary, presets: Array) -> void:
 	var phase := str(state.get("status",""))
 	if phase not in ["idle","waiting","matched","playing"]: return
+	if not _released_lobby_assignment.is_empty():
+		if phase == "playing" and state.get("room_id") == _released_lobby_assignment.room_id \
+				and state.get("previous_match_id", "") == _released_lobby_assignment.previous_match_id \
+				and int(state.get("completed_rounds", 0)) == _released_lobby_assignment.completed_rounds:
+			return
+		_released_lobby_assignment.clear()
 	var first := not _lobby_synced
 	var joined_room := _lobby_command_acked and phase in ["waiting", "matched"] and str(_match.get("room_id", "")) != str(state.get("room_id", ""))
 	_lobby_synced = true
@@ -1271,6 +1282,10 @@ func _on_lobby_state(state: Dictionary, presets: Array) -> void:
 		_lobby_command_error = ""
 	if _pending_lobby_id.is_empty(): _lobby_deadline.stop()
 	_match = state.duplicate(true)
+	if not _detached_match.is_empty() and phase != "idle":
+		var same_room: bool = _match.get("room_id") == _detached_match.room_id
+		if phase != "playing" or not same_room or _match.get("previous_match_id") == _detached_match.match_id:
+			_detached_match.clear()
 	if joined_room: _audio.play_cue("room")
 	_presets = presets.duplicate(true)
 	if not _valid_rule(_selected_rule):
@@ -1532,6 +1547,7 @@ func _on_lobby_action(action: String, payload: Dictionary) -> void:
 			if phase=="idle" or (phase=="playing" and str(_match.get("kind",""))!="training"): return
 			fields = {"room_id":str(_match.get("room_id",""))}
 		_: return
+	if action in ["quick","create","join","training","watch"]: _detached_match.clear()
 	if action in ["quick","create","join","training","ready"]: _enter_when_ready = true
 	if action == "leave":
 		_enter_when_ready = false
@@ -1815,6 +1831,8 @@ func _clear_live_session() -> void:
 	_history_extra.clear()
 	_history_extra_loaded = false
 	_finished_friend_return.clear()
+	_detached_match.clear()
+	_released_lobby_assignment.clear()
 	_rematch_window_match_id = ""
 	_training_to_abandon = ""
 	_board_return_route.clear()
@@ -1848,6 +1866,7 @@ func _enter_training() -> void:
 
 
 func _make_game(practice: bool, context: Dictionary) -> Variant:
+	_detached_match.clear()
 	var preserve_window_size: bool = (
 		not _rematch_window_match_id.is_empty() and context.get("kind") == "friend"
 		and context.get("previous_match_id") == _rematch_window_match_id
@@ -1879,11 +1898,12 @@ func _make_game(practice: bool, context: Dictionary) -> Variant:
 	game.product_audio = _audio
 	_game = game
 	game.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	game.session_expired.connect(_expire_live_session)
+	game.session_expired.connect(func():
+		if game == _game: _expire_live_session())
 	game.entry_cancelled.connect(func(message: String):
 		if game == _game:
 			if not game.released_match_id.is_empty():
-				_return_from_released_match(game, message)
+				_return_from_released_match(str(game.match_context.get("room_id", "")), game.released_match_id, message)
 				return
 			_lobby_message = message
 			_board_return_notice = message)
@@ -2138,16 +2158,21 @@ func _on_history_page_response(result: int, code: int, _headers: PackedStringArr
 	_render_lobby()
 
 
-func _return_from_released_match(game: Control, message: String) -> void:
-	var stale: bool = _match.get("status") == "playing" and _match.get("room_id") == game.match_context.get("room_id") \
-		and _match.get("previous_match_id") != game.released_match_id
+func _return_from_released_match(room_id: String, match_id: String, message: String) -> void:
+	var stale: bool = _match.get("status") == "playing" and _match.get("room_id") == room_id and _match.get("previous_match_id") != match_id
+	_detached_match.clear()
 	if stale:
+		# A playing snapshot already queued on the independent lobby socket can arrive after the board's cancellation.
+		_released_lobby_assignment = {"room_id":room_id, "previous_match_id":_match.get("previous_match_id", ""),
+			"completed_rounds":int(_match.get("completed_rounds", 0))}
 		_match = {}
 		_lobby_synced = false
 	_enter_when_ready = false
 	_board_return_route.clear()
 	_board_return_notice = ""
-	_show_lobby()
+	_lobby_message = ""
+	_lobby_command_error = ""
+	if _state == "game" or stale: _show_lobby()
 	if stale and _lobby_socket.is_open(): _on_lobby_open()
 	_present_error(message, "match_ended")
 
@@ -2173,6 +2198,10 @@ func _return_from_game(game: Control, keep_room: bool, auto_ready: bool = true) 
 		if not notice.is_empty(): _present_error(notice, "watch_ended")
 		return
 	var match_id: String = game.finished_friend_match_id()
+	if match_id.is_empty() and notice.is_empty() and game.has_method("resumable_match_id"):
+		var active_match: String = game.resumable_match_id()
+		if not active_match.is_empty():
+			_detached_match = {"room_id":str(game.match_context.get("room_id", "")), "match_id":active_match}
 	if not match_id.is_empty():
 		_finished_friend_return = {
 			"room_id":str(game.match_context.get("room_id", "")), "match_id":match_id,

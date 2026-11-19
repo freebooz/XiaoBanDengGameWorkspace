@@ -4,8 +4,10 @@ package mahjongactive
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -19,11 +21,12 @@ var ErrConflict = errors.New("麻将牌局不存在、房间已占用或版本�
 const MaxPayloadBytes = 1 << 20
 
 type Snapshot struct {
-	MatchID     string
-	RoomID      string
-	Revision    int64
-	Payload     json.RawMessage
-	CommittedAt time.Time
+	MatchID             string
+	RoomID              string
+	Revision            int64
+	Payload             json.RawMessage
+	CommittedAt         time.Time
+	DisconnectDeadlines [4]int64 // Unix milliseconds, zero when no deadline is known.
 }
 
 type Service struct{ db *pgxpool.Pool }
@@ -38,7 +41,7 @@ func (s *Service) Insert(ctx context.Context, snapshot Snapshot) error {
 
 // InsertCommitted returns the database clock stamp stored for the first revision.
 func (s *Service) InsertCommitted(ctx context.Context, snapshot Snapshot) (time.Time, error) {
-	if !validSnapshot(snapshot) || snapshot.Revision != 1 {
+	if !validSnapshot(snapshot) || snapshot.Revision != 1 || slices.Min(snapshot.DisconnectDeadlines[:]) < 0 {
 		return time.Time{}, errors.New("无效的麻将首发快照")
 	}
 	var committedAt time.Time
@@ -46,9 +49,9 @@ func (s *Service) InsertCommitted(ctx context.Context, snapshot Snapshot) (time.
 		if err := lockMatch(ctx, tx, snapshot.MatchID); err != nil {
 			return err
 		}
-		return tx.QueryRow(ctx, `INSERT INTO mahjong_active_matches (match_id,room_id,revision,payload,committed_at)
-			SELECT $1,$2,$3::BIGINT,$4::JSONB,clock_timestamp() WHERE NOT EXISTS (SELECT 1 FROM mahjong_active_completions WHERE match_id=$1)
-			ON CONFLICT DO NOTHING RETURNING committed_at`, snapshot.MatchID, snapshot.RoomID, snapshot.Revision, snapshot.Payload).Scan(&committedAt)
+		return tx.QueryRow(ctx, `INSERT INTO mahjong_active_matches (match_id,room_id,revision,payload,committed_at,disconnect_deadlines)
+			SELECT $1,$2,$3::BIGINT,$4::JSONB,clock_timestamp(),$5::BIGINT[] WHERE NOT EXISTS (SELECT 1 FROM mahjong_active_completions WHERE match_id=$1)
+			ON CONFLICT DO NOTHING RETURNING committed_at`, snapshot.MatchID, snapshot.RoomID, snapshot.Revision, snapshot.Payload, snapshot.DisconnectDeadlines[:]).Scan(&committedAt)
 	})
 	return committedTimestamp(committedAt, err)
 }
@@ -69,6 +72,16 @@ func (s *Service) UpdateCommitted(ctx context.Context, snapshot Snapshot) (time.
 	err := s.db.QueryRow(ctx, `UPDATE mahjong_active_matches SET revision=$3,payload=$4,committed_at=clock_timestamp()
 		WHERE match_id=$1 AND room_id=$2 AND revision=$5 RETURNING committed_at`, snapshot.MatchID, snapshot.RoomID, snapshot.Revision, snapshot.Payload, snapshot.Revision-1).Scan(&committedAt)
 	return committedTimestamp(committedAt, err)
+}
+
+// SetDisconnectDeadlines records seat connectivity independently of command
+// revisions and their decision clocks. A late write cannot recreate a match.
+func (s *Service) SetDisconnectDeadlines(ctx context.Context, matchID, roomID string, deadlines [4]int64) error {
+	if matchID == "" || roomID == "" || slices.Min(deadlines[:]) < 0 {
+		return errors.New("无效的麻将断线期限")
+	}
+	return changed(s.db.Exec(ctx, `UPDATE mahjong_active_matches SET disconnect_deadlines=$3
+		WHERE match_id=$1 AND room_id=$2`, matchID, roomID, deadlines[:]))
 }
 
 func committedTimestamp(stamp time.Time, err error) (time.Time, error) {
@@ -115,7 +128,7 @@ func validSnapshot(snapshot Snapshot) bool {
 }
 
 func (s *Service) List(ctx context.Context) ([]Snapshot, error) {
-	rows, err := s.db.Query(ctx, `SELECT match_id,room_id,revision,payload,committed_at FROM mahjong_active_matches ORDER BY room_id`)
+	rows, err := s.db.Query(ctx, `SELECT match_id,room_id,revision,payload,committed_at,disconnect_deadlines FROM mahjong_active_matches ORDER BY room_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +137,7 @@ func (s *Service) List(ctx context.Context) ([]Snapshot, error) {
 	for rows.Next() {
 		var snapshot Snapshot
 		var stamp *time.Time
-		if err := rows.Scan(&snapshot.MatchID, &snapshot.RoomID, &snapshot.Revision, &snapshot.Payload, &stamp); err != nil {
+		if err := rows.Scan(&snapshot.MatchID, &snapshot.RoomID, &snapshot.Revision, &snapshot.Payload, &stamp, &snapshot.DisconnectDeadlines); err != nil {
 			return nil, err
 		}
 		if stamp != nil {
@@ -136,7 +149,7 @@ func (s *Service) List(ctx context.Context) ([]Snapshot, error) {
 }
 
 func (s *Service) Delete(ctx context.Context, matchID string, expectedRevision int64) error {
-	return deleteSnapshot(ctx, s.db, matchID, expectedRevision)
+	return deleteSnapshot(ctx, s.db, matchID, "", expectedRevision)
 }
 
 // Complete removes a matching private snapshot and commits the caller's public
@@ -146,11 +159,25 @@ func (s *Service) Complete(ctx context.Context, matchID string, expectedRevision
 	if saveHistory == nil {
 		return errors.New("缺少麻将结算记录写入")
 	}
+	return s.finish(ctx, matchID, "", expectedRevision, fingerprint, saveHistory)
+}
+
+// Abandon retires a disconnected match and optionally its friend-room generation
+// together. Its private receipt prevents stale first deals and late settlements.
+func (s *Service) Abandon(ctx context.Context, matchID, roomID string, expectedRevision int64, retireFriend func(context.Context, pgx.Tx) error) error {
+	if roomID == "" {
+		return errors.New("缺少解散的麻将房间号")
+	}
+	fingerprint := sha256.Sum256([]byte("mahjong:disconnect-abandon:v1\x00" + roomID))
+	return s.finish(ctx, matchID, roomID, expectedRevision, fingerprint, retireFriend)
+}
+
+func (s *Service) finish(ctx context.Context, matchID, roomID string, expectedRevision int64, fingerprint [32]byte, commit func(context.Context, pgx.Tx) error) error {
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if err := lockMatch(ctx, tx, matchID); err != nil {
 			return err
 		}
-		if err := deleteSnapshot(ctx, tx, matchID, expectedRevision); err != nil {
+		if err := deleteSnapshot(ctx, tx, matchID, roomID, expectedRevision); err != nil {
 			if !errors.Is(err, ErrConflict) {
 				return err
 			}
@@ -164,8 +191,10 @@ func (s *Service) Complete(ctx context.Context, matchID string, expectedRevision
 			}
 			return ErrConflict
 		}
-		if err := saveHistory(ctx, tx); err != nil {
-			return err
+		if commit != nil {
+			if err := commit(ctx, tx); err != nil {
+				return err
+			}
 		}
 		_, err := tx.Exec(ctx, `INSERT INTO mahjong_active_completions (match_id,revision,fingerprint) VALUES ($1,$2,$3)`, matchID, expectedRevision, fingerprint[:])
 		return err
@@ -183,11 +212,12 @@ type executor interface {
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 }
 
-func deleteSnapshot(ctx context.Context, query executor, matchID string, revision int64) error {
+func deleteSnapshot(ctx context.Context, query executor, matchID, roomID string, revision int64) error {
 	if matchID == "" || revision < 1 {
 		return errors.New("无效的麻将快照标识")
 	}
-	return changed(query.Exec(ctx, `DELETE FROM mahjong_active_matches WHERE match_id=$1 AND revision=$2`, matchID, revision))
+	return changed(query.Exec(ctx, `DELETE FROM mahjong_active_matches
+		WHERE match_id=$1 AND revision=$2 AND ($3::TEXT='' OR room_id=$3)`, matchID, revision, roomID))
 }
 
 func changed(result pgconn.CommandTag, err error) error {

@@ -1327,7 +1327,7 @@ func _handle_packet(raw: String) -> void:
 				return
 			if parsed.get("operation", "") == "join":
 				if parsed.get("code") == "match_unavailable":
-					if not _joined: _end_confirmed_match(parsed, "原对局已结束，请返回大厅重新开局。")
+					if not _joined: _end_confirmed_match(parsed, "原对局已结束，可在大厅重新开局。")
 					return
 				if parsed.has("room_id") and parsed.room_id != match_context.get("room_id"): return
 				if parsed.has("match_id") and parsed.match_id != _joined_match_id: return
@@ -1372,10 +1372,18 @@ func _handle_watch_packet(packet: Dictionary) -> void:
 			_deadline_tick = Time.get_ticks_msec() + maxi(0, deadline - int(packet.get("server_now_ms", 0))) if deadline > 0 else 0
 			_render()
 		"mahjong_watch_ended":
+			var watched := str(_state.get("match_id", ""))
+			if packet.has("match_id") and not watched.is_empty() and packet.match_id != watched: return
 			_abort_entry(str(packet.get("message", "观战已结束")))
 
 
 var released_match_id := ""
+
+
+func resumable_match_id() -> String:
+	if training_mode or _is_spectating() or _room_kind() == "training" or _state.get("status") != "playing":
+		return ""
+	return _joined_match_id
 
 
 func apply_match_cancellation(packet: Dictionary) -> void:

@@ -23,6 +23,8 @@ type mahjongCheckpointStore interface {
 	UpdateCommitted(context.Context, mahjongactive.Snapshot) (time.Time, error)
 	CommittedAt(context.Context, mahjongactive.Snapshot) (time.Time, error)
 	List(context.Context) ([]mahjongactive.Snapshot, error)
+	SetDisconnectDeadlines(context.Context, string, string, [4]int64) error
+	Abandon(context.Context, string, string, int64, func(context.Context, pgx.Tx) error) error
 	Complete(context.Context, string, int64, [32]byte, func(context.Context, pgx.Tx) error) error
 }
 
@@ -109,19 +111,26 @@ func (h *mahjongHub) restore(ctx context.Context) error {
 				return fmt.Errorf("active Mahjong match identity conflicts with friend room %s", row.RoomID)
 			}
 		}
-		h.rooms[row.RoomID] = &mahjongRoom{
+		r := &mahjongRoom{
 			monitor: h.monitor, spectators: &h.spectators,
 			id: row.RoomID, matchID: row.MatchID, kind: assignment.Kind, rule: assignment.Rule,
 			createdAt: assignment.Room.CreatedAt, completedRounds: assignment.CompletedRounds,
 			game: game, clients: map[*mahjongClient]struct{}{}, started: true,
 			startedAt: saved.StartedAt, lastActionAt: clockStart, revision: row.Revision,
 			decisionID: mahjongDecisionID(row.MatchID, game), decisionStart: decisionStart,
-			assignment: assignment, commands: saved.Commands,
+			assignment: assignment, commands: saved.Commands, disconnectDeadlines: row.DisconnectDeadlines,
 		}
+		if r.markAbsentSeats(h, [4]bool{}) {
+			if err := h.checkpoints.SetDisconnectDeadlines(ctx, r.matchID, r.id, r.disconnectDeadlines); err != nil {
+				return fmt.Errorf("restore board disconnect deadlines for %s: %w", row.MatchID, err)
+			}
+		}
+		h.rooms[row.RoomID] = r
 	}
 	for _, r := range h.rooms {
 		r.mu.Lock()
 		r.scheduleTimeoutLocked(h)
+		r.scheduleDisconnectLocked(h, false)
 		r.mu.Unlock()
 	}
 	h.friendHeads.Range(func(key, value any) bool {
@@ -209,7 +218,7 @@ func (r *mahjongRoom) persistLocked(h *mahjongHub, next *guiyang.Game, when time
 		}
 		return when, err
 	}
-	snapshot := mahjongactive.Snapshot{MatchID: r.matchID, RoomID: r.id, Revision: r.revision + 1, Payload: payload}
+	snapshot := mahjongactive.Snapshot{MatchID: r.matchID, RoomID: r.id, Revision: r.revision + 1, Payload: payload, DisconnectDeadlines: r.disconnectDeadlines}
 	var committed time.Time
 	if r.revision == 0 {
 		committed, err = h.checkpoints.InsertCommitted(ctx, snapshot)
@@ -288,7 +297,15 @@ func (r *mahjongRoom) commitLocked(h *mahjongHub, next *guiyang.Game, when time.
 		clockStart = *decisionStart
 	}
 	r.decisionID, r.decisionStart = decisionID, clockStart
+	wasStarted := r.started
 	accepted()
+	if !wasStarted && r.playing() {
+		r.markAbsentSeats(h, r.connectedSeatFlags())
+		if r.firstDisconnectDeadline() != 0 || r.presenceDirty {
+			_ = r.savePresenceLocked(h)
+			r.scheduleDisconnectLocked(h, false)
+		}
+	}
 	r.advanceLocked(h)
 }
 
