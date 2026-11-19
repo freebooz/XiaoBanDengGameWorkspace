@@ -16,8 +16,8 @@ void fragment() {
 	// A shallow molded finish carries a soft lobe without speckling at table scale.
 	float polish = sin(resin_position.x * 158.0 + 0.34 * sin(resin_position.z * 180.0));
 	ALBEDO = mix(ivory_color.rgb, blue_color.rgb, back_layer);
-	ALBEDO = mix(ALBEDO, vec3(0.70, 0.94, 0.16), selection_strength * 0.46);
-	EMISSION = vec3(0.66, 0.94, 0.12) * selection_strength * 0.42;
+	ALBEDO = mix(ALBEDO, vec3(0.55, 0.96, 0.11), selection_strength * 0.56);
+	EMISSION = vec3(0.55, 0.95, 0.10) * selection_strength * 0.44;
 	ROUGHNESS = mix(0.36, 0.295 + 0.015 * polish, back_layer);
 	METALLIC = 0.0;
 	SPECULAR = mix(0.38, 0.51, back_layer);

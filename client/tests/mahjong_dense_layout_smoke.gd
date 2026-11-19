@@ -112,39 +112,15 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 	var own_portrait: Vector2 = screen._avatar_portraits[viewer].size
 	for portrait in screen._avatar_portraits:
 		_check(portrait.size.is_equal_approx(own_portrait), "The corner and side portraits must use the same size")
-	var near_play_edge: Vector2 = screen._project_to_board(Vector3(0.0, 0.0, screen.PLAY_AREA_NEAR_DEPTH))
-	var far_tile_top := Vector3(0.0, screen.TILE_SIZE.z, -screen.HAND_ROW_RADIUS)
-	var far_edge: Vector2 = screen._camera.unproject_position(far_tile_top) * screen._board_view.size / Vector2(screen._board_viewport.size) + screen._board_view.position
-	var view: Rect2 = screen._play_area
 	if viewer == 0 and scenario == "four-seat-melds" and not OS.has_feature("mobile"):
 		for button in [screen._toolbar.get_child(1), screen._side_tools.get_child(0), screen._own_mic]:
 			var scale: Vector2 = button.get_viewport_transform().get_scale()
 			_check((button.size * scale).distance_to(Vector2(37.8, 37.8)) <= 1.0, "Round toolbar and social icons must share a 37.8 px desktop diameter")
-	var far_seat: Rect2 = screen._seat_panels[2].get_rect()
-	var inset := far_seat.size.y * (8.0 / 76.0)
-	var band_top := maxf(view.position.y, far_seat.end.y)
-	var band_center := (far_edge + near_play_edge) * 0.5
-	var full_center := Vector2(view.get_center().x, (band_top + view.end.y) * 0.5)
-	var social_center_y: float = (band_top + screen._side_tools.position.y) * 0.5
-	var hand_center_y: float = (far_edge.y + screen._own_tile_rect(0.0, 0.0).end.y) * 0.5
-	if screen._frames_player_hand():
-		var pose: Transform3D = screen._own_tile_pose(0.0, 0.0)
-		if screen._framed_own_melds:
-			var meld := screen._pieces_root.get_node_or_null("MahjongMeld0_0_0") as Node3D
-			if is_instance_valid(meld): pose = meld.global_transform
-		var bottom := -INF
-		for point: Vector2 in screen._tile_side_hull:
-			bottom = maxf(bottom, screen._project_to_board(pose * Vector3(0.0, point.x, point.y)).y)
-		var gap: float = (screen.size.y - screen._safe.w - bottom) * screen.get_viewport_transform().get_scale().y
-		var inset_px: float = screen.HAND_BOTTOM_INSET_PIXELS
-		_check(absf(gap - inset_px) <= 0.2 and far_edge.y >= screen._safe.y,
-			"Camera must keep the full reference hand five pixels from the safe bottom edge")
-	else:
-		_check(band_center.distance_to(full_center) <= 1.0 or (absf(hand_center_y-social_center_y) <= 1.0 and absf(band_center.x-view.get_center().x) <= 1.0), "Playable table must stay centered in the available band")
-		_check(far_edge.y >= band_top and near_play_edge.y <= view.end.y, "Near playing edge and far hand must fit the safe layout band")
 	var surface_transform: Transform2D = screen._board_surface.get_viewport_transform() * screen._board_surface.get_global_transform()
 	_check(surface_transform.get_scale().is_equal_approx(Vector2.ONE) and is_equal_approx(screen._board_viewport.scaling_3d_scale, 1.0),
 		"Board must render and present every physical pixel without image upscaling")
+	var center: Vector2 = surface_transform * screen._camera.unproject_position(screen._wind_dial.get_timer_position())
+	_check(center.distance_to(Vector2(root.size) * 0.5) <= 0.8, "Four-seat melds must keep the table centered")
 	var expected := 0
 	var exposed: Array[Node3D] = []
 	var hand_radii := {}
@@ -181,7 +157,7 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 				var dial_center: Vector3 = screen._wind_dial.global_position
 				var measured: float = (_body_bounds(tile).get_center() - dial_center).dot(Vector3.BACK.rotated(Vector3.UP, relative * PI * 0.5))
 				hand_radii[relative] = snappedf(measured, 0.00001)
-				_check(absf(measured - 0.300) < 0.0001, "Resting tile body at seat %d has the wrong radius: %.5f m" % [relative, measured])
+				_check(absf(measured - 0.330) < 0.0001, "Resting tile body at seat %d has the wrong radius: %.5f m" % [relative, measured])
 			continue
 		var bounds := _body_bounds(tile)
 		for other: Node3D in physical_bounds:
@@ -190,14 +166,15 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 		_check(bounds.position.x >= felt_bounds.position.x and bounds.end.x <= felt_bounds.end.x and bounds.position.z >= felt_bounds.position.z and bounds.end.z <= felt_bounds.end.z, "Public tile outside felt: %s %s" % [tile.name, bounds])
 		if is_meld:
 			expected += 1
-			var relative := int(str(tile.name).trim_prefix("MahjongMeld").split("_")[0])
+			var slot := str(tile.name).trim_prefix("MahjongMeld").split("_")
+			var relative := int(slot[0])
 			var local: Vector3 = tile.position.rotated(Vector3.UP,-float(relative)*PI*.5)
 			if relative == 0:
 				own_meld_edge = maxf(own_meld_edge, local.x + screen.TILE_SIZE.x * tile.scale.x * 0.5)
-			var row_offset: float = (screen.MELD_ROW_RADIUS - local.z) / (screen.TILE_SIZE.z + screen.MELD_ROW_GAP)
-			_check(row_offset >= -0.001 and absf(row_offset - roundf(row_offset)) < 0.001, "Declared melds must stay in complete readable rows")
-			var hand_start: float = screen._concealed_row_start(relative, screen._seat_concealed_count(relative))
-			_check(local.x < hand_start,"Meld is not left of its remaining hand")
+			var base: float = screen.MELD_SURFACE_HEIGHT + (screen.TILE_SIZE.y if is_equal_approx(tile.rotation.x, PI) else 0.0)
+			var stack: float = screen.TILE_SIZE.y + screen.MELD_STACK_CLEARANCE if int(slot[2]) == 3 else 0.0
+			_check(absf(local.z - screen.MELD_ROW_RADIUS) < 0.0001 and absf(local.y - base - stack) < 0.0001,
+				"Melds use fixed edge slots and the fourth kong tile stacks above its group")
 			if is_equal_approx(tile.rotation.x, PI):
 				concealed_kongs += 1
 				_check((tile.find_child("TileFace",true,false) as MeshInstance3D).material_override == screen._tile_materials.blank_face(),"Opponent concealed kong leaks face")
@@ -232,13 +209,15 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 		var first_hand: Node3D = screen._hand_models.front()
 		var hand_tile_width: float = screen.TILE_SIZE.x * first_hand.scale.x
 		var gap := first_hand.position.x - hand_tile_width * 0.5 - own_meld_edge
-		_check(is_equal_approx(gap, hand_tile_width), "Own hand and displayed melds must have a one-tile gap")
+		_check(gap >= hand_tile_width - 0.0001, "Own hand and displayed melds must have at least a one-tile gap")
 	for i in exposed.size():
 		var a := exposed[i]
 		for j in range(i+1, exposed.size()):
 			var b := exposed[j]
+			var stack := (str(a.name).ends_with("_2") and str(b.name) == str(a.name).trim_suffix("_2") + "_3"
+				or str(b.name).ends_with("_2") and str(a.name) == str(b.name).trim_suffix("_2") + "_3") and str(a.name).begins_with("MahjongMeld")
 			# Adjacent perspective quads can overlap in AABB without occlusion.
-			_check(not _polygons_overlap(_projected_hull(screen,a),_projected_hull(screen,b)),"Public faces overlap: %s / %s"%[a.name,b.name])
+			_check(stack or not _polygons_overlap(_projected_hull(screen,a),_projected_hull(screen,b)),"Public faces overlap: %s / %s"%[a.name,b.name])
 		for hand in hands:
 			_check(not _polygons_overlap(_projected_hull(screen,a),_projected_hull(screen,hand,"TileBody")),"Concealed hand hides public face: %s / %s"%[a.name,hand.name])
 	for hand in screen._hand_models:
@@ -269,7 +248,7 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 			occupied.append(bounds)
 			buttons[kind] = [bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y]
 	var pixel_scale: Vector2 = screen.get_viewport_transform().get_scale()
-	_evidence.append({"scenario":scenario,"camera_distance":screen._camera.position.distance_to(screen.CAMERA_TARGET),"camera_vertical_fov":screen._camera.fov,"far_hand_top_logical":far_edge.y,"near_play_edge_logical":near_play_edge.y,"band_center_logical":str(band_center),"native_render_size":str(screen._board_viewport.size),"hand_radii_metres":hand_radii,"tiles_measured":physical_bounds.size()})
+	_evidence.append({"scenario":scenario,"camera_distance":screen._camera.position.distance_to(screen._wind_dial.get_timer_position()),"camera_vertical_fov":screen._camera.fov,"table_center_pixels":str(center),"native_render_size":str(screen._board_viewport.size),"hand_radii_metres":hand_radii,"tiles_measured":physical_bounds.size()})
 	_evidence.append({"scenario":scenario,"viewer":viewer,"logical_viewport":[screen.size.x,screen.size.y],"physical_window":[root.size.x,root.size.y],"public_tiles":exposed.size(),"hidden_kongs":concealed_kongs,"tile_metres":[0.039,0.028,0.056],"smallest_discard_px":[smallest_discard.x*pixel_scale.x,smallest_discard.y*pixel_scale.y],"smallest_meld_px":[smallest_meld.x*pixel_scale.x,smallest_meld.y*pixel_scale.y] if is_finite(smallest_meld.x) else [],"response_targets_logical":buttons})
 
 func _verify_spot_coverage(screen, scenario: String) -> void:

@@ -3,6 +3,9 @@ extends Node3D
 ## selection event. No polling of the game state, transport or hidden hands.
 
 const RESIN_SHADER := preload("res://modules/games/mahjong/guiyang/tile_resin.gdshader")
+const MARKER_BREATH_TRAVEL := 0.0075
+const SELECTED_FACE_TINT := Color("#c3ed72")
+const SELECTED_FACE_EMISSION := Color("#a9ee2b")
 var marker: MeshInstance3D
 var marker_identity := ""
 var _marker_base := Vector3.ZERO
@@ -98,7 +101,7 @@ func _start_marker_breath() -> void:
 	resin.emission_energy_multiplier = energy
 	_marker_animation = create_tween().set_loops()
 	_marker_animation.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_marker_animation.tween_property(marker, "global_position:y", _marker_base.y + 0.006, 0.85)
+	_marker_animation.tween_property(marker, "global_position:y", _marker_base.y + MARKER_BREATH_TRAVEL, 0.85)
 	_marker_animation.parallel().tween_property(resin,"emission_energy_multiplier",energy*1.18,0.85)
 	_marker_animation.tween_property(marker, "global_position:y", _marker_base.y, 0.85)
 	_marker_animation.parallel().tween_property(resin,"emission_energy_multiplier",energy,0.85)
@@ -127,9 +130,9 @@ func select_tile(tile: Node3D) -> void:
 	if face != null and face.material_override is StandardMaterial3D:
 		_selection_materials[face] = face.material_override
 		var printed := face.material_override.duplicate() as StandardMaterial3D
-		printed.albedo_color = Color("#dceb9b")
+		printed.albedo_color = SELECTED_FACE_TINT
 		printed.emission_enabled = true
-		printed.emission = Color("#b5ed38")
+		printed.emission = SELECTED_FACE_EMISSION
 		printed.emission_texture = printed.albedo_texture
 		printed.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY
 		printed.emission_energy_multiplier = [0.24, 0.31, 0.38][_quality]

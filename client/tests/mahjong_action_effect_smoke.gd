@@ -43,6 +43,8 @@ func _run() -> void:
 		"action_events": [{"sequence": 1, "seat": 3, "type": "peng"}], "discards": [],
 	}
 	game._handle_packet(JSON.stringify(snapshot))
+	var fixed_camera: Transform3D = game._camera.get_camera_transform()
+	var fixed_projection: Projection = game._camera.get_camera_projection()
 	var voice: AudioStreamPlayer = game.product_audio._callout
 	var impact: AudioStreamPlayer = game.product_audio._impact
 	_expect(game._action_effects.get_child_count() == 0 and game.cues.is_empty() and not voice.playing and not impact.playing, "initial action history is quiet")
@@ -58,6 +60,8 @@ func _run() -> void:
 	_expect(game.cues == ["gang"] and not voice.playing and not impact.playing, "duplicate kong does not repeat any channel")
 	_verify_center(game, "MahjongAction2", "杠")
 	await _capture("confirmed_kong.png")
+	_expect(not is_instance_valid(game._camera_impact) and game._camera.get_camera_transform().is_equal_approx(fixed_camera)
+		and game._camera.get_camera_projection() == fixed_projection, "Kong visual effects must leave the camera fixed")
 	snapshot.epoch = 9
 	snapshot.discards.append({"seat": 1, "tile": {"id": 14, "suit": "tong", "rank": 9}})
 	game._handle_packet(JSON.stringify(snapshot))
@@ -79,6 +83,8 @@ func _run() -> void:
 	_expect(_speaks(voice, "peng"), "confirmed pong speaks its exact name")
 	_expect(impact.playing and impact.stream == game.product_audio._impact_streams["peng"] and impact.stream.get_length() < gang_length, "pong uses a shorter impact")
 	await _capture("confirmed_pong.png")
+	_expect(not is_instance_valid(game._camera_impact) and game._camera.get_camera_transform().is_equal_approx(fixed_camera)
+		and game._camera.get_camera_projection() == fixed_projection, "Pong visual effects must leave the camera fixed")
 	snapshot.epoch = 12
 	snapshot.phase = "finished"
 	snapshot.status = "finished"

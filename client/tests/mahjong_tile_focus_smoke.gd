@@ -80,6 +80,11 @@ func _run() -> void:
 	var initial_energy: float = marker.material_override.emission_energy_multiplier
 	await create_timer(0.22).timeout
 	_check(absf(marker.global_position.y-initial_y)>0.0001 and not is_equal_approx(marker.material_override.emission_energy_multiplier,initial_energy),"Engine animation must move the crystal and breathe its emission")
+	focus._start_marker_breath()
+	focus._marker_animation.pause()
+	focus._marker_animation.custom_step(0.85)
+	_check(absf(marker.global_position.y - focus._marker_base.y - 0.0075) < 0.00001, "The discard crystal must travel 7.5 mm on inhale")
+	focus._marker_animation.play()
 	var identity: String = focus.marker_identity
 	var stale := _packet(1)
 	stale.discards.append({"seat":3,"tile":{"id":92,"suit":"tiao","rank":6},"claimed":false})
@@ -125,7 +130,9 @@ func _run() -> void:
 		_check(selected_body.material_override.get_shader_parameter("selection_strength")>0.0,"Whole closed tile body must emit yellow-green light")
 		_check(selected_body.get_child_count()==0 and not screen._selected_outline.visible,"Selection must not create a shell or 2D rectangular border")
 		_check(selected_face!=original_face and selected_face.albedo_texture==original_face.albedo_texture and selected_face.uv1_offset==original_face.uv1_offset and selected_face.normal_texture==original_face.normal_texture,"Selection must retain the printed PBR atlas, UV and normal details")
-		_check(selected_face.emission_enabled and selected_face.emission==Color("#b5ed38") and selected_face.emission_texture==selected_face.albedo_texture,"Printed symbols must modulate whole-face emission instead of being washed out")
+		_check(selected_face.albedo_color == Color("#c3ed72") and selected_face.emission_enabled
+			and selected_face.emission == Color("#a9ee2b") and selected_face.emission_texture == selected_face.albedo_texture,
+			"The stronger highlight must retain the original printed characters")
 		_check(screen._coach_results.size()==14,"Native Rust values must cover all fourteen legal discards")
 		var badge := screen._coach_overlay.get_node("MahjongEfficiencyBadge7") as Control
 		_check(badge.text=="0·8" and badge.recommended and badge.selected,"Actual 0-shanten/8-ukeire and selected/recommended states must coexist")

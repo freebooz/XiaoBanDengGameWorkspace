@@ -402,7 +402,7 @@ func _check_dingque(screen) -> void:
 	_check(screen._pending_action, "The action receipt alone does not confirm a missing-suit choice")
 	packet.options = []
 	screen._handle_packet(JSON.stringify(packet))
-	_check(not screen._pending_action and not choose.visible and "等待" in screen._status.text,
+	_check(not screen._pending_action and not choose.visible and screen._status.text == "已提交定缺",
 		"A same-epoch snapshot removing private options confirms the choice without revealing anyone's suit")
 	packet.epoch += 1
 	packet.phase = "turn"

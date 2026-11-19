@@ -49,9 +49,9 @@ const CAMERA_FOCAL_LENGTH_MM := 50.0
 const CAMERA_TARGET := Vector3(0.0, 0.0, 0.0144)
 const TILE_SIZE := TILE_MODEL.SIZE
 const TILE_BODY_BOUNDS := AABB(Vector3(-TILE_SIZE.x * 0.5, 0.0, -TILE_SIZE.z * 0.5), TILE_SIZE)
-const MELD_ROW_RADIUS := 0.356
 const ROW_INSET := 0.028 # One 56-size tile thickness in metres.
-const HAND_ROW_RADIUS := MELD_ROW_RADIUS - 2.0 * ROW_INSET
+const HAND_ROW_RADIUS := 0.330
+const MELD_ROW_RADIUS := HAND_ROW_RADIUS - 0.015
 const HAND_STANDING_ANGLE := PI * 0.5
 const SOUTH_HAND_ANGLE := HAND_STANDING_ANGLE - PI / 12.0 # Tilt the south hand 15 degrees toward the camera.
 # The flat model pivots on its back. After standing it up, its thickness extends toward its owner.
@@ -60,7 +60,7 @@ const HAND_PIVOT_HEIGHT := TILE_SIZE.z * 0.5
 const DISCARD_COLUMNS := 8
 const RIVER_CORNER_GAP := 0.006
 const RIVER_SIDE_OFFSET := 0.074
-const MELD_ROW_GAP := 0.009
+const MELD_STACK_CLEARANCE := 0.0007
 const MELD_SURFACE_HEIGHT := 0.0015
 const OPPONENT_MELD_SEPARATION := 0.054
 const SEAT_CARD_SIZE := Vector2(178, 76)
@@ -69,9 +69,9 @@ const SEAT_EDGE_INSET := 12.0
 const NORTH_HAND_CARD_GAP := 4.0
 const OWN_HAND_LIFT := 0.020
 const FULL_HAND_COUNT := 14
-const HAND_SIDE_MARGIN_TILES := 2.97
-const HAND_BOTTOM_INSET_PIXELS := 5.0
-const PLAY_AREA_NEAR_DEPTH := HAND_ROW_RADIUS + TILE_SIZE.z * 0.5
+const MAX_MELD_GROUPS := 4
+const MELD_GROUP_COLUMNS := 3
+const BOARD_EDGE_PIXELS := 5.0
 
 var product: Dictionary = {}
 var match_context: Dictionary = {}
@@ -94,8 +94,6 @@ var _state: Dictionary = {}
 var _textures: Dictionary = {}
 var _tile_materials := TILE_MATERIALS.new()
 var _south_hand_rest_height := 0.0
-var _tile_side_hull := PackedVector2Array()
-var _framed_own_melds := false
 var _selected_id := 0
 var _auto_played := false
 var _status: Label
@@ -104,7 +102,6 @@ var _seat_root: Control
 var _action_effects: Control
 var _last_action_sequence := 0
 var _overlay_root: Control
-var _turn_label: Label
 var _seat_panels: Array[Panel] = []
 var _avatar_portraits: Array[TextureRect] = []
 var _play_button: Button
@@ -124,7 +121,11 @@ var _board_surface: SubViewportContainer
 var _board_viewport: SubViewport
 var _play_area := Rect2()
 var _stage: Node3D
+var _felt_surface: MeshInstance3D
 var _camera: Camera3D
+var _camera_table_frame := Transform3D.IDENTITY
+var _camera_frame_tiles: Array[PackedVector3Array] = []
+var _camera_south_edge := PackedVector2Array()
 var _camera_impact: Tween
 var _camera_displacement := Vector2.ZERO
 var _camera_world_per_pixel := 0.0
@@ -438,10 +439,6 @@ func _build_static_ui() -> void:
 	_remaining_number.add_theme_font_override("font", dial_font)
 	_remaining_number.add_theme_color_override("font_outline_color", Color("#663015"))
 	_remaining_number.add_theme_constant_override("outline_size", 3)
-	_turn_label = _label(self,"正在入座",0,0,270,27,16,Color("#edd59a"))
-	_turn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_turn_label.add_theme_constant_override("outline_size", 4)
-	_turn_label.add_theme_color_override("font_outline_color", Color("#342517"))
 	_status = _label(self,"正在连接牌桌……",0,0,600,34,18,TABLE_THEME.CREAM)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_status.add_theme_constant_override("outline_size", 2)
@@ -503,11 +500,11 @@ func _build_static_ui() -> void:
 	_action_effects.name = "MahjongConfirmedActionEffects"
 	_action_effects.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_action_effects.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(_action_effects)
 	_overlay_root = Control.new()
 	_overlay_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_overlay_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_overlay_root)
+	add_child(_action_effects)
 	_layout_ui()
 	_render_seats()
 	_render_actions()
@@ -525,10 +522,7 @@ func _layout_ui() -> void:
 	var horizontal_inset := _horizontal_screen_pixels(10.0)
 	var top := float(_safe.y)
 	var bottom := height - _safe.w
-	# Keep the play and HUD anchors in a landscape area inside the full-screen felt.
-	var board_top := top + 60 * factor
-	var board_height := minf(bottom - board_top, usable_width / 1.25)
-	_play_area = Rect2(_safe.x, (board_top + bottom - board_height) * 0.5, usable_width, board_height)
+	_play_area = Rect2(_safe.x, top, usable_width, bottom - top)
 	var tool_width := icon_extent
 	var tool_height := icon_extent
 	var tool_gap := maxf(8.0 * factor, icon_extent / 8.0)
@@ -556,10 +550,6 @@ func _layout_ui() -> void:
 	_own_mic.position = Vector2(social_right - social_extent, bottom - social_extent - 11.0 * factor)
 	_side_tools.position = _own_mic.position - tool_step
 	_sync_viewport_size()
-	var own_seat := _seat_rect(0)
-	_turn_label.size = Vector2(own_seat.size.x, 26.0 * factor)
-	_turn_label.position = Vector2(own_seat.position.x, own_seat.position.y - _turn_label.size.y - 4.0 * factor)
-	_turn_label.add_theme_font_size_override("font_size", roundi(17.0 * factor))
 	_status.position = Vector2(_header.position.x, _header.get_rect().end.y + 2.0 * factor)
 	for index in range(_side_tools.get_child_count()):
 		var tool := _side_tools.get_child(index) as Button
@@ -597,25 +587,12 @@ func _seat_rect(relative: int) -> Rect2:
 		0: return Rect2(Vector2(left, size.y - _safe.w - box.y - edge_inset), box)
 		1: return Rect2(Vector2(right, side_y), box)
 		2:
-			var position := Vector2(_play_area.get_center().x - box.x * 0.5, _safe.y + edge_inset)
-			var count := _seat_concealed_count(2)
-			if count > 0 and is_instance_valid(_camera) and _camera.is_inside_tree() and is_instance_valid(_pieces_root):
-				var row_start := _concealed_row_start(2, count)
-				var row_end := row_start + (count - 1) * TILE_SIZE.x
-				var row := _project_tile_bounds(_north_hand_pose(row_start)).merge(_project_tile_bounds(_north_hand_pose(row_end)))
-				position.x = clampf(_board_view.position.x + row.get_center().x - box.x * 0.5, left, right)
+			var position := Vector2((size.x - box.x) * 0.5, _safe.y + edge_inset)
+			if is_instance_valid(_camera) and _camera.is_inside_tree() and is_instance_valid(_pieces_root):
+				var row := _project_tile_bounds(_standing_hand_pose(2, 0.0))
 				position.y = maxf(position.y, _board_view.position.y + row.position.y - box.y - NORTH_HAND_CARD_GAP * factor)
 			return Rect2(position, box)
 	return Rect2(Vector2(left, side_y), box)
-
-
-func _uses_tablet_layout() -> bool:
-	var available_height := size.y - _safe.y - _safe.w
-	return available_height > 0.0 and (size.x - _safe.x - _safe.z) / available_height <= 1.60
-
-
-func _frames_player_hand() -> bool:
-	return not _is_spectating() and size.x >= size.y
 
 
 func _own_hand_top() -> float:
@@ -638,9 +615,11 @@ func _own_tile_rect(along: float, lift: float) -> Rect2:
 	return _project_tile_bounds(_own_tile_pose(along, lift))
 
 
-func _north_hand_pose(along: float) -> Transform3D:
-	var rotation := Basis.from_euler(Vector3(HAND_STANDING_ANGLE, PI, 0.0))
-	var position := _seat_table_position(2, along, HAND_PIVOT_HEIGHT, HAND_PIVOT_DEPTH)
+func _standing_hand_pose(relative: int, along: float) -> Transform3D:
+	if relative == 0:
+		return _own_tile_pose(along, 0.0)
+	var rotation := Basis.from_euler(Vector3(HAND_STANDING_ANGLE, relative * PI * 0.5, 0.0))
+	var position := _seat_table_position(relative, along, HAND_PIVOT_HEIGHT, HAND_PIVOT_DEPTH)
 	return _pieces_root.global_transform * Transform3D(rotation, position)
 
 
@@ -783,10 +762,6 @@ func _layout_response_actions() -> void:
 		_actions_root.hide()
 		return
 	var preferred_x := _board_view.get_rect().get_center().x
-	if not _hand_models.is_empty():
-		var hand_x := (_hand_models[0].position.x + _hand_models[-1].position.x) * 0.5
-		var hand_anchor := _pieces_root.to_global(_own_tile_position(hand_x, 0.0))
-		preferred_x = _board_view.position.x + _project_to_board(hand_anchor).x
 	var obstacles: Array[Rect2] = [_projected_dial(0.147), _side_tools.get_rect(), _own_mic.get_global_rect()]
 	for panel in _seat_panels:
 		obstacles.append(panel.get_rect())
@@ -893,110 +868,137 @@ func _sync_viewport_size() -> void:
 
 
 func _fit_camera() -> void:
-	if not is_instance_valid(_camera) or not _camera.is_inside_tree() or not _play_area.has_area():
+	if not is_instance_valid(_camera) or not _camera.is_inside_tree() or _camera_frame_tiles.is_empty() or not _play_area.has_area():
 		return
-	var aspect := Vector2(_board_viewport.size).aspect()
-	var pitch := deg_to_rad(CAMERA_PITCH_DEGREES)
-	_camera.position = CAMERA_TARGET + Vector3(0.0, sin(pitch), cos(pitch))
-	_camera.look_at(CAMERA_TARGET)
-	if _frames_player_hand() and is_instance_valid(_pieces_root) and _pieces_root.is_inside_tree():
-		_fit_player_hand_camera(aspect)
-		return
-
-	var view := Transform3D(_camera.global_basis, CAMERA_TARGET).affine_inverse()
+	var native_size := Vector2(_board_viewport.size)
+	var output_size := native_size * _board_surface.scale
+	var aspect := native_size.aspect()
 	# The long edge of the film gate is horizontal in landscape and vertical in portrait.
 	var tan_y := CAMERA_SENSOR_WIDTH_MM / (2.0 * CAMERA_FOCAL_LENGTH_MM * maxf(1.0, aspect))
 	var tan_x := tan_y * aspect
-	var far := view * Vector3(0.0, TILE_SIZE.z, -HAND_ROW_RADIUS)
-	var near_depth := HAND_PIVOT_DEPTH + TILE_SIZE.y if _is_spectating() else PLAY_AREA_NEAR_DEPTH
-	var near_edge := view * Vector3(0.0, 0.0, near_depth)
+	var half_output := output_size * 0.5
 	var factor := minf(size.x / 1440.0, size.y / 810.0)
-	var gap := 8.0 * factor
-	var top := 1.0 - 2.0 * (maxf(_play_area.position.y, _safe.y + (SEAT_EDGE_INSET + NORTH_CARD_SIZE.y) * factor) + gap) / size.y
-	var bottom := 1.0 - 2.0 * (minf(_play_area.end.y, _side_tools.position.y) - gap) / size.y
-	var usable_width := _play_area.size.x / size.x
-	if aspect >= 1.0: usable_width -= 2.0 * SEAT_CARD_SIZE.x * factor / size.x
-	usable_width = maxf(0.3, usable_width)
-	var side_extent := HAND_PIVOT_DEPTH + TILE_SIZE.y
-	var distance := maxf(near_edge.z + side_extent / (tan_x * usable_width),
-		((far.y - near_edge.y) / tan_y + top * far.z - bottom * near_edge.z) / maxf(0.1, top - bottom))
-	if not _is_spectating():
-		var outer := (FULL_HAND_COUNT - 1) * TILE_SIZE.x * 0.5
-		var end_tile := view * _own_tile_pose(outer, 0.0)
-		for index in 8:
-			var point := end_tile * TILE_BODY_BOUNDS.get_endpoint(index)
-			distance = maxf(distance, point.z + absf(point.x) / (tan_x * _play_area.size.x / size.x * 0.98))
-	var top_offset := far.y - top * (distance - far.z) * tan_y
-	var bottom_offset := near_edge.y - bottom * (distance - near_edge.z) * tan_y
+	var edge := _board_surface.scale * BOARD_EDGE_PIXELS
+	var north_gutter := (SEAT_EDGE_INSET + NORTH_CARD_SIZE.y + NORTH_HAND_CARD_GAP) * factor + edge.y
+	var left_slope := tan_x * maxf(0.05, (half_output.x - _safe.x - edge.x) / half_output.x)
+	var right_slope := tan_x * maxf(0.05, (size.x - _safe.z - edge.x - half_output.x) / half_output.x)
+	var top_slope := tan_y * maxf(0.05, (half_output.y - _safe.y - north_gutter) / half_output.y)
+	var bottom_slope := tan_y * maxf(0.05, (size.y - _safe.w - edge.y - half_output.y) / half_output.y)
+	var phone := _uses_phone_framing()
+	var top_limit := -INF
+	var bottom_limit := INF
+	# Both layouts fit the fixed tile slots. Phones use the lower edge, while
+	# tablets and desktops keep the original center ray over the dial.
+	var distance := _camera.near * 2.0
+	for slot in _camera_frame_tiles.size():
+		for point in _camera_frame_tiles[slot]:
+			var horizontal := -point.x / left_slope if point.x < 0.0 else point.x / right_slope
+			distance = maxf(distance, point.z + horizontal)
+			if phone:
+				top_limit = maxf(top_limit, point.y + top_slope * point.z)
+				# The first 14 slots form the south hand. Use its exact rounded edge below.
+				if slot >= FULL_HAND_COUNT: bottom_limit = minf(bottom_limit, point.y - bottom_slope * point.z)
+			else:
+				var vertical := -point.y / bottom_slope if point.y < 0.0 else point.y / top_slope
+				distance = maxf(distance, point.z + vertical)
+	var vertical_shift := Vector2.ZERO
+	if phone:
+		for point in _camera_south_edge:
+			bottom_limit = minf(bottom_limit, point.x - bottom_slope * point.y)
+		distance = maxf(distance, (top_limit - bottom_limit) / (top_slope + bottom_slope))
+		vertical_shift = Vector2(bottom_limit, bottom_slope)
+	distance = _clear_camera_hud(distance, half_output, half_output / Vector2(tan_x, tan_y), maxf(edge.x, edge.y), vertical_shift)
 	_camera.set_perspective(rad_to_deg(2.0 * atan(tan_y)), _camera.near, _camera.far)
-	_camera.position = CAMERA_TARGET + _camera.basis.z * distance
-	_camera.h_offset = (near_edge.z - distance) * tan_x * (2.0 * _play_area.get_center().x / size.x - 1.0)
-	_camera.v_offset = (top_offset + bottom_offset) * 0.5
-	if aspect < 1.0:
-		# Frame the board above the side portraits and keep the far edge of the felt offscreen.
-		var side_end := view * Vector3(0.0, 0.0, HAND_PIVOT_DEPTH)
-		var above_portraits := 1.0 - 2.0 * (_seat_rect(1).position.y - gap) / size.y
-		var half_felt := TABLE_THEME.FELT_SIZE_METRES.y * 0.4995
-		var far_felt := view * Vector3(0.0, 0.0, -half_felt)
-		var near_felt := view * Vector3(0.0, 0.0, half_felt)
-		var portrait_offset := side_end.y - above_portraits * (distance - side_end.z) * tan_y
-		_camera.v_offset = clampf(minf(_camera.v_offset, portrait_offset),
-			near_felt.y + (distance - near_felt.z) * tan_y, far_felt.y - (distance - far_felt.z) * tan_y)
-	_camera_world_per_pixel = 2.0 * (distance - near_edge.z) * tan_y / size.y
+	var translation := _camera_table_frame.basis * Vector3(0.0, vertical_shift.x + vertical_shift.y * distance, distance)
+	_camera.global_transform = _camera_table_frame.translated(translation)
+	_camera.h_offset = 0.0
+	_camera.v_offset = 0.0
+	_camera_world_per_pixel = 2.0 * distance * tan_y / output_size.y
+	_cover_felt()
 
 
-func _fit_player_hand_camera(aspect: float) -> void:
-	var view := Transform3D(_camera.global_basis, CAMERA_TARGET).affine_inverse()
-	var row := view * _own_tile_pose(0.0, 0.0)
-	var north_row := view * _north_hand_pose(0.0)
-
-	var board_height := _board_viewport.size.y * _board_surface.scale.y
-	# The native 3D texture can be rounded up by a pixel. Use its displayed height for projection.
-	var pixel_scale := maxf((get_viewport_transform() * get_global_transform()).y.length(), 0.01)
-	var bottom := size.y - _safe.w - HAND_BOTTOM_INSET_PIXELS / pixel_scale
-	var factor := minf(size.x / 1440.0, size.y / 810.0)
-	var top := _safe.y + (SEAT_EDGE_INSET + NORTH_CARD_SIZE.y + NORTH_HAND_CARD_GAP) * factor + 1.0 / pixel_scale
-	var top_ndc := 1.0 - 2.0 * top / board_height
-	var bottom_ndc := 1.0 - 2.0 * bottom / board_height
-	var tangent := CAMERA_SENSOR_WIDTH_MM / (2.0 * CAMERA_FOCAL_LENGTH_MM * aspect)
-	var nearest_z := -INF
-	var north_limit := -INF
-	# Project both standing rows against the top and bottom edges of the viewing frustum.
-	for i in 8:
-		var corner := TILE_BODY_BOUNDS.get_endpoint(i)
-		var south := row * corner
-		var north := north_row * corner
-		nearest_z = maxf(nearest_z, south.z)
-		north_limit = maxf(north_limit, north.y + top_ndc * north.z * tangent)
-	var bottom_slope := bottom_ndc * tangent
-	var south_limit := _bottom_framing_limit(row, bottom_slope)
-	if _framed_own_melds:
-		# An exposed set extends in front of the standing hand.
-		var meld := view * _pieces_root.global_transform * Transform3D(Basis.IDENTITY, Vector3(0.0, MELD_SURFACE_HEIGHT, MELD_ROW_RADIUS))
-		south_limit = minf(south_limit, _bottom_framing_limit(meld, bottom_slope))
-	# Use the existing row spacing to frame a reference hand, independent of melds and the live tile count.
-	var half_span := _concealed_row_start(0, 1) - _concealed_row_start(0, FULL_HAND_COUNT)
-	var hand_width := 2.0 * half_span + TILE_SIZE.x
-	var safe_fraction := 1.0 - 2.0 * maxf(_safe.x, _safe.z) / _board_view.size.x
-	var frame_width := maxf(hand_width + 2.0 * HAND_SIDE_MARGIN_TILES * TILE_SIZE.x, hand_width / maxf(0.01, safe_fraction))
-	var width_distance := nearest_z + frame_width / (2.0 * aspect * tangent)
-	var height_distance := (north_limit - south_limit) / (maxf(0.01, top_ndc - bottom_ndc) * tangent)
-	var distance := maxf(width_distance, height_distance)
-	# Translate the camera to frame the hand while its centre ray retains the specified pitch.
-	_camera.set_perspective(rad_to_deg(2.0 * atan(tangent)), _camera.near, _camera.far)
-	_camera.position = CAMERA_TARGET + _camera.basis.z * distance
-	_camera.h_offset = row.origin.x
-	_camera.v_offset = south_limit - bottom_ndc * distance * tangent
-	_camera_world_per_pixel = 2.0 * (distance - row.origin.z) * tangent / board_height
+func _uses_phone_framing() -> bool:
+	if not OS.has_feature("mobile") or size.x < size.y:
+		return false
+	var screen := get_window().current_screen
+	var pixels := DisplayServer.screen_get_size(screen)
+	var dpi := DisplayServer.screen_get_dpi(screen)
+	if dpi <= 0 or pixels.x <= 0 or pixels.y <= 0:
+		return size.aspect() >= 1.67
+	# Android's smallest-width tablet breakpoint also distinguishes 16:9 tablets from phones.
+	return float(mini(pixels.x, pixels.y)) * 160.0 / dpi < 600.0
 
 
-func _bottom_framing_limit(pose: Transform3D, slope: float) -> float:
-	# The real rounded front edge ends above its bounding-box corner.
-	var limit := INF
-	for vertex in _tile_side_hull:
-		var point := pose * Vector3(0.0, vertex.x, vertex.y)
-		limit = minf(limit, point.y + slope * point.z)
-	return limit
+func _clear_camera_hud(distance: float, center: Vector2, projection: Vector2, pad: float, vertical_shift: Vector2) -> float:
+	var regions: Array[Rect2] = [_seat_rect(0), _seat_rect(1), _seat_rect(3), _side_tools.get_rect(), _own_mic.get_rect()]
+	var anchor := center + Vector2(0.0, vertical_shift.y * projection.y)
+	# Tiles outside a card's vertical band can use the full safe screen width.
+	while true:
+		var next_distance := distance
+		for tile in _camera_frame_tiles:
+			var projected := PackedVector2Array()
+			for point in tile:
+				var height := point.y - vertical_shift.x - vertical_shift.y * point.z
+				projected.append(Vector2(point.x, -height) * projection)
+			var bounds := Rect2(anchor + projected[0] / (distance - tile[0].z), Vector2.ZERO)
+			for corner in range(1, tile.size()):
+				bounds = bounds.expand(anchor + projected[corner] / (distance - tile[corner].z))
+			for region in regions:
+				region = region.grow(pad)
+				if not bounds.intersects(region): continue
+				var left := region.get_center().x < anchor.x
+				var horizontal := maxf(1.0, anchor.x - region.end.x if left else region.position.x - anchor.x)
+				var below := region.position.y > anchor.y
+				var vertical := maxf(region.position.y - anchor.y, anchor.y - region.end.y)
+				var clear_x := -INF
+				var clear_y := -INF if vertical > 0.0 else INF
+				for corner in tile.size():
+					var z := tile[corner].z
+					var pixel := projected[corner]
+					clear_x = maxf(clear_x, z + (-pixel.x if left else pixel.x) / horizontal)
+					if vertical > 0.0:
+						clear_y = maxf(clear_y, z + (pixel.y if below else -pixel.y) / vertical)
+				next_distance = maxf(next_distance, minf(clear_x, clear_y))
+		if next_distance <= distance + 0.00001:
+			return distance
+		distance = next_distance
+	return distance
+
+
+func _include_framing_tile(pose: Transform3D) -> void:
+	var corners := PackedVector3Array()
+	for corner in 8:
+		corners.append(pose * TILE_BODY_BOUNDS.get_endpoint(corner))
+	_camera_frame_tiles.append(corners)
+
+
+func _reserve_board_framing() -> void:
+	_camera_table_frame = Transform3D(Basis(Vector3.RIGHT, -deg_to_rad(CAMERA_PITCH_DEGREES)), _wind_dial.get_timer_position())
+	var view := _camera_table_frame.affine_inverse()
+	var first := _concealed_row_start(FULL_HAND_COUNT)
+	for relative in 4:
+		for slot in FULL_HAND_COUNT:
+			var along := first + float(slot) * TILE_SIZE.x
+			_include_framing_tile(view * _standing_hand_pose(relative, along))
+		var rotation := Basis(Vector3.UP, relative * PI * 0.5)
+		for group in MAX_MELD_GROUPS:
+			for tile in MELD_GROUP_COLUMNS + 1:
+				var position := _meld_tile_position(relative, group, tile, false)
+				_include_framing_tile(view * _pieces_root.global_transform * Transform3D(rotation, position))
+
+
+func _cover_felt() -> void:
+	var native_size := Vector2(_board_viewport.size)
+	var half_felt := TABLE_THEME.FELT_SIZE_METRES * 0.5
+	var plane := Plane(Vector3.UP, _felt_surface.global_position.y)
+	for pixel in [Vector2.ZERO, Vector2(native_size.x, 0.0), Vector2(0.0, native_size.y), native_size]:
+		var point: Variant = plane.intersects_ray(_camera.project_ray_origin(pixel), _camera.project_ray_normal(pixel))
+		if point is Vector3:
+			half_felt = half_felt.max(Vector2(absf(point.x), absf(point.z)) + Vector2.ONE * TILE_SIZE.z)
+	var mesh := _felt_surface.mesh as PlaneMesh
+	var extent := half_felt * 2.0
+	if not mesh.size.is_equal_approx(extent):
+		mesh.size = extent
 
 
 func _on_native_projection_resized() -> void:
@@ -1032,7 +1034,8 @@ func _build_3d_table() -> void:
 	var pitch := deg_to_rad(CAMERA_PITCH_DEGREES)
 	_camera = _stage.configure(2.0, CAMERA_TARGET + Vector3(0, sin(pitch), cos(pitch)), CAMERA_TARGET, true, 30.0)
 	TABLE_THEME.configure_stage(_stage, _quality)
-	world.add_child(TABLE_THEME.create_felt_surface())
+	_felt_surface = TABLE_THEME.create_felt_surface()
+	world.add_child(_felt_surface)
 	_wind_dial = WIND_DIAL.new()
 	world.add_child(_wind_dial)
 	_pieces_root = Node3D.new()
@@ -1049,8 +1052,12 @@ func _build_3d_table() -> void:
 		var point := tile_space * vertex
 		_south_hand_rest_height = maxf(_south_hand_rest_height, -(tilted * point).y)
 		side_points.append(Vector2(point.y, point.z))
-	_tile_side_hull = Geometry2D.convex_hull(side_points)
 	sample.free()
+	_reserve_board_framing()
+	var south_pose := _camera_table_frame.affine_inverse() * _own_tile_pose(0.0, 0.0)
+	for point in Geometry2D.convex_hull(side_points):
+		var view_point := south_pose * Vector3(0.0, point.x, point.y)
+		_camera_south_edge.append(Vector2(view_point.y, view_point.z))
 	_tile_focus = TILE_FOCUS.new()
 	world.add_child(_tile_focus)
 	_tile_focus.set_quality(_quality)
@@ -1484,12 +1491,6 @@ func _render() -> void:
 		_settlement_panel = null
 	if _tool_open.is_empty() and (_state.get("phase") != "finished" or training_mode or _is_spectating()):
 		_block_board_focus(false)
-	var has_own_melds := int(_meld_layout(0).columns) > 0
-	if _framed_own_melds != has_own_melds:
-		_framed_own_melds = has_own_melds
-		if _frames_player_hand():
-			_stop_camera_impact()
-			_fit_camera()
 	_selected_id = _selected_id if _state.get("phase") != "dingque" and _hand_contains(_selected_id) else 0
 	_render_seats()
 	_render_opponent_hands()
@@ -1525,13 +1526,11 @@ func _render() -> void:
 	elif not _actions_ready():
 		_status.text = "连接恢复中 · 等待入座确认和新状态"
 	elif phase == "dingque":
-		_status.text = "已提交定缺 · 等待牌友" if _legal_options("dingque").is_empty() else "请选择一门定缺"
-	elif phase == "reaction":
-		_status.text = "等待牌友响应" if _options().is_empty() else "请选择响应动作"
-	elif int(_state.get("turn", -1)) == int(_state.get("your_seat", -2)):
+		_status.text = "已提交定缺" if _legal_options("dingque").is_empty() else "请选择一门定缺"
+	elif phase == "turn" and int(_state.get("turn", -1)) == int(_state.get("your_seat", -2)):
 		_status.text = _discard_prompt()
 	else:
-		_status.text = "等待牌友出牌"
+		_status.text = ""
 	print("MAHJONG_STATE room=%s phase=%s turn=%s seat=%s remaining=%s" % [str(_state.get("room_id", "")), phase, str(_state.get("turn", "")), str(_state.get("your_seat", "")), str(_state.get("remaining", ""))])
 	if "--auto-flow" in OS.get_cmdline_user_args() and not _auto_played and _actions_ready() and status == "playing" and phase == "turn" and int(_state.get("turn", -1)) == int(_state.get("your_seat", -2)):
 		_auto_played = true
@@ -1741,11 +1740,6 @@ func _is_practice_table() -> bool:
 
 
 func _update_context_labels() -> void:
-	var phase := str(_state.get("phase", ""))
-	var status := str(_state.get("status", "waiting"))
-	var own_turn := not _is_spectating() and int(_state.get("turn", -1)) == int(_state.get("your_seat", -2))
-	_turn_label.text = "" if own_turn else "等待牌友"
-	_turn_label.add_theme_color_override("font_color", Color("#ffe19b") if own_turn else Color("#fff8df"))
 	var limit := int(_state.get("round_limit", match_context.get("round_limit", 0)))
 	var completed := int(_state.get("completed_rounds", match_context.get("completed_rounds", 0)))
 	_round_number.text = "%d/%d局" % [clampi(completed + 1, 1, limit), limit] if limit > 0 else ("练习" if _is_practice_table() else "第%d局" % maxi(1, completed + 1))
@@ -1753,16 +1747,6 @@ func _update_context_labels() -> void:
 	var room := str(_state.get("room_id", match_context.get("room_id", "—")))
 	_header.text = _rule_name() if training_mode else "%s · %s %s" % [_rule_name(), "训练房" if _room_kind() == "training" else "房间", room]
 	BATTLE_ART.fit_room_heading(_header)
-	if _state.get("saving", false):
-		_turn_label.text = "正在保存"
-	elif status == "waiting":
-		_turn_label.text = "等待入座"
-	elif phase == "reaction":
-		_turn_label.text = "等待响应" if _options().is_empty() else "可以响应"
-	elif phase == "finished":
-		_turn_label.text = ""
-	if _is_spectating(): _turn_label.text = "观战 · %d 号位" % (int(match_context.get("watch_seat", 0)) + 1)
-	_turn_label.visible = not _turn_label.text.is_empty()
 	_update_compass_winds()
 	_update_clock()
 
@@ -1794,8 +1778,8 @@ func _render_opponent_hands() -> void:
 	for seat in range(mini(4,counts.size())):
 		var relative := _relative_seat(seat)
 		if relative == 0 and not _is_spectating(): continue
-		var count := mini(int(counts[seat]),14)
-		var hand_start := _concealed_row_start(relative, count)
+		var count := clampi(int(counts[seat]), 0, FULL_HAND_COUNT)
+		var hand_start := _concealed_row_start(count)
 		for index in range(count):
 			var along := hand_start + float(index) * TILE_SIZE.x
 			var position := _seat_table_position(relative, along, HAND_PIVOT_HEIGHT, HAND_PIVOT_DEPTH)
@@ -1808,43 +1792,19 @@ func _seat_table_position(relative: int, along: float, height: float, depth: flo
 	return Vector3(along, height, depth).rotated(Vector3.UP, float(relative) * PI * 0.5)
 
 
-func _meld_layout(relative: int) -> Dictionary:
-	var seats := _array("melds")
-	var seat := posmod(relative + int(_state.get("your_seat", 0)), 4)
-	var origins: Array[Vector2i] = []
-	var widest := 0
-	if seat < seats.size() and seats[seat] is Array:
-		var remaining_width := _seat_concealed_count(relative) * TILE_SIZE.x
-		var capacity := clampi(floori((2.0 * MELD_ROW_RADIUS - remaining_width - OPPONENT_MELD_SEPARATION) / TILE_SIZE.x), 4, 12)
-		var row := 0
-		var used := 0
-		for meld in seats[seat].slice(0, 4):
-			var count := mini(4, meld.tiles.size()) if meld is Dictionary and meld.get("tiles") is Array else 0
-			if used + count > capacity:
-				row += 1
-				used = 0
-			origins.append(Vector2i(used, row))
-			used += count
-			widest = maxi(widest, used)
-	return {"origins":origins, "columns":widest}
+func _concealed_row_start(count: int) -> float:
+	# Fill the fixed hand slots from the right end so melds use the free left slots.
+	return ((FULL_HAND_COUNT + 1) * 0.5 - count) * TILE_SIZE.x
 
 
-func _seat_concealed_count(relative: int) -> int:
-	if relative == 0 and not _is_spectating(): return _array("hand").size()
-	var counts := _array("hand_counts")
-	for seat in range(mini(4, counts.size())):
-		if _relative_seat(seat) == relative: return clampi(int(counts[seat]), 0, 14)
-	return 0
-
-
-func _concealed_row_start(relative: int, count: int) -> float:
-	var meld_width := int(_meld_layout(relative).columns) * TILE_SIZE.x
-	var separator := _meld_hand_gap(relative) if meld_width > 0.0 and count > 0 else 0.0
-	return (meld_width + separator - count * TILE_SIZE.x + TILE_SIZE.x) * 0.5
-
-
-func _meld_hand_gap(relative: int) -> float:
-	return TILE_SIZE.x if relative == 0 and not _is_spectating() else OPPONENT_MELD_SEPARATION
+func _meld_tile_position(relative: int, group: int, index: int, concealed: bool) -> Vector3:
+	var gap := TILE_SIZE.x if relative == 0 else OPPONENT_MELD_SEPARATION
+	var column := group * MELD_GROUP_COLUMNS + mini(index, MELD_GROUP_COLUMNS - 1)
+	var along := _concealed_row_start(FULL_HAND_COUNT) - gap + column * TILE_SIZE.x
+	var height := MELD_SURFACE_HEIGHT + (TILE_SIZE.y if concealed else 0.0)
+	if index == MELD_GROUP_COLUMNS:
+		height += TILE_SIZE.y + MELD_STACK_CLEARANCE
+	return _seat_table_position(relative, along, height, MELD_ROW_RADIUS)
 
 
 func _render_discards() -> void:
@@ -1892,29 +1852,16 @@ func _render_melds() -> void:
 			continue
 		var relative := _relative_seat(seat)
 		var melds: Array = meld_groups[seat]
-		var layout := _meld_layout(relative)
-		var concealed_count := _seat_concealed_count(relative)
-		var meld_width := int(layout.columns) * TILE_SIZE.x
-		var hand_width := concealed_count * TILE_SIZE.x
-		var separator := _meld_hand_gap(relative) if concealed_count > 0 else 0.0
-		var bank_width := meld_width + hand_width + separator
-		var start := (TILE_SIZE.x - bank_width) * 0.5
-		for index in range(mini(4, melds.size())):
+		for index in range(mini(MAX_MELD_GROUPS, melds.size())):
 			var meld: Variant = melds[index]
 			if not meld is Dictionary or not meld.get("tiles") is Array:
 				continue
 			var tiles: Array = meld.tiles
-			var origin: Vector2i = layout.origins[index]
-			var depth := MELD_ROW_RADIUS - origin.y * (TILE_SIZE.z + MELD_ROW_GAP)
 			var concealed: bool = (relative != 0 or _is_spectating()) and meld.get("kind") == "an_gang"
-			# Every seat reads its exposed sets from its own left, just ahead of
-			# its remaining concealed row. Rotate both rows with the same seat basis.
-			var height := MELD_SURFACE_HEIGHT + (TILE_SIZE.y if concealed else 0.0)
 			for tile_index in range(mini(4, tiles.size())):
 				if not tiles[tile_index] is Dictionary:
 					continue
-				var along := start + (origin.x + tile_index) * TILE_SIZE.x
-				var position := _seat_table_position(relative, along, height, depth)
+				var position := _meld_tile_position(relative, index, tile_index, concealed)
 				var model := _tile_model(tiles[tile_index], position, relative, concealed, true)
 				model.name = "MahjongMeld%d_%d_%d" % [relative, index, tile_index]
 
@@ -1934,7 +1881,7 @@ func _render_hand() -> void:
 			break
 	_hand_models.clear()
 	_hand_ids.clear()
-	var hand_start := _concealed_row_start(0, hand.size())
+	var hand_start := _concealed_row_start(hand.size())
 	for index in range(hand.size()):
 		var tile: Dictionary = hand[index]
 		var id := int(tile.get("id", 0))
@@ -1968,9 +1915,7 @@ func _select_tile(id: int) -> void:
 func _discard_prompt() -> String:
 	if training_mode and int(_state.get("remaining", 0)) == 0:
 		return "牌墙已空 · 打出后结束"
-	if _selected_id == 0:
-		return "点选手牌，再点一次或点击打出"
-	return "当前不能打出这张牌" if _play_button.disabled else ""
+	return "当前不能打出这张牌" if _selected_id > 0 and _play_button.disabled else ""
 
 
 func _render_hand_only() -> void:
@@ -2438,18 +2383,17 @@ func _show_action_effects(events: Array[Dictionary]) -> void:
 	_action_effects.add_child(effect)
 	effect.position = (size - effect.size) * 0.5
 	effect.show_action(action)
-	_start_camera_impact(action, unit)
+	if action == "hu": _start_win_impact(unit)
 	_play_sound("settlement" if action == "hu" else "peng" if action == "peng" else "gang")
 	if is_instance_valid(product_audio):
 		product_audio.play_action_impact(action)
 	_play_callout(action)
 
 
-func _start_camera_impact(action: String, unit: float) -> void:
+func _start_win_impact(unit: float) -> void:
 	_stop_camera_impact()
-	var strength := (5.0 if action == "hu" else 3.8 if action.ends_with("gang") else 2.2)*unit
 	_camera_impact = create_tween()
-	_camera_impact.tween_method(_apply_camera_impact.bind(strength), 0.0, 1.0, 0.24)
+	_camera_impact.tween_method(_apply_camera_impact.bind(5.0 * unit), 0.0, 1.0, 0.24)
 
 
 func _apply_camera_impact(progress: float, strength: float) -> void:
@@ -3146,7 +3090,7 @@ func _render_bubbles() -> void:
 		var bubble_x := rect.end.x - box.size.x if relative == 1 else rect.position.x
 		var bubble_y := rect.end.y + 32.0
 		if relative == 0:
-			bubble_y = _turn_label.position.y - box.size.y - 8.0
+			bubble_y = rect.position.y - box.size.y - 8.0
 		elif relative == 2:
 			bubble_x = rect.end.x + 8.0
 			bubble_y = maxf(rect.position.y, _toolbar.get_rect().end.y + 8.0)
