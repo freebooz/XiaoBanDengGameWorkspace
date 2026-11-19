@@ -86,8 +86,7 @@ func _draw() -> void:
 	fill.corner_detail = 10
 	fill.anti_aliasing = true
 	if recommended:
-		# Recommendation belongs to the label below the tile. Keep the entire
-		# tile free of 2D rectangles; its own PBR material shows selection.
+		# The capsule indicates recommendation. The tile material shows selection.
 		fill.set_border_width_all(1)
 		fill.border_color = RECOMMENDED
 	draw_style_box(fill, badge_rect)

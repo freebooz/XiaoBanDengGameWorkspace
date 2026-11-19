@@ -130,8 +130,9 @@ func _verify(screen, scenario: String, viewer: int) -> void:
 	if screen._frames_player_hand():
 		var bottom: float = screen._own_tile_rect(0.0, 0.0).end.y
 		var gap: float = (screen.size.y - screen._safe.w - bottom) * screen.get_viewport_transform().get_scale().y
-		var label_space: float = (screen.COACH_OVERLAY.LABEL_HEIGHT + screen.COACH_OVERLAY.LABEL_GAP) * screen.get_viewport_transform().get_scale().y
-		_check(gap >= label_space - 0.01 and gap <= label_space + 3.0 and far_edge.y >= band_top - 0.1, "Camera must leave the label row below the hand and keep the far row below its avatar")
+		var inset_px: float = screen.HAND_BOTTOM_INSET * screen.get_viewport_transform().get_scale().y
+		_check(gap >= inset_px - 0.01 and gap <= inset_px + 3.0 and far_edge.y >= screen._safe.y,
+			"Camera must preserve the bottom inset and keep the far row inside the safe frame")
 	else:
 		_check(band_center.distance_to(full_center) <= 1.0 or (absf(hand_center_y-social_center_y) <= 1.0 and absf(band_center.x-view.get_center().x) <= 1.0), "Playable table must stay centered in the available band")
 		_check(far_edge.y >= band_top and near_play_edge.y <= view.end.y, "Near playing edge and far hand must fit the safe layout band")

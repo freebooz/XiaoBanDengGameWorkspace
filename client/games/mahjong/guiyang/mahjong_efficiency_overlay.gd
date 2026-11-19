@@ -7,7 +7,7 @@ const NUMERALS := ["一", "二", "三", "四", "五", "六", "七", "八", "九"
 const SUITS := ["万", "筒", "条"]
 const SUIT_IDS := ["wan", "tong", "tiao"]
 const LABEL_HEIGHT := 32.0 * 2.0 / 3.0
-const LABEL_GAP := 4.0
+const LABEL_GAP := 1.0
 
 var tile_materials: RefCounted
 var _badges: Dictionary = {}
@@ -55,19 +55,13 @@ func present(tiles: Array, results: Dictionary, selected_id: int, detail_area :=
 	_unavailable_hint = unavailable_hint
 	_snapshot_note = snapshot_note
 	var last_rank := 1
-	var label_top := 0.0
-	var highest_tile := INF
 	for tile in tiles:
 		var rect: Rect2 = tile.get("rect", Rect2())
 		if not rect.has_area():
 			continue
-		label_top = maxf(label_top, tile.get("bottom", rect.end.y) + LABEL_GAP)
-		highest_tile = minf(highest_tile, tile.get("top", rect.position.y))
 		var result: Variant = results.get(int(tile.get("id", 0)))
 		if _valid_efficiency(result):
 			last_rank = maxi(last_rank, _rank(result))
-	if detail_area.has_area() and label_top + LABEL_HEIGHT > detail_area.end.y:
-		label_top = highest_tile - LABEL_HEIGHT - LABEL_GAP
 	var used := {}
 	for tile_index in range(tiles.size()):
 		var tile: Dictionary = tiles[tile_index]
@@ -103,7 +97,7 @@ func present(tiles: Array, results: Dictionary, selected_id: int, detail_area :=
 			badge.set_efficiency(int(result.shanten.minimum), int(result.ukeireCount), rank, last_rank)
 		badge.position = rect.position
 		badge.size = rect.size
-		badge.badge_rect = _label_rect(tiles, tile_index, rect, label_top)
+		badge.badge_rect = _label_rect(tiles, tile_index, rect, tile.get("top", rect.position.y))
 		var hit := badge.get_node("Inspect") as Button
 		hit.position = badge.badge_rect.position
 		hit.size = badge.badge_rect.size
@@ -129,7 +123,7 @@ func _inspect(id: int) -> void:
 	_show_detail(_detail_results.get(_inspected_id))
 
 
-func _label_rect(tiles: Array, index: int, face: Rect2, label_top: float) -> Rect2:
+func _label_rect(tiles: Array, index: int, face: Rect2, tile_top: float) -> Rect2:
 	var width := face.size.x
 	for neighbor_index in [index - 1, index + 1]:
 		if neighbor_index < 0 or neighbor_index >= tiles.size():
@@ -138,7 +132,8 @@ func _label_rect(tiles: Array, index: int, face: Rect2, label_top: float) -> Rec
 		if neighbor.has_area():
 			width = minf(width, absf(face.get_center().x - neighbor.get_center().x) - 2.0)
 	width = maxf(22.0, width - 2.0)
-	return Rect2(Vector2((face.size.x - width) * 0.5, label_top - face.position.y), Vector2(width, LABEL_HEIGHT))
+	var top := tile_top - LABEL_GAP - LABEL_HEIGHT
+	return Rect2(Vector2((face.size.x - width) * 0.5, top - face.position.y), Vector2(width, LABEL_HEIGHT))
 
 
 func _show_detail(result: Variant) -> void:

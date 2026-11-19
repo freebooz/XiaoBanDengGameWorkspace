@@ -109,9 +109,9 @@ func _verify_full_hand_framing(board: Board) -> void:
 	_check(margin_px >= -2.0 and absf(bounds.position.x - (board.size.x - bounds.end.x)) * pixels < 2.0
 		and (margin_px < 2.0 or (north_top - safe_area.position.y) * pixels <= 2.0)
 		and safe_area.encloses(bounds), "Both rows must fit with centred south margins: %.3f / %.3f" % [left, right])
-	var label_space := (board.COACH_OVERLAY.LABEL_HEIGHT + board.COACH_OVERLAY.LABEL_GAP) * pixels
-	_check(bottom_px >= label_space - 0.01 and bottom_px <= label_space + 3.0,
-		"Resting hand must leave room for a complete shanten label below it: %.2f native pixels" % bottom_px)
+	var bottom_inset := board.HAND_BOTTOM_INSET * pixels
+	_check(bottom_px >= bottom_inset - 0.01 and bottom_px <= bottom_inset + 3.0,
+		"Resting hand must keep the camera's bottom inset: %.2f native pixels" % bottom_px)
 	var selected := board._selected_id
 	for index in [0, 13]:
 		var resting: Transform3D = board._hand_models[index].global_transform
@@ -156,7 +156,9 @@ func _verify_hud_layout(board: Board) -> void:
 	var heading := board._header.get_global_rect()
 	var opposite := board._seat_panels[2].get_global_rect()
 	var expected_left := board._safe.x + board._horizontal_screen_pixels(10.0)
-	var top_inset := opposite.position.y - board._safe.y
+	var expected_right := board.size.x - board._safe.z - board._horizontal_screen_pixels(10.0)
+	var factor := minf(board.size.x / 1440.0, board.size.y / 810.0)
+	var corner_inset := 12.0 * factor
 	_check(board.find_child("MahjongTableBrandMark", true, false) == null, "The battle HUD must omit the logo")
 	_check(is_equal_approx(heading.position.x, expected_left)
 		and board._header.horizontal_alignment == HORIZONTAL_ALIGNMENT_LEFT
@@ -165,40 +167,50 @@ func _verify_hud_layout(board: Board) -> void:
 	for relative in 4:
 		_check(board._wind_dial._winds[relative].text == ["南", "东", "北", "西"][relative], "Projected table directions must follow the screen")
 		var nickname := board._seat_panels[relative].get_node("MahjongSeatNickname") as Label
-		var factor := minf(board.size.x / 1440.0, board.size.y / 810.0)
 		var previous_size := roundi(20 * factor)
 		while previous_size > 10 and nickname.get_theme_font("font").get_height(previous_size) > 25 * factor: previous_size -= 1
 		_check(nickname.get_theme_font_size("font_size") == maxi(10, previous_size - 2) + 2, "All four nicknames must gain exactly two points")
-	_check(is_equal_approx(opposite.get_center().x, board._play_area.get_center().x)
-		and top_inset >= 0.0 and top_inset <= 12.1,
-		"Opposite player's card must sit at the top center")
-	_check(not heading.intersects(opposite) and not opposite.intersects(board._toolbar.get_global_rect()),
-		"Room heading, opposite player's card and toolbar must have separate space")
+	var north_portrait := board._avatar_portraits[2].get_global_rect()
+	var north_name := board._seat_panels[2].get_node("MahjongSeatNickname") as Label
+	_check(is_equal_approx(opposite.end.x, expected_right) and is_equal_approx(opposite.position.y, board._safe.y + corner_inset)
+		and north_portrait.end.x >= opposite.end.x - 5.1 * factor and north_name.get_global_rect().end.x <= north_portrait.position.x,
+		"North portrait must hug the safe top-right corner with its name to the left")
+	var toolbar := board._toolbar.get_global_rect()
+	_check(not heading.intersects(opposite) and toolbar.position.y > opposite.end.y and is_equal_approx(toolbar.end.x, expected_right),
+		"Room heading and north portrait must share the top edge with the tools below the portrait")
 	var left := board._seat_panels[3].get_global_rect()
 	var right := board._seat_panels[1].get_global_rect()
-	var expected_right := board.size.x - board._safe.z - board._horizontal_screen_pixels(10.0)
 	var center_y := (board._safe.y + board.size.y - board._safe.w) * 0.5
 	_check(is_equal_approx(left.position.x, expected_left) and is_equal_approx(right.end.x, expected_right)
 		and is_equal_approx(left.get_center().y, center_y) and is_equal_approx(right.get_center().y, center_y),
 		"Side players' cards must be centered vertically along the safe edges")
-	for relative in [1, 3]:
+	for relative in [1, 2, 3]:
 		var seat := board._seat_panels[relative].get_global_rect()
 		for tile in board._pieces_root.find_children("MahjongConcealedHand%d_*" % relative, "Node3D", false, false):
 			if tile.is_queued_for_deletion(): continue
 			var body := board._projected_tile_rect(tile, &"TileBody")
-			_check(not seat.grow(-1.0).intersects(body), "Side card must clear %s at %s: %s and %s" % [tile.name, root.size, seat, body])
+			_check(not seat.grow(-1.0).intersects(body), "Portrait must clear %s at %s: %s and %s" % [tile.name, root.size, seat, body])
 	var own_seat := board._seat_panels[0].get_global_rect()
-	var row_gap := 4.0 * minf(board.size.x / 1440.0, board.size.y / 810.0)
-	_check(is_equal_approx(own_seat.position.x, heading.position.x) and is_equal_approx(own_seat.position.y, heading.end.y + row_gap)
-		and not own_seat.intersects(opposite) and not own_seat.intersects(left), "South portrait must sit directly under the room heading at the safe left edge")
+	_check(is_equal_approx(own_seat.position.x, expected_left) and is_equal_approx(own_seat.end.y, board.size.y - board._safe.w - corner_inset)
+		and not own_seat.intersects(left), "South portrait must hug the safe bottom-left corner")
+	for model in board._hand_models:
+		_check(not own_seat.grow(-1.0).intersects(board._projected_tile_rect(model, &"TileBody")), "South portrait must clear all local hand tiles")
 	_check(not board._turn_label.visible and board._turn_label.text.is_empty(), "Local discard turn must have no reminder text")
 	var saved_turn: int = board._state.turn
+	var deadline := board._deadline_tick
+	board._deadline_tick = Time.get_ticks_msec() + 10000
+	for seat in [0, 2]:
+		board._state.turn = seat
+		board._position_avatar_clock()
+		_check(board._remaining_number.visible and board._avatar_portraits[seat].get_global_rect().grow(1.0).encloses(board._remaining_number.get_global_rect()),
+			"The countdown must follow the active avatar to its corner")
+	board._deadline_tick = deadline
 	board._state.turn = 1
 	board._update_context_labels()
 	var turn := board._turn_label.get_global_rect()
-	_check(board._turn_label.visible and board._turn_label.text == "等待牌友" and turn.position.y >= own_seat.end.y and turn.end.y <= board.size.y - board._safe.w
+	_check(board._turn_label.visible and board._turn_label.text == "等待牌友" and turn.end.y <= own_seat.position.y and turn.position.y >= board._safe.y
 		and is_equal_approx(turn.get_center().x, own_seat.get_center().x),
-		"Waiting status must return below the local portrait when the turn changes")
+		"Waiting status must return above the local portrait when the turn changes")
 	board._state.turn = saved_turn
 	board._update_context_labels()
 	var tools := board._side_tools.get_global_rect()

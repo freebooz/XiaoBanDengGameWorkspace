@@ -59,8 +59,9 @@ func _run() -> void:
 			_expect(badge.mouse_filter == Control.MOUSE_FILTER_IGNORE, "badge must not intercept touch")
 			_expect(Rect2(Vector2.ZERO, viewport_size).encloses(global_badge), "badge stays in screen")
 			_expect(not previous.intersects(global_badge), "adjacent compact badges stay separate")
-			_expect(global_badge.position.y > face.end.y and is_equal_approx(global_badge.get_center().x, face.get_center().x),
-				"badge is centered below the tile, including after selection lifts it")
+			_expect(is_equal_approx(global_badge.end.y, face.position.y - OVERLAY.LABEL_GAP)
+				and is_equal_approx(global_badge.get_center().x, face.get_center().x),
+				"badge is centered at the top edge of its own tile, including the lifted tile")
 			for tile in tiles:
 				_expect(not global_badge.intersects(tile.rect), "no badge can cover a tile")
 			previous = global_badge

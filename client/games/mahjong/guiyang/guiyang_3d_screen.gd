@@ -66,6 +66,7 @@ const SEAT_CARD_SIZE := Vector2(178, 76)
 const OWN_HAND_LIFT := 0.020
 const FULL_HAND_COUNT := 14
 const HAND_SIDE_MARGIN_TILES := 2.97
+const HAND_BOTTOM_INSET := 76.0 / 3.0
 const PLAY_AREA_NEAR_DEPTH := HAND_ROW_RADIUS + TILE_SIZE.z * 0.5
 
 var product: Dictionary = {}
@@ -531,9 +532,7 @@ func _layout_ui() -> void:
 	var bar_width := maxf(1.0, opposite_seat.position.x - _header.position.x - 12.0 * factor)
 	_header.size = Vector2(bar_width, minf(tool_height, maxf(44.0 * factor, icon_extent * 0.67)))
 	BATTLE_ART.fit_room_heading(_header, roundi(28*factor), 2)
-	_toolbar.position = Vector2(width-_safe.z-toolbar_width-15*factor,top + 12*factor)
-	if _toolbar.position.x < opposite_seat.end.x + 8.0 * factor:
-		_toolbar.position.y = opposite_seat.end.y + 8.0 * factor
+	_toolbar.position = Vector2(opposite_seat.end.x - toolbar_width, opposite_seat.end.y + 8.0 * factor)
 	_toolbar.size = Vector2(toolbar_width,tool_height)
 	for index in range(_toolbar.get_child_count()):
 		var tool := _toolbar.get_child(index) as Button
@@ -553,10 +552,10 @@ func _layout_ui() -> void:
 	_side_tools.position = _own_mic.position - tool_step
 	_sync_viewport_size()
 	var own_seat := _seat_rect(0)
-	_turn_label.position = Vector2(own_seat.position.x, own_seat.end.y + 4.0 * factor)
 	_turn_label.size = Vector2(own_seat.size.x, 26.0 * factor)
+	_turn_label.position = Vector2(own_seat.position.x, own_seat.position.y - _turn_label.size.y - 4.0 * factor)
 	_turn_label.add_theme_font_size_override("font_size", roundi(17.0 * factor))
-	_status.position = Vector2(_header.position.x, _turn_label.get_rect().end.y + 2.0 * factor)
+	_status.position = Vector2(_header.position.x, _header.get_rect().end.y + 2.0 * factor)
 	for index in range(_side_tools.get_child_count()):
 		var tool := _side_tools.get_child(index) as Button
 		tool.position = index * tool_step
@@ -588,14 +587,12 @@ func _seat_rect(relative: int) -> Rect2:
 	var left := _safe.x + horizontal_inset
 	var right := size.x - _safe.z - horizontal_inset - box.x
 	var side_y := _safe.y + (size.y - _safe.y - _safe.w - box.y) * 0.5
+	var edge_inset := 12.0 * factor
 	match relative:
-		0:
-			return Rect2(Vector2(left, _header.get_rect().end.y + 4.0 * factor), box)
-		1: return Rect2(Vector2(right,side_y),box)
-		2:
-			var far_y := _safe.y + 12.0 * factor
-			return Rect2(Vector2(_play_area.get_center().x - box.x * 0.5, far_y), box)
-	return Rect2(Vector2(left,side_y),box)
+		0: return Rect2(Vector2(left, size.y - _safe.w - box.y - edge_inset), box)
+		1: return Rect2(Vector2(right, side_y), box)
+		2: return Rect2(Vector2(right, _safe.y + edge_inset), box)
+	return Rect2(Vector2(left, side_y), box)
 
 
 func _uses_tablet_layout() -> bool:
@@ -671,9 +668,9 @@ func _layout_coach() -> void:
 		var model := _hand_models[index]
 		var rect := _projected_tile_rect(model)
 		var body := _projected_tile_rect(model, &"TileBody")
-		var bottom := maxf(rect.end.y, body.end.y)
+		var top := board_origin.y + minf(rect.position.y, body.position.y)
 		rect.position += board_origin
-		tiles.append({"id": _hand_ids[index], "rect": rect, "top":board_origin.y + body.position.y, "bottom": board_origin.y + bottom})
+		tiles.append({"id": _hand_ids[index], "rect": rect, "top": top})
 	var snapshot_note := ""
 	if not _actions_ready(): snapshot_note = "最近一次同步的牌局数据；重连后更新。"
 	elif _pending_action: snapshot_note = "当前为服务器已确认的数据；动作确认后更新。"
@@ -757,7 +754,7 @@ func _layout_response_actions() -> void:
 	var area := _usable_modal_area().grow(-ACTION_BUTTON_GAP)
 	area.position.y = maxf(area.position.y, _header.get_rect().end.y + ACTION_BUTTON_GAP)
 	area.end.y = _own_hand_top() - ACTION_HAND_GAP
-	if _frames_player_hand() and _coach_enabled:
+	if _coach_enabled and not _hand_models.is_empty() and _state.get("phase") != "dingque":
 		area.end.y -= COACH_OVERLAY.LABEL_HEIGHT + COACH_OVERLAY.LABEL_GAP
 	if not area.has_area():
 		_actions_root.hide()
@@ -933,9 +930,9 @@ func _fit_player_hand_camera(aspect: float) -> void:
 	var north_row := view * _pieces_root.global_transform * north_pose
 
 	var board_height := _board_view.size.y
-	# Keep a full badge row below the resting hand, including at fractional native pixel scales.
+	# Keep the resting hand inside the bottom safe inset at fractional native scales.
 	var pixel_scale := maxf((get_viewport_transform() * get_global_transform()).y.length(), 0.01)
-	var bottom := floorf((size.y - _safe.w - COACH_OVERLAY.LABEL_HEIGHT - COACH_OVERLAY.LABEL_GAP) * pixel_scale - 1.0) / pixel_scale
+	var bottom := floorf((size.y - _safe.w - HAND_BOTTOM_INSET) * pixel_scale - 1.0) / pixel_scale
 	var top_ndc := 1.0 - 2.0 * (_safe.y + 1.0 / pixel_scale) / board_height
 	var bottom_ndc := 1.0 - 2.0 * bottom / board_height
 	var tangent := CAMERA_SENSOR_WIDTH_MM / (2.0 * CAMERA_FOCAL_LENGTH_MM * aspect)
@@ -1543,17 +1540,19 @@ func _render_seats() -> void:
 		var known: bool = (balance is int or balance is float) and balance >= 0 and is_finite(float(balance))
 		var egg_text := str(int(balance)) if known else "—"
 		var dealer := seat == int(_state.get("dealer", -1))
+		var portrait_on_right := relative == 2
 		var panel := Panel.new()
 		panel.name="MahjongSeat%d"%relative
-		panel.position=_seat_rect(relative).position
-		panel.size=_seat_rect(relative).size
+		var seat_rect := _seat_rect(relative)
+		panel.position = seat_rect.position
+		panel.size = seat_rect.size
 		panel.mouse_filter=Control.MOUSE_FILTER_IGNORE
 		panel.add_theme_stylebox_override("panel", clear_background)
 		_seat_root.add_child(panel)
 		var avatar := Panel.new()
 		avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		avatar.position = Vector2(4, 4) * factor
 		avatar.size = Vector2(68, 68) * factor
+		avatar.position = Vector2(panel.size.x - avatar.size.x - 4.0 * factor if portrait_on_right else 4.0 * factor, 4.0 * factor)
 		avatar.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 		var surround := RURAL.frame(Color("#e0a24c"), TABLE_THEME.BRASS, roundi(34 * factor), 1)
 		surround.shadow_size = 0
@@ -1574,7 +1573,7 @@ func _render_seats() -> void:
 		avatar.add_child(portrait)
 		_avatar_portraits.append(portrait)
 		var ring := _decoration(panel, BATTLE_ART.portrait_ring(), "MahjongAvatarGoldRim")
-		ring.position = Vector2(2,2)*factor
+		ring.position = avatar.position - Vector2.ONE * 2.0 * factor
 		ring.size = Vector2(72,72)*factor
 		if _can_moderate(seat):
 			var manage := Button.new()
@@ -1585,7 +1584,9 @@ func _render_seats() -> void:
 			manage.pressed.connect(_open_moderation.bind(seat))
 			avatar.add_child(manage)
 			manage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		var name_label := _label(panel,"",74*factor,5*factor,0,27*factor,roundi(20*factor),Color("#fff1d4"))
+		var text_start := (7.0 if portrait_on_right else 74.0) * factor
+		var text_edge := panel.size.x - (74.0 if portrait_on_right else 7.0) * factor
+		var name_label := _label(panel,"",text_start,5*factor,0,27*factor,roundi(20*factor),Color("#fff1d4"))
 		name_label.name = "MahjongSeatNickname"
 		name_label.add_theme_stylebox_override("normal", clear_background)
 		name_label.add_theme_color_override("font_outline_color", Color("#17261e"))
@@ -1599,7 +1600,6 @@ func _render_seats() -> void:
 		while name_size > 10 and name_label.get_theme_font("font").get_height(name_size) > 25 * factor:
 			name_size -= 1
 		name_label.add_theme_font_size_override("font_size", maxi(12, name_size))
-		var text_edge := panel.size.x - 7.0 * factor
 		name_label.size = Vector2(text_edge - name_label.position.x, 27.0 * factor)
 		name_label.tooltip_text = nickname + (" · 庄家" if dealer else "")
 		if not missing_suits.is_empty():
@@ -1610,7 +1610,7 @@ func _render_seats() -> void:
 				maxi(10, roundi(15 * factor)), TABLE_THEME.CREAM)
 			missing.name = "MahjongMissingSuit%d" % seat
 			missing.tooltip_text = "定缺" + suit
-		var quantity := _label(panel,"",74*factor,34*factor,0,36*factor,roundi(31*factor),Color("#a42316"))
+		var quantity := _label(panel,"",text_start,34*factor,0,36*factor,roundi(31*factor),Color("#a42316"))
 		quantity.name = "MahjongSeatEggs"
 		quantity.add_theme_color_override("font_outline_color", Color("#ffe6c1"))
 		quantity.add_theme_constant_override("outline_size", maxi(1, roundi(2 * factor)))
@@ -1646,7 +1646,8 @@ func _render_seats() -> void:
 		if relative == 0:
 			_seat_voice_buttons[seat] = _own_mic
 		elif _can_moderate(seat):
-			var mic := _button(panel,"",52*factor,50*factor,22*factor,22*factor,_toggle_seat_mute.bind(seat))
+			var mute_point := avatar.position + Vector2(48, 46) * factor
+			var mic := _button(panel,"",mute_point.x,mute_point.y,22*factor,22*factor,_toggle_seat_mute.bind(seat))
 			mic.name="MahjongSeatMic%d"%seat
 			BATTLE_ART.hud_button(mic, "muted" if _seat_muted(seat) else "mic", "切换此牌友静音")
 			MODAL.size_icon_button(mic, self, 22.0 * factor)
@@ -3085,16 +3086,16 @@ func _render_bubbles() -> void:
 		var rect := _seat_panels[relative].get_rect() if relative < _seat_panels.size() and is_instance_valid(_seat_panels[relative]) else _seat_rect(relative)
 		var box := Panel.new()
 		box.name = "MahjongSocialSeat%d" % int(seat)
-		var bubble_x := rect.position.x if relative != 1 else rect.end.x - 280
 		box.size = Vector2(280, 52)
+		var bubble_x := rect.end.x - box.size.x if relative in [1, 2] else rect.position.x
 		var bubble_y := rect.end.y + 32.0
 		if relative == 0:
-			if rect.end.x + 8.0 + box.size.x <= _seat_rect(2).position.x:
-				bubble_x = rect.end.x + 8.0
-				bubble_y = rect.position.y
-			else:
-				bubble_y = _status.get_rect().end.y + 4.0
-		box.position = Vector2(clampf(bubble_x, 8, size.x - 288), bubble_y)
+			bubble_y = _turn_label.position.y - box.size.y - 8.0
+		elif relative == 2:
+			bubble_y = _toolbar.get_rect().end.y + 8.0
+		var safe_area := _usable_modal_area()
+		box.position = Vector2(clampf(bubble_x, safe_area.position.x, safe_area.end.x - box.size.x),
+			clampf(bubble_y, safe_area.position.y, safe_area.end.y - box.size.y))
 		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_theme_stylebox_override("panel", _style(Color("#fff5deef"), Color("#b39c61"), 16))
 		_social_root.add_child(box)

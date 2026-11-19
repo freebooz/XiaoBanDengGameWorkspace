@@ -67,12 +67,17 @@ func _run() -> void:
 			var label := Rect2(item.position + item.badge_rect.position, item.badge_rect.size)
 			_check(Rect2(Vector2.ZERO, board.size).encloses(label), "Labels must remain in bounds at " + str(dimensions))
 			_check(is_equal_approx(label.size.y, 64.0 / 3.0), "Each capsule must be two thirds of the original label height")
+			var tile: Node3D = board._hand_models[board._hand_ids.find(id)]
+			var tile_top := minf(board._projected_tile_rect(tile).position.y, board._projected_tile_rect(tile, &"TileBody").position.y)
+			tile_top += board._board_view.position.y
+			_check(is_equal_approx(label.end.y, tile_top - board.COACH_OVERLAY.LABEL_GAP),
+				"The label must follow the top edge of its own tile across viewports and selection")
+			_check(not board._actions_root.visible or not label.intersects(board._actions_root.get_rect()),
+				"All capsules stay clear of gameplay action buttons")
 			for model in board._hand_models:
 				var face: Rect2 = board._projected_tile_rect(model)
 				face.position += board._board_view.position
 				_check(not label.intersects(face), "Labels cannot cover any tile face")
-				if board._frames_player_hand():
-					_check(label.position.y >= board._projected_tile_rect(model, &"TileBody").end.y, "All phone capsules must fit below the hand")
 	# Incoming visible tiles change the effective count using snapshot events only.
 	packet.epoch = 2
 	packet.discards = [{"seat":1,"tile":{"id":20,"suit":"tiao","rank":4},"claimed":false}]

@@ -255,7 +255,7 @@ func _run() -> void:
 		var discard_rect: Rect2 = screen._play_button.get_global_rect()
 		_check(screen._play_button.is_visible_in_tree() and not screen._play_button.disabled and discard_rect.end.y < top,
 			"Discard button must be above the raised tile body and available at %s" % [dimensions])
-		var coach_space: float = screen.COACH_OVERLAY.LABEL_HEIGHT + screen.COACH_OVERLAY.LABEL_GAP if screen._frames_player_hand() and screen._coach_enabled else 0.0
+		var coach_space: float = screen.COACH_OVERLAY.LABEL_HEIGHT + screen.COACH_OVERLAY.LABEL_GAP if screen._coach_enabled else 0.0
 		_check(discard_rect.size == Vector2(125,56) and is_equal_approx(discard_rect.end.y, screen._own_hand_top() - coach_space - 8.0),
 			"An unobstructed discard button must keep its fixed size at the hand edge at %s" % [dimensions])
 		_check(seat_positions == screen._seat_panels.map(func(panel): return panel.get_global_rect()),

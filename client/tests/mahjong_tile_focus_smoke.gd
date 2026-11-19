@@ -136,7 +136,7 @@ func _run() -> void:
 			for model in screen._hand_models:
 				var tile_rect: Rect2 = screen._projected_tile_rect(model)
 				tile_rect.position+=screen._board_view.position
-				_check(not label_rect.intersects(tile_rect),"Efficiency labels must stay below all hand faces")
+				_check(not label_rect.intersects(tile_rect),"Efficiency labels must keep all hand faces clear")
 		_evidence.append({"quality":quality,"selection_materials":focus._selection_materials.size(),"marker_facets":marker.mesh.get_meta("facets"),"marker_id":focus.marker_identity,"selected_recommended_value":badge.text,"selection_face_emission":selected_face.emission_energy_multiplier})
 		await _capture(screen,"focus-quality-%d"%quality)
 	var old_face := screen._hand_models[6].find_child("TileFace",true,false) as MeshInstance3D
