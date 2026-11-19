@@ -109,9 +109,9 @@ func _verify_own_seat_slot(screen) -> void:
 func _verify(screen, scenario: String, viewer: int) -> void:
 	_verify_spot_coverage(screen, scenario)
 	_verify_own_seat_slot(screen)
-	var own_seat: Rect2 = screen._seat_panels[0].get_global_rect()
-	for panel: Control in screen._seat_panels:
-		_check(panel.size.is_equal_approx(own_seat.size), "All seat panels must use the same compact size")
+	var own_portrait: Vector2 = screen._avatar_portraits[viewer].size
+	for portrait in screen._avatar_portraits:
+		_check(portrait.size.is_equal_approx(own_portrait), "The corner and side portraits must use the same size")
 	var near_play_edge: Vector2 = screen._project_to_board(Vector3(0.0, 0.0, screen.PLAY_AREA_NEAR_DEPTH))
 	var far_tile_top := Vector3(0.0, screen.TILE_SIZE.z, -screen.HAND_ROW_RADIUS)
 	var far_edge: Vector2 = screen._camera.unproject_position(far_tile_top) * screen._board_view.size / Vector2(screen._board_viewport.size) + screen._board_view.position

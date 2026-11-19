@@ -63,6 +63,7 @@ const RIVER_SIDE_OFFSET := 0.074
 const MELD_ROW_GAP := 0.009
 const OPPONENT_MELD_SEPARATION := 0.054
 const SEAT_CARD_SIZE := Vector2(178, 76)
+const SOUTH_CARD_SIZE := Vector2(98, 140)
 const OWN_HAND_LIFT := 0.020
 const FULL_HAND_COUNT := 14
 const HAND_SIDE_MARGIN_TILES := 2.97
@@ -582,7 +583,7 @@ func _horizontal_screen_pixels(pixels: float) -> float:
 
 func _seat_rect(relative: int) -> Rect2:
 	var factor := minf(size.x/1440.0,size.y/810.0)
-	var box := SEAT_CARD_SIZE * factor
+	var box := (SOUTH_CARD_SIZE if relative == 0 else SEAT_CARD_SIZE) * factor
 	var horizontal_inset := _horizontal_screen_pixels(10.0)
 	var left := _safe.x + horizontal_inset
 	var right := size.x - _safe.z - horizontal_inset - box.x
@@ -1541,6 +1542,7 @@ func _render_seats() -> void:
 		var egg_text := str(int(balance)) if known else "—"
 		var dealer := seat == int(_state.get("dealer", -1))
 		var portrait_on_right := relative == 2
+		var caption_above := relative == 0
 		var panel := Panel.new()
 		panel.name="MahjongSeat%d"%relative
 		var seat_rect := _seat_rect(relative)
@@ -1552,7 +1554,11 @@ func _render_seats() -> void:
 		var avatar := Panel.new()
 		avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		avatar.size = Vector2(68, 68) * factor
-		avatar.position = Vector2(panel.size.x - avatar.size.x - 4.0 * factor if portrait_on_right else 4.0 * factor, 4.0 * factor)
+		avatar.position = Vector2.ONE * 4.0 * factor
+		if portrait_on_right:
+			avatar.position.x = panel.size.x - avatar.size.x - 4.0 * factor
+		if caption_above:
+			avatar.position.y = panel.size.y - avatar.size.y - 4.0 * factor
 		avatar.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 		var surround := RURAL.frame(Color("#e0a24c"), TABLE_THEME.BRASS, roundi(34 * factor), 1)
 		surround.shadow_size = 0
@@ -1584,7 +1590,7 @@ func _render_seats() -> void:
 			manage.pressed.connect(_open_moderation.bind(seat))
 			avatar.add_child(manage)
 			manage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		var text_start := (7.0 if portrait_on_right else 74.0) * factor
+		var text_start := (7.0 if portrait_on_right or caption_above else 74.0) * factor
 		var text_edge := panel.size.x - (74.0 if portrait_on_right else 7.0) * factor
 		var name_label := _label(panel,"",text_start,5*factor,0,27*factor,roundi(20*factor),Color("#fff1d4"))
 		name_label.name = "MahjongSeatNickname"
@@ -1610,7 +1616,8 @@ func _render_seats() -> void:
 				maxi(10, roundi(15 * factor)), TABLE_THEME.CREAM)
 			missing.name = "MahjongMissingSuit%d" % seat
 			missing.tooltip_text = "定缺" + suit
-		var quantity := _label(panel,"",text_start,34*factor,0,36*factor,roundi(31*factor),Color("#a42316"))
+		var balance_y := (32.0 if caption_above else 34.0) * factor
+		var quantity := _label(panel,"",text_start,balance_y,0,36*factor,roundi(31*factor),Color("#a42316"))
 		quantity.name = "MahjongSeatEggs"
 		quantity.add_theme_color_override("font_outline_color", Color("#ffe6c1"))
 		quantity.add_theme_constant_override("outline_size", maxi(1, roundi(2 * factor)))

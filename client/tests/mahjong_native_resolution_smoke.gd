@@ -191,8 +191,13 @@ func _verify_hud_layout(board: Board) -> void:
 			var body := board._projected_tile_rect(tile, &"TileBody")
 			_check(not seat.grow(-1.0).intersects(body), "Portrait must clear %s at %s: %s and %s" % [tile.name, root.size, seat, body])
 	var own_seat := board._seat_panels[0].get_global_rect()
+	var south_portrait := board._avatar_portraits[0].get_global_rect()
+	var south_balance := board._seat_panels[0].get_node("MahjongSeatEggs") as Label
 	_check(is_equal_approx(own_seat.position.x, expected_left) and is_equal_approx(own_seat.end.y, board.size.y - board._safe.w - corner_inset)
-		and not own_seat.intersects(left), "South portrait must hug the safe bottom-left corner")
+		and south_portrait.end.y >= own_seat.end.y - 5.1 * factor and not own_seat.intersects(left),
+		"South portrait must hug the safe bottom-left corner")
+	_check(south_balance.get_global_rect().end.y <= south_portrait.position.y,
+		"South captions must stack above its portrait to leave room for left-side public melds")
 	for model in board._hand_models:
 		_check(not own_seat.grow(-1.0).intersects(board._projected_tile_rect(model, &"TileBody")), "South portrait must clear all local hand tiles")
 	_check(not board._turn_label.visible and board._turn_label.text.is_empty(), "Local discard turn must have no reminder text")
